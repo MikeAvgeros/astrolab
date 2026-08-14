@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AstroLab is a .NET 10 / C# 14 RESTful API for downloading, storing, parsing, analyzing, and visualizing FITS (Flexible Image Transport System) astronomical datasets from ESO/MAST archives and direct uploads. See `spec.md` for the full original specification this project was scaffolded from.
+AstroLab is a .NET 10 / C# 14 RESTful API for downloading, storing, parsing, analyzing, and visualizing FITS (Flexible Image Transport System) astronomical datasets from ESO/MAST archives and direct uploads. See `spec.md` for the full specification — architecture, coding standards, and implementation patterns — and the original build sequence this project was scaffolded from.
 
 There is no database — metadata and raw datasets are staged on local disk under `storage/` (gitignored, path configurable via `Storage:RootPath`).
 
@@ -21,6 +21,7 @@ These apply across all four projects (see `spec.md` § General Requirements for 
 - One type per file, no matter how small (including private/internal nested types) — a file may still hold multiple `extension` blocks for the same static class.
 - Never add `<LangVersion>` to a `.csproj`.
 - CRLF line endings on every file, enforced repo-wide via `.gitattributes` (`* text eol=crlf`).
+- No magic numbers: numeric literals encoding domain meaning (scaling factors, thresholds, buffer sizes, default fallbacks, algorithm coefficients) must be extracted into a named `private const` field on the containing class rather than appearing inline in a method body. Structurally self-evident literals (array indices, loop bounds from a collection's own length) are exempt.
 
 ## Commands
 

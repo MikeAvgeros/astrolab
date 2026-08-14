@@ -14,6 +14,9 @@ public readonly record struct FitsImageDescriptor(
     double BScale,
     long? Blank)
 {
+    private const double DefaultBZero = 0.0;
+    private const double DefaultBScale = 1.0;
+
     /// <summary>The total number of pixels across all axes, or 0 when the HDU carries no data (<c>NAXIS</c> = 0).</summary>
     public long PixelCount => NAxes.IsDefaultOrEmpty ? 0 : NAxes.Aggregate(1L, (acc, n) => acc * n);
 
@@ -42,8 +45,8 @@ public readonly record struct FitsImageDescriptor(
                 .Bind(naxis => ReadAxes(header, (int)naxis))
                 .Map(axes =>
                 {
-                    var bzero = header.GetReal("BZERO").GetValueOrDefault(0.0);
-                    var bscale = header.GetReal("BSCALE").GetValueOrDefault(1.0);
+                    var bzero = header.GetReal("BZERO").GetValueOrDefault(DefaultBZero);
+                    var bscale = header.GetReal("BSCALE").GetValueOrDefault(DefaultBScale);
                     var blankResult = header.GetInteger("BLANK");
                     var blank = blankResult.IsSuccess ? blankResult.Value : (long?)null;
                     return new FitsImageDescriptor(bitpix, axes, bzero, bscale, blank);

@@ -8,13 +8,20 @@ namespace AstroLab.Core.Imaging;
 /// </summary>
 public static class ColorMapper
 {
+    private const int RgbChannelCount = 3;
+    private const double MaxByteValue = 255.0;
+    private const float MaxByteValueF = 255f;
+    private const double HotChannelSlope = 3.0;
+    private const double HotGreenChannelOffset = 1.0;
+    private const double HotBlueChannelOffset = 2.0;
+
     /// <summary>
     /// Maps each normalized grayscale byte in <paramref name="intensities"/> onto an RGB triple
     /// written contiguously into <paramref name="rgb"/> (which must be exactly three times as long).
     /// </summary>
     public static Result<Unit> Apply(ReadOnlySpan<byte> intensities, Span<byte> rgb, ColorMap colorMap)
     {
-        if (rgb.Length != intensities.Length * 3)
+        if (rgb.Length != intensities.Length * RgbChannelCount)
         {
             return Error.Validation(
                 "imaging.rgb_buffer_length_mismatch",
@@ -24,7 +31,7 @@ public static class ColorMapper
         for (var i = 0; i < intensities.Length; i++)
         {
             var (r, g, b) = Map(intensities[i], colorMap);
-            var offset = i * 3;
+            var offset = i * RgbChannelCount;
             rgb[offset] = r;
             rgb[offset + 1] = g;
             rgb[offset + 2] = b;
@@ -44,10 +51,10 @@ public static class ColorMapper
 
     private static (byte R, byte G, byte B) MapHot(byte intensity)
     {
-        var t = intensity / 255.0;
-        var r = Clamp01(3.0 * t);
-        var g = Clamp01((3.0 * t) - 1.0);
-        var b = Clamp01((3.0 * t) - 2.0);
+        var t = intensity / MaxByteValue;
+        var r = Clamp01(HotChannelSlope * t);
+        var g = Clamp01((HotChannelSlope * t) - HotGreenChannelOffset);
+        var b = Clamp01((HotChannelSlope * t) - HotBlueChannelOffset);
         return (ToByte(r), ToByte(g), ToByte(b));
     }
 
@@ -66,7 +73,7 @@ public static class ColorMapper
 
     private static (byte R, byte G, byte B) MapViridis(byte intensity)
     {
-        var t = intensity / 255f;
+        var t = intensity / MaxByteValueF;
         var stops = ViridisStops;
 
         var upperIndex = 1;
@@ -86,9 +93,9 @@ public static class ColorMapper
             Lerp(lower.B, upper.B, localT));
     }
 
-    private static byte Lerp(byte a, byte b, float t) => (byte)Math.Clamp(a + ((b - a) * t), 0f, 255f);
+    private static byte Lerp(byte a, byte b, float t) => (byte)Math.Clamp(a + ((b - a) * t), 0f, MaxByteValueF);
 
     private static double Clamp01(double value) => Math.Clamp(value, 0.0, 1.0);
 
-    private static byte ToByte(double normalized) => (byte)Math.Round(normalized * 255.0);
+    private static byte ToByte(double normalized) => (byte)Math.Round(normalized * MaxByteValue);
 }

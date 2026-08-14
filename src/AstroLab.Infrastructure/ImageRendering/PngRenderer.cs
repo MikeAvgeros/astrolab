@@ -17,6 +17,13 @@ public static class PngRenderer
 
     private const byte BitDepth = 8;
     private const byte ColorTypeTruecolor = 2;
+    private const int BytesPerPixel = 3;
+    private const int IhdrLength = 13;
+    private const int ChunkLengthFieldSize = 4;
+    private const byte CompressionMethod = 0;
+    private const byte FilterMethod = 0;
+    private const byte InterlaceMethod = 0;
+    private const byte NoFilterScanlineTag = 0;
 
     /// <summary>Encodes <paramref name="image"/> as a complete PNG file.</summary>
     public static byte[] Encode(RenderedImage image)
@@ -34,14 +41,13 @@ public static class PngRenderer
     /// <summary>Prefixes every scanline with a filter-type byte (always 0 / "None") as PNG's raw image data requires.</summary>
     private static byte[] ToFilteredScanlines(RenderedImage image)
     {
-        const int bytesPerPixel = 3;
-        var stride = image.Width * bytesPerPixel;
+        var stride = image.Width * BytesPerPixel;
         var raw = new byte[(stride + 1) * image.Height];
 
         for (var y = 0; y < image.Height; y++)
         {
             var rawRowOffset = y * (stride + 1);
-            raw[rawRowOffset] = 0;
+            raw[rawRowOffset] = NoFilterScanlineTag;
             Buffer.BlockCopy(image.Rgb, y * stride, raw, rawRowOffset + 1, stride);
         }
 
@@ -50,14 +56,14 @@ public static class PngRenderer
 
     private static byte[] BuildIhdr(int width, int height)
     {
-        var ihdr = new byte[13];
-        BinaryPrimitives.WriteUInt32BigEndian(ihdr.AsSpan(0, 4), (uint)width);
-        BinaryPrimitives.WriteUInt32BigEndian(ihdr.AsSpan(4, 4), (uint)height);
+        var ihdr = new byte[IhdrLength];
+        BinaryPrimitives.WriteUInt32BigEndian(ihdr.AsSpan(0, ChunkLengthFieldSize), (uint)width);
+        BinaryPrimitives.WriteUInt32BigEndian(ihdr.AsSpan(4, ChunkLengthFieldSize), (uint)height);
         ihdr[8] = BitDepth;
         ihdr[9] = ColorTypeTruecolor;
-        ihdr[10] = 0;
-        ihdr[11] = 0;
-        ihdr[12] = 0;
+        ihdr[10] = CompressionMethod;
+        ihdr[11] = FilterMethod;
+        ihdr[12] = InterlaceMethod;
         return ihdr;
     }
 
@@ -74,11 +80,11 @@ public static class PngRenderer
 
     private static void WriteChunk(Stream output, string chunkType, byte[] data)
     {
-        Span<byte> lengthBytes = stackalloc byte[4];
+        Span<byte> lengthBytes = stackalloc byte[ChunkLengthFieldSize];
         BinaryPrimitives.WriteUInt32BigEndian(lengthBytes, (uint)data.Length);
         output.Write(lengthBytes);
 
-        Span<byte> typeBytes = stackalloc byte[4];
+        Span<byte> typeBytes = stackalloc byte[ChunkLengthFieldSize];
         Encoding.ASCII.GetBytes(chunkType, typeBytes);
         output.Write(typeBytes);
         output.Write(data);
@@ -87,7 +93,7 @@ public static class PngRenderer
         crc.Append(typeBytes);
         crc.Append(data);
 
-        Span<byte> crcBytes = stackalloc byte[4];
+        Span<byte> crcBytes = stackalloc byte[ChunkLengthFieldSize];
         crc.GetCurrentHash(crcBytes);
         crcBytes.Reverse();
         output.Write(crcBytes);

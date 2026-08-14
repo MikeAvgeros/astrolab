@@ -17,6 +17,8 @@ public static class ApertureEngine
     /// </summary>
     public const int DefaultSubpixelOversampling = 5;
 
+    private const double PixelCenterOffset = 0.5;
+
     /// <summary>
     /// Integrates flux within a circular aperture centred at (<paramref name="centerX"/>,
     /// <paramref name="centerY"/>), using exact inclusion/exclusion for pixels fully inside or
@@ -177,11 +179,11 @@ public static class ApertureEngine
         for (var py = yMin; py <= yMax; py++)
         {
             var rowOffset = py * width;
-            var dy = py + 0.5 - centerY;
+            var dy = py + PixelCenterOffset - centerY;
             var dySquared = dy * dy;
             for (var px = xMin; px <= xMax; px++)
             {
-                var dx = px + 0.5 - centerX;
+                var dx = px + PixelCenterOffset - centerX;
                 var distanceSquared = (dx * dx) + dySquared;
                 if (distanceSquared < innerRadiusSquared || distanceSquared > outerRadiusSquared)
                 {
@@ -216,11 +218,11 @@ public static class ApertureEngine
             for (var py = yMin; py <= yMax; py++)
             {
                 var rowOffset = py * width;
-                var dy = py + 0.5 - centerY;
+                var dy = py + PixelCenterOffset - centerY;
                 var dySquared = dy * dy;
                 for (var px = xMin; px <= xMax; px++)
                 {
-                    var dx = px + 0.5 - centerX;
+                    var dx = px + PixelCenterOffset - centerX;
                     var distanceSquared = (dx * dx) + dySquared;
                     if (distanceSquared < innerRadiusSquared || distanceSquared > outerRadiusSquared)
                     {
@@ -280,12 +282,12 @@ public static class ApertureEngine
         var hits = 0;
         for (var sy = 0; sy < oversampling; sy++)
         {
-            var subY = py + ((sy + 0.5) / oversampling);
+            var subY = py + ((sy + PixelCenterOffset) / oversampling);
             var dy = subY - centerY;
             var dySquared = dy * dy;
             for (var sx = 0; sx < oversampling; sx++)
             {
-                var subX = px + ((sx + 0.5) / oversampling);
+                var subX = px + ((sx + PixelCenterOffset) / oversampling);
                 var dx = subX - centerX;
                 if ((dx * dx) + dySquared <= radiusSquared)
                 {

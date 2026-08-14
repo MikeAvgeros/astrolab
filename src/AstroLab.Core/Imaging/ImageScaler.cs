@@ -58,14 +58,16 @@ public static class ImageScaler
     };
 
     private const double LogScaleFactor = 1000.0;
+    private const double DefaultAsinhSoftening = 0.1;
+    private const double MaxByteValue = 255.0;
 
     private static double LogStretch(double t) => Math.Log(1.0 + (LogScaleFactor * t)) / Math.Log(1.0 + LogScaleFactor);
 
     private static double AsinhStretch(double t, double softening)
     {
-        var safeSoftening = softening > 0 ? softening : 0.1;
+        var safeSoftening = softening > 0 ? softening : DefaultAsinhSoftening;
         return Math.Asinh(t / safeSoftening) / Math.Asinh(1.0 / safeSoftening);
     }
 
-    private static byte ToByte(double normalized) => (byte)Math.Clamp(Math.Round(normalized * 255.0), 0.0, 255.0);
+    private static byte ToByte(double normalized) => (byte)Math.Clamp(Math.Round(normalized * MaxByteValue), 0.0, MaxByteValue);
 }

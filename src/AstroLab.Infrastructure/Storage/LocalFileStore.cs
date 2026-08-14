@@ -11,6 +11,8 @@ namespace AstroLab.Infrastructure.Storage;
 /// </summary>
 public sealed class LocalFileStore : ILocalFileStore
 {
+    private const int DefaultFileStreamBufferSize = 4096;
+
     private readonly string _rootPath;
 
     public LocalFileStore(IOptions<LocalFileStoreOptions> options)
@@ -66,7 +68,7 @@ public sealed class LocalFileStore : ILocalFileStore
         FileStream? fileStream = null;
         try
         {
-            fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
+            fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: DefaultFileStreamBufferSize, useAsync: true);
 
             while (true)
             {
@@ -132,7 +134,7 @@ public sealed class LocalFileStore : ILocalFileStore
 
         try
         {
-            Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+            Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: DefaultFileStreamBufferSize, useAsync: true);
             return Result<Stream>.Success(stream);
         }
         catch (IOException ex)

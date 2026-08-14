@@ -11,6 +11,10 @@ namespace AstroLab.Infrastructure.ImageRendering;
 /// </summary>
 public sealed class FitsImageRenderer
 {
+    private const double DefaultBlackPoint = 0.0;
+    private const double DefaultWhitePoint = 1.0;
+    private const int RgbChannelCount = 3;
+
     /// <summary>Applies stretch and color mapping, producing an in-memory RGB image without modifying the source pixels.</summary>
     public Result<RenderedImage> Render(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options)
     {
@@ -21,8 +25,8 @@ public sealed class FitsImageRenderer
                 $"Pixel span length ({pixels.Length}) does not match width x height ({width}x{height}).");
         }
 
-        var blackPoint = options.BlackPoint ?? 0.0;
-        var whitePoint = options.WhitePoint ?? 1.0;
+        var blackPoint = options.BlackPoint ?? DefaultBlackPoint;
+        var whitePoint = options.WhitePoint ?? DefaultWhitePoint;
 
         if (options.RequiresAutoScale)
         {
@@ -45,7 +49,7 @@ public sealed class FitsImageRenderer
             return Result<RenderedImage>.Failure(stretchResult.Error);
         }
 
-        var rgb = new byte[pixels.Length * 3];
+        var rgb = new byte[pixels.Length * RgbChannelCount];
         var colorResult = ColorMapper.Apply(grayscale, rgb, options.ColorMap);
         if (colorResult.IsFailure)
         {

@@ -11,6 +11,11 @@ public readonly record struct ImageStatistics(
     long ValidPixelCount,
     long TotalPixelCount)
 {
+    private const int DefaultHistogramBins = 65536;
+    private const int MaxStackallocHistogramBins = 1024;
+    private const double MinPercentile = 0.0;
+    private const double MaxPercentile = 100.0;
+
     public long InvalidPixelCount => TotalPixelCount - ValidPixelCount;
 
     /// <summary>
@@ -78,9 +83,9 @@ public readonly record struct ImageStatistics(
     /// display without sorting the full — potentially gigapixel — pixel array.
     /// </summary>
     public static Result<(double Lower, double Upper)> ComputePercentileBounds(
-        ReadOnlySpan<float> pixels, double lowerPercentile, double upperPercentile, int histogramBins = 65536)
+        ReadOnlySpan<float> pixels, double lowerPercentile, double upperPercentile, int histogramBins = DefaultHistogramBins)
     {
-        if (lowerPercentile < 0 || upperPercentile > 100 || lowerPercentile >= upperPercentile)
+        if (lowerPercentile < MinPercentile || upperPercentile > MaxPercentile || lowerPercentile >= upperPercentile)
         {
             return Error.Validation(
                 "imaging.invalid_percentile_range",
@@ -99,7 +104,7 @@ public readonly record struct ImageStatistics(
             return (stats.Min, stats.Max);
         }
 
-        Span<long> histogram = histogramBins <= 1024 ? stackalloc long[histogramBins] : new long[histogramBins];
+        Span<long> histogram = histogramBins <= MaxStackallocHistogramBins ? stackalloc long[histogramBins] : new long[histogramBins];
         var range = stats.Max - stats.Min;
         var scale = histogramBins / range;
 
@@ -115,8 +120,8 @@ public readonly record struct ImageStatistics(
             histogram[bin]++;
         }
 
-        var lowerTarget = (long)(stats.ValidPixelCount * (lowerPercentile / 100.0));
-        var upperTarget = (long)(stats.ValidPixelCount * (upperPercentile / 100.0));
+        var lowerTarget = (long)(stats.ValidPixelCount * (lowerPercentile / MaxPercentile));
+        var upperTarget = (long)(stats.ValidPixelCount * (upperPercentile / MaxPercentile));
 
         var lowerBound = stats.Min;
         var upperBound = stats.Max;

@@ -8,6 +8,11 @@ obj/
 storage/*
 !storage/.gitkeep
 
+## Native cfitsio binaries (per-developer/CI, never committed -- see Directory.Build.props)
+native/**/*.dll
+native/**/*.so
+native/**/*.dylib
+
 ## IDEs
 .vs/
 .idea/

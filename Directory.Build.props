@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    Native cfitsio binaries (and any of its transitive dependencies) live under native/<rid>/,
+    gitignored and supplied locally per-developer/CI. They must land in the output directory of
+    whichever project is the actual running process at P/Invoke time: native library resolution
+    walks the entry assembly's base directory, not AstroLab.Infrastructure's output folder, even
+    though that's where the LibraryImport declarations live.
+  -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'AstroLab.Api' Or '$(MSBuildProjectName)' == 'AstroLab.Tests'">
+    <None Include="$(MSBuildThisFileDirectory)native\win-x64\*.dll" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

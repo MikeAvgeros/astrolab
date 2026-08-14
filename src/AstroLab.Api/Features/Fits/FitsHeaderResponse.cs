@@ -7,6 +7,7 @@ public sealed record FitsHeaderResponse(string FileId, IReadOnlyList<FitsKeyword
     public static FitsHeaderResponse FromHeader(string fileId, FitsHeader header)
     {
         var keywords = new List<FitsKeywordDto>(header.Count);
+        
         foreach (var keyword in header)
         {
             keywords.Add(new FitsKeywordDto(keyword.Name, keyword.Value.ToString(), keyword.Comment));

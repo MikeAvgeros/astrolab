@@ -37,7 +37,7 @@ public static class ObservationsEndpoints
         var client = ResolveClient(archive, esoClient, mastClient);
 
         var result = await client.SearchAsync(query, cancellationToken);
-        return result.ToApiResult(observations => Results.Ok(observations));
+        return result.ToApiResult(Results.Ok);
     }
 
     private static async Task<IResult> DownloadAsync(

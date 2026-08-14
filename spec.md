@@ -9,6 +9,7 @@ For day-to-day operational details (build/test commands, current repo layout, lo
 see `CLAUDE.md` instead.
 
 > **How to use this document**
+>
 > - **Humans:** §1–§2 give context; §3–§6 are the standing reference to build against.
 > - **AI agents:** §3 (Coding Standards) and §4.2 (Dependency Rules) are hard constraints —
 >   check every diff you produce against them before finishing a task. §5 documents the
@@ -350,19 +351,19 @@ retained as a reference for the build order to follow when extending the same ar
 to a new capability (e.g. a new Core algorithm family or archive integration), not as an outstanding
 task list.
 
-| Phase | What was built | Governing spec section |
-|---|---|---|
-| 1 | Solution and project scaffolding (four projects, dependency direction) | §4.1, §4.2 |
-| 2 | Core `Result`/`Error` types | §5.1 |
-| 3 | Core FITS/domain models | §4.1 |
-| 4 | Core photometry, imaging, and spectroscopy algorithms | §5.2 |
-| 5 | Core unit and allocation tests | §6 |
-| 6 | CFITSIO native bindings and `UnmanagedFitsBuffer` | §5.3 |
-| 7 | `LocalFileStore` / pipeline streaming | §5.4 |
-| 8 | ESO and MAST archive clients | §5.6 |
-| 9 | API vertical slices | §5.5, §4.3 |
-| 10 | API integration tests | §6 |
-| 11 | Full solution validation | — |
+| Phase | What was built                                                         | Governing spec section |
+| ----- | ---------------------------------------------------------------------- | ---------------------- |
+| 1     | Solution and project scaffolding (four projects, dependency direction) | §4.1, §4.2             |
+| 2     | Core `Result`/`Error` types                                            | §5.1                   |
+| 3     | Core FITS/domain models                                                | §4.1                   |
+| 4     | Core photometry, imaging, and spectroscopy algorithms                  | §5.2                   |
+| 5     | Core unit and allocation tests                                         | §6                     |
+| 6     | CFITSIO native bindings and `UnmanagedFitsBuffer`                      | §5.3                   |
+| 7     | `LocalFileStore` / pipeline streaming                                  | §5.4                   |
+| 8     | ESO and MAST archive clients                                           | §5.6                   |
+| 9     | API vertical slices                                                    | §5.5, §4.3             |
+| 10    | API integration tests                                                  | §6                     |
+| 11    | Full solution validation                                               | —                      |
 
 ```text
 1. Solution & project scaffolding

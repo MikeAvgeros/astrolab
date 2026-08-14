@@ -30,8 +30,8 @@ public static class ResultEndpointExtensions
         public IResult ToApiResult(Func<TValue, IResult> onSuccess) =>
             result switch
             {
-                { IsSuccess: true } success => onSuccess(success.Value),
-                { IsSuccess: false } failure => failure.Error.ToProblem(),
+                { IsSuccess: true } => onSuccess(result.Value),
+                { IsSuccess: false } => result.Error.ToProblem(),
             };
     }
 }

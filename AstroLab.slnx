@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AstroLab.Api/AstroLab.Api.csproj" />
+    <Project Path="src/AstroLab.Core/AstroLab.Core.csproj" />
+    <Project Path="src/AstroLab.Infrastructure/AstroLab.Infrastructure.csproj" />
+    <Project Path="src/AstroLab.Tests/AstroLab.Tests.csproj" />
+  </Folder>
+</Solution>

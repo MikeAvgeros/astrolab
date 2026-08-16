@@ -33,7 +33,7 @@ public static class FitsPixelDataReader
             {
                 var remaining = totalBytes - offset;
                 var toRead = (int)Math.Min((nuint)chunk.Length, remaining);
-                var bytesRead = await stream.ReadAsync(chunk.AsMemory(0, toRead), cancellationToken).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(chunk.AsMemory(0, toRead), cancellationToken);
                 if (bytesRead == 0)
                 {
                     buffer.Dispose();

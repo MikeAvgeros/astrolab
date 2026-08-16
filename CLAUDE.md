@@ -65,7 +65,7 @@ Owns all side effects: native interop, filesystem, HTTP, memory management.
 - `InfrastructureServiceCollectionExtensions.AddAstroLabInfrastructure(...)` — single DI registration entry point called from `Program.cs`; options bound from config sections (`Storage`, `Eso`, `Mast` — see each `*Options.SectionName`)
 
 ### AstroLab.Api — host & vertical slices
-Minimal APIs, organized as self-contained feature slices under `Features/`, each owning its own request/response DTOs (one per file) and endpoint mapping (`Map*Endpoints()` extension member on `IEndpointRouteBuilder`), registered in `Program.cs`:
+Minimal APIs, organized as self-contained feature slices under `Features/` following the **REPR pattern** (Request-Endpoint-Response): each endpoint owns its own request/response DTOs (one per file, defined at the API boundary) and endpoint mapping (`Map*Endpoints()` extension member on `IEndpointRouteBuilder`), registered in `Program.cs`. A `Core` or `Infrastructure` domain model (FITS headers, `ArchiveObservation`, aperture/spectrum measurement results, etc.) is never returned directly as, or embedded unmapped inside, an HTTP response — every response is its own DTO record, built from the `Result<T>` value via a `FromX(...)` mapping helper or inline construction in the endpoint (see spec.md §5.5). The only exception is enums shared across the boundary (`StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`), which are plain string-serialized discriminators, not models.
 - `Features/Fits/` — upload staging + header inspection
 - `Features/Imaging/` — FITS → image visualization
 - `Features/Photometry/` — aperture measurement endpoints

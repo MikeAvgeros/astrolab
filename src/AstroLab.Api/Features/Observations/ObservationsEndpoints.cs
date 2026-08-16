@@ -25,19 +25,16 @@ public static class ObservationsEndpoints
     }
 
     private static async Task<IResult> SearchAsync(
-        ArchiveSource archive,
+        [AsParameters] ObservationSearchRequest request,
         IEsoArchiveClient esoClient,
         IMastArchiveClient mastClient,
-        CancellationToken cancellationToken,
-        string? target = null,
-        string? instrument = null,
-        int maxResults = 50)
+        CancellationToken cancellationToken)
     {
-        var query = new ArchiveSearchQuery(target, instrument, MaxResults: maxResults);
-        var client = ResolveClient(archive, esoClient, mastClient);
+        var query = new ArchiveSearchQuery(request.Target, request.Instrument, MaxResults: request.MaxResults);
+        var client = ResolveClient(request.Archive, esoClient, mastClient);
 
         var result = await client.SearchAsync(query, cancellationToken);
-        return result.ToApiResult(Results.Ok);
+        return result.ToApiResult(observations => Results.Ok(ObservationSearchResponse.FromObservations(observations)));
     }
 
     private static async Task<IResult> DownloadAsync(

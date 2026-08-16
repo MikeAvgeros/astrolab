@@ -32,8 +32,7 @@ public sealed class MastArchiveClient : IMastArchiveClient
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, BuildSearchUri(query));
             using var response = await _httpClient
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -61,8 +60,7 @@ public sealed class MastArchiveClient : IMastArchiveClient
         try
         {
             response = await _httpClient
-                .GetAsync(BuildDownloadUri(datasetId), HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+                .GetAsync(BuildDownloadUri(datasetId), HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -71,7 +69,7 @@ public sealed class MastArchiveClient : IMastArchiveClient
                 return Error.Infrastructure("mast.download_failed", $"MAST archive download failed with status {status}.");
             }
 
-            var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             var reader = PipeReader.Create(stream);
             return new ArchiveDownload($"{datasetId}.fits", response.Content.Headers.ContentLength, reader, response);
         }

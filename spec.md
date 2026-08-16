@@ -29,7 +29,7 @@ see `CLAUDE.md` instead.
    - 5.2 [Functional Core: Purity and Spans](#52-functional-core-purity-and-spans)
    - 5.3 [Unmanaged Native Buffers](#53-unmanaged-native-buffers)
    - 5.4 [Pipeline Streaming](#54-pipeline-streaming)
-   - 5.5 [Vertical Slice API Endpoints](#55-vertical-slice-api-endpoints)
+   - 5.5 [Vertical Slice API Endpoints (REPR Pattern)](#55-vertical-slice-api-endpoints-repr-pattern)
    - 5.6 [Archive Clients: ESO and MAST](#56-archive-clients-eso-and-mast)
 6. [Testing Standards](#6-testing-standards)
    - 6.1 [Core Unit Tests](#61-core-unit-tests)
@@ -282,17 +282,31 @@ unnecessarily buffering the entire FITS file in managed memory, using
 - Correctly complete and dispose pipeline resources.
 - Propagate cancellation tokens throughout the pipeline.
 
-### 5.5 Vertical Slice API Endpoints
+### 5.5 Vertical Slice API Endpoints (REPR Pattern)
 
 **Location:** `AstroLab.Api/Features`
 
-API functionality is organized into self-contained vertical slices using ASP.NET Core Minimal APIs.
-Each feature slice owns the endpoint-specific request/response DTOs (one per file) and endpoint
-mapping (a `Map*Endpoints()` extension member on `IEndpointRouteBuilder`) required for that use
-case — see §4.3 for the request flow each endpoint follows. Avoid creating a large centralized
-controller or service containing unrelated application functionality; endpoints stay thin and never
-contain the implementation of photometry, image scaling, spectral extraction, or other scientific
-algorithms.
+API functionality is organized into self-contained vertical slices using ASP.NET Core Minimal APIs,
+with each endpoint following the **REPR pattern** (Request-Endpoint-Response): a single endpoint is
+paired with exactly one request DTO and one response DTO, both defined at the API boundary, in the
+same feature slice.
+
+- Each feature slice owns its endpoint-specific request/response DTOs (one type per file, per the
+  §3 one-type-per-file rule) and endpoint mapping (a `Map*Endpoints()` extension member on
+  `IEndpointRouteBuilder`) — see §4.3 for the request flow each endpoint follows.
+- **A domain or infrastructure model — anything defined in `AstroLab.Core` or
+  `AstroLab.Infrastructure` (FITS domain models, `ArchiveObservation`, aperture/spectrum
+  measurement results, etc.) — must never be returned directly as, or embedded unmapped inside, an
+  HTTP response.** Every response is its own DTO record declared under `Features/`, constructed by
+  the endpoint (or a small `FromX(...)` mapping helper on the response type) from the `Result<T>`
+  value returned by Core/Infrastructure. This holds even when a response would otherwise be a
+  trivial one-to-one field copy — the boundary DTO still isolates callers from Core/Infrastructure
+  representation changes and is what defines the endpoint's actual wire contract.
+  Enums shared across the boundary (`StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`)
+  are the one exception, since they are plain string-serialized discriminators rather than models.
+- Avoid creating a large centralized controller or service containing unrelated application
+  functionality; endpoints stay thin and never contain the implementation of photometry, image
+  scaling, spectral extraction, or other scientific algorithms.
 
 ### 5.6 Archive Clients: ESO and MAST
 

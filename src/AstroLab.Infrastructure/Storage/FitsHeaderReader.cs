@@ -21,7 +21,7 @@ public static class FitsHeaderReader
 
         for (var blockIndex = 0; blockIndex < MaxBlocks; blockIndex++)
         {
-            var bytesRead = await ReadExactAsync(stream, block, cancellationToken).ConfigureAwait(false);
+            var bytesRead = await ReadExactAsync(stream, block, cancellationToken);
             if (bytesRead < BlockSize)
             {
                 return Error.Validation(
@@ -46,7 +46,7 @@ public static class FitsHeaderReader
         var totalRead = 0;
         while (totalRead < buffer.Length)
         {
-            var read = await stream.ReadAsync(buffer.AsMemory(totalRead), cancellationToken).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buffer.AsMemory(totalRead), cancellationToken);
             if (read == 0)
             {
                 break;

@@ -28,7 +28,7 @@ public sealed class FitsDatasetReader
         }
 
         await using var stream = openResult.Value;
-        return await FitsHeaderReader.ReadPrimaryHeaderAsync(stream, cancellationToken).ConfigureAwait(false);
+        return await FitsHeaderReader.ReadPrimaryHeaderAsync(stream, cancellationToken);
     }
 
     public async Task<Result<FitsDataset>> LoadPrimaryImageAsync(string relativeKey, CancellationToken cancellationToken = default)
@@ -41,7 +41,7 @@ public sealed class FitsDatasetReader
 
         await using var stream = openResult.Value;
 
-        var headerResult = await FitsHeaderReader.ReadPrimaryHeaderAsync(stream, cancellationToken).ConfigureAwait(false);
+        var headerResult = await FitsHeaderReader.ReadPrimaryHeaderAsync(stream, cancellationToken);
         if (headerResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(headerResult.Error);
@@ -53,7 +53,7 @@ public sealed class FitsDatasetReader
             return Error.Validation("fits.data.no_image", "The primary HDU does not contain image pixel data.");
         }
 
-        var bufferResult = await FitsPixelDataReader.ReadImageDataAsync(stream, descriptor, cancellationToken).ConfigureAwait(false);
+        var bufferResult = await FitsPixelDataReader.ReadImageDataAsync(stream, descriptor, cancellationToken);
         if (bufferResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(bufferResult.Error);

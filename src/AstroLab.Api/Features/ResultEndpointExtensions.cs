@@ -26,7 +26,6 @@ public static class ResultEndpointExtensions
 
     extension<TValue>(Result<TValue> result)
     {
-        /// <summary>Maps a <see cref="Result{TValue}"/> onto an <see cref="IResult"/> via pattern matching: success is shaped by the caller, failure always becomes a problem response.</summary>
         public IResult ToApiResult(Func<TValue, IResult> onSuccess) =>
             result switch
             {

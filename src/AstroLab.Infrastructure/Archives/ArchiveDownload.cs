@@ -31,7 +31,7 @@ public sealed class ArchiveDownload : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Content.CompleteAsync().ConfigureAwait(false);
+        await Content.CompleteAsync();
         _response.Dispose();
     }
 }

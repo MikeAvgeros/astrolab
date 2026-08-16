@@ -25,16 +25,10 @@ public static class ImagingEndpoints
 
     private static async Task<IResult> RenderAsync(
         string fileId,
+        [AsParameters] RenderImageRequest request,
         FitsDatasetReader datasetReader,
         FitsImageRenderer renderer,
-        CancellationToken cancellationToken,
-        StretchMode stretch = StretchMode.Asinh,
-        ColorMap colorMap = ColorMap.Grayscale,
-        double? blackPoint = null,
-        double? whitePoint = null,
-        double lowerPercentile = 1.0,
-        double upperPercentile = 99.0,
-        double asinhSoftening = 0.1)
+        CancellationToken cancellationToken)
     {
         var datasetResult = await datasetReader.LoadPrimaryImageAsync(fileId, cancellationToken);
         if (datasetResult.IsFailure)
@@ -44,7 +38,8 @@ public static class ImagingEndpoints
 
         var dataset = datasetResult.Value;
         var (width, height) = dataset.Image.Resolve2DDimensions();
-        var options = new RenderOptions(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, lowerPercentile, upperPercentile);
+        var options = new RenderOptions(
+            request.Stretch, request.AsinhSoftening, request.ColorMap, request.BlackPoint, request.WhitePoint, request.LowerPercentile, request.UpperPercentile);
 
         var pngResult = renderer.RenderToPng(dataset.Pixels, width, height, options);
         return pngResult.ToApiResult(png => Results.File(png, "image/png"));

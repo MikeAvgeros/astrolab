@@ -52,7 +52,7 @@ public sealed class LocalFileStore : ILocalFileStore
         var pathResult = ResolvePath(relativeKey);
         if (pathResult.IsFailure)
         {
-            await source.CompleteAsync().ConfigureAwait(false);
+            await source.CompleteAsync();
             return Result<StoredFile>.Failure(pathResult.Error);
         }
 
@@ -72,12 +72,12 @@ public sealed class LocalFileStore : ILocalFileStore
 
             while (true)
             {
-                var readResult = await source.ReadAsync(cancellationToken).ConfigureAwait(false);
+                var readResult = await source.ReadAsync(cancellationToken);
                 var buffer = readResult.Buffer;
 
                 foreach (var segment in buffer)
                 {
-                    await fileStream.WriteAsync(segment, cancellationToken).ConfigureAwait(false);
+                    await fileStream.WriteAsync(segment, cancellationToken);
                     totalBytesWritten += segment.Length;
                 }
 
@@ -89,26 +89,26 @@ public sealed class LocalFileStore : ILocalFileStore
                 }
             }
 
-            await fileStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            await source.CompleteAsync().ConfigureAwait(false);
+            await fileStream.FlushAsync(cancellationToken);
+            await source.CompleteAsync();
             succeeded = true;
             return new StoredFile(relativeKey, path, totalBytesWritten);
         }
         catch (OperationCanceledException ex)
         {
-            await source.CompleteAsync(ex).ConfigureAwait(false);
+            await source.CompleteAsync(ex);
             throw;
         }
         catch (IOException ex)
         {
-            await source.CompleteAsync(ex).ConfigureAwait(false);
+            await source.CompleteAsync(ex);
             return Error.Infrastructure("storage.write_failed", $"Failed to write staged file '{relativeKey}': {ex.Message}");
         }
         finally
         {
             if (fileStream is not null)
             {
-                await fileStream.DisposeAsync().ConfigureAwait(false);
+                await fileStream.DisposeAsync();
             }
 
             if (!succeeded)

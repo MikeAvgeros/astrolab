@@ -20,6 +20,8 @@ public readonly record struct Error(string Code, string Message, ErrorCategory C
 
     public static Error Infrastructure(string code, string message) => new(code, message, ErrorCategory.Infrastructure);
 
+    public static Error NotImplemented(string code, string message) => new(code, message, ErrorCategory.NotImplemented);
+
     public static Error Cancelled(string code, string message) => new(code, message, ErrorCategory.Cancelled);
 
     public static Error Unexpected(string code, string message) => new(code, message, ErrorCategory.Unexpected);

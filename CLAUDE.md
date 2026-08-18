@@ -31,13 +31,15 @@ dotnet test src/AstroLab.Tests                 # run all tests
 dotnet test src/AstroLab.Tests --filter "FullyQualifiedName~ApertureEngineTests"   # run one test class
 dotnet test src/AstroLab.Tests --filter "DisplayName~<test name>"                  # run one test
 dotnet run --project src/AstroLab.Api          # run the API host
+docker build -t astrolab-api .                 # build the container image (see Dockerfile)
+docker run -p 8080:8080 -v astrolab-storage:/app/storage astrolab-api   # run it, with staged FITS files on a named volume
 ```
 
 Tests use xUnit (`AstroLab.Tests`). `Microsoft.AspNetCore.Mvc.Testing` (`ApiFactory.cs`) is used for in-process endpoint integration tests against `Program`.
 
 ## Architecture
 
-The solution is a strict 4-project **Functional Core, Imperative Shell (FCIS)** design, combined with **Vertical Slice Architecture** in the API layer. Dependency direction is one-way and enforced by convention (not by analyzer):
+The solution is a strict 4-project **Functional Core, Imperative Shell (FCIS)** design, combined with **Vertical Slice Architecture** in the API layer. Feature slices drive the shape of the API: the top-level feature areas track the four conceptual layers a FITS dataset passes through — understand the file (`Fits`), then make each data type's data scientifically usable and analyze it (`Images` for 2D image data, `Spectroscopy` for 1D spectra, `TimeSeries` for tabular time-series data — scaffolded but HTTP 501 today) — plus `Archives` for upstream archive search/download and `Catalogues` for external catalogue integration (also scaffolded, HTTP 501). Before any type-specific analysis runs, `AstroLab.Core.Fits.FitsDatasetClassifier` identifies the file's `FitsDatasetKind` (Image/Spectrum/TimeSeries/Table/Unknown) from its HDU metadata and gates the analysis on it — see spec.md §4.4. Visualization (PNG rendering) is deliberately kept out of `AstroLab.Core` and lives in `AstroLab.Infrastructure`/the API boundary instead — see spec.md §5.7. Dependency direction is one-way and enforced by convention (not by analyzer):
 
 ```
 AstroLab.Api  ──►  AstroLab.Infrastructure  ──►  AstroLab.Core
@@ -48,34 +50,43 @@ AstroLab.Tests ──► all three
 `AstroLab.Core` must **never** reference `AstroLab.Infrastructure` or ASP.NET Core, and must have zero I/O, zero native interop, and no hidden global/mutable state. When adding a feature, put the math/domain logic in Core first, then wire it up from Infrastructure/Api — not the other way around.
 
 ### AstroLab.Core — pure functional core
-Static, pure, deterministic functions only; operates over `ReadOnlySpan<float>` / `ReadOnlySpan<byte>` on hot paths to avoid managed allocations. No I/O, no exceptions for expected failures.
-- `Fits/` — FITS domain models (headers, HDUs, keyword/value parsing)
+Static, pure, deterministic functions only; operates over `ReadOnlySpan<float>` / `ReadOnlySpan<byte>` on hot paths to avoid managed allocations. No I/O, no exceptions for expected failures. Contains only scientific primitives — never rendering/encoding logic (PNG, JSON shaping, etc.), which belongs in Infrastructure/Api instead (spec.md §5.7).
+- `Fits/` — FITS domain models (headers, HDUs, keyword/value parsing); `FitsDatasetKind` and `FitsDatasetClassifier` classify a file's scientific data type (Image/Spectrum/TimeSeries/Table/Unknown) from its HDU metadata and gate analysis endpoints on the required kind — see spec.md §4.4
 - `Imaging/` — pixel scaling/stretch (`ImageScaler`), statistics (`ImageStatistics`), colour mapping (`ColorMapper`)
 - `Photometry/` — `ApertureEngine`: circular/annular aperture flux and background estimation
 - `Spectroscopy/` — `SpectrumExtractor`: 1D spectral extraction
-- `Result/` — `Result<TValue>` / `Error`: hand-rolled discriminated union (C# lacks native DUs) used everywhere instead of throwing for expected failures (validation, missing data, calculation failures). Has `Match`, `Bind`, `Map`, `MapError`, `Ensure`, `Deconstruct` for pattern matching. Reserve real exceptions for genuinely unrecoverable infrastructure/interop failures at the shell boundary.
+- `Result/` — `Result<TValue>` / `Error`: hand-rolled discriminated union (C# lacks native DUs) used everywhere instead of throwing for expected failures (validation, missing data, calculation failures, or a named capability that isn't implemented yet — `ErrorCategory.NotImplemented`, mapped to HTTP 501). Has `Match`, `Bind`, `Map`, `MapError`, `Ensure`, `Deconstruct` for pattern matching. Reserve real exceptions for genuinely unrecoverable infrastructure/interop failures at the shell boundary — and even those are ultimately caught by `GlobalExceptionHandler` (see below) rather than surfacing a stack trace to the caller.
+- **Roadmap (not yet implemented):** an `Astrometry/` namespace (`Wcs`) and a `TimeSeries/` and `Catalogues/` namespace are still unbuilt. Their API-boundary feature slices already exist (scaffolded, returning HTTP 501 — see below), but do not scaffold the Core namespaces themselves ahead of the real algorithm work landing.
 
 ### AstroLab.Infrastructure — imperative shell
 Owns all side effects: native interop, filesystem, HTTP, memory management.
-- `CFITSIO/` — P/Invoke bindings to the native `cfitsio` library (`NativeMethods`); `UnmanagedFitsBuffer` owns native pixel memory lifetime via `NativeMemory`/`IDisposable` (double-free-safe, explicit ownership)
+- `Fits/` — P/Invoke bindings to the native `cfitsio` library (`NativeMethods`); `UnmanagedFitsBuffer` owns native pixel memory lifetime via `NativeMemory`/`IDisposable` (double-free-safe, explicit ownership)
   - The native `cfitsio` binary (and any DLLs it's dynamically linked against) is **not committed to git** — drop it locally into `native/<rid>/` (e.g. `native/win-x64/cfitsio.dll`), gitignored. The root `Directory.Build.props` copies everything under `native/win-x64/*.dll` into the output directory of `AstroLab.Api` and `AstroLab.Tests` only (native library resolution happens relative to the running process's base directory, not `AstroLab.Infrastructure`'s output folder). Add a corresponding `native/<rid>/` item group there when Linux/macOS builds are introduced.
-- `Storage/` — `LocalFileStore` (`ILocalFileStore`) streams FITS data to/from disk via `System.IO.Pipelines` (`PipeReader`/`PipeWriter`), never buffering full files in managed memory; `FitsDatasetReader`/`FitsHeaderReader`/`FitsPixelDataReader`/`FitsPixelConverter` read staged files
-- `ESO/`, `MAST/` — archive HTTP clients (`IEsoArchiveClient`, `IMastArchiveClient`), registered via `AddHttpClient<TInterface, TImpl>` with `AddStandardResilienceHandler()` for retries
-- `ImageRendering/` — `FitsImageRenderer` + `PngRenderer` turn FITS pixel data into browser-displayable PNGs via `RenderOptions`
+- `Storage/` — `LocalFileStore` (`ILocalFileStore`) streams FITS data to/from disk via `System.IO.Pipelines` (`PipeReader`/`PipeWriter`), never buffering full files in managed memory; `FitsDatasetReader`/`FitsHeaderReader`/`FitsPixelDataReader`/`FitsPixelConverter` read staged files. `LocalFileStoreOptions.MaxUploadSizeBytes` (default 10 GiB, `Storage:MaxUploadSizeBytes` in config, `null` = unlimited) is applied by `UploadEndpoint` via `IHttpMaxRequestBodySizeFeature` — Kestrel's own default (~28.6 MB) would otherwise reject any real FITS upload regardless of the streaming code path.
+- `Archives/` — archive metadata models (`ArchiveObservation`, `ArchiveDownload`, `ArchiveSearchQuery`, `ArchiveSource`), the shared `IArchiveClient` contract, and the ESO/MAST HTTP clients (`IEsoArchiveClient`/`EsoArchiveClient`, `IMastArchiveClient`/`MastArchiveClient`), registered via `AddHttpClient<TInterface, TImpl>` with `AddStandardResilienceHandler()` for retries. Both clients return `Error.NotImplemented(...)` directly rather than calling a guessed URL on the real archive host — see spec.md §5.6.
+- `ImageRendering/` — `FitsImageRenderer` (fully static — no instance state) + `PngRenderer` turn FITS pixel data into browser-displayable PNGs via `RenderOptions`
 - `InfrastructureServiceCollectionExtensions.AddAstroLabInfrastructure(...)` — single DI registration entry point called from `Program.cs`; options bound from config sections (`Storage`, `Eso`, `Mast` — see each `*Options.SectionName`)
 
 ### AstroLab.Api — host & vertical slices
-Minimal APIs, organized as self-contained feature slices under `Features/` following the **REPR pattern** (Request-Endpoint-Response): each endpoint owns its own request/response DTOs (one per file, defined at the API boundary) and endpoint mapping (`Map*Endpoints()` extension member on `IEndpointRouteBuilder`), registered in `Program.cs`. A `Core` or `Infrastructure` domain model (FITS headers, `ArchiveObservation`, aperture/spectrum measurement results, etc.) is never returned directly as, or embedded unmapped inside, an HTTP response — every response is its own DTO record, built from the `Result<T>` value via a `FromX(...)` mapping helper or inline construction in the endpoint (see spec.md §5.5). The only exception is enums shared across the boundary (`StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`), which are plain string-serialized discriminators, not models.
-- `Features/Fits/` — upload staging + header inspection
-- `Features/Imaging/` — FITS → image visualization
-- `Features/Photometry/` — aperture measurement endpoints
-- `Features/Spectroscopy/` — spectrum extraction endpoints
-- `Features/Observations/` — archive metadata search/query
+Minimal APIs, organized as self-contained feature slices under `Features/` following the **REPR pattern** (Request-Endpoint-Response). Features drive the folder structure at leaf granularity (spec.md §5.5): a top-level feature area owns a `{Feature}Endpoints.cs` that creates the route group and composes leaves; each leaf subfolder is one self-contained endpoint with its own `{Leaf}Endpoint.cs`, request/response DTOs (one per file, defined at the API boundary), and namespace (`AstroLab.Api.Features.{Feature}.{Leaf}`), registered from the parent `{Feature}Endpoints.cs` and ultimately `Program.cs`. A `Core` or `Infrastructure` domain model (FITS headers, `ArchiveObservation`, aperture/spectrum measurement results, etc.) is never returned directly as, or embedded unmapped inside, an HTTP response — every response is its own DTO record, built from the `Result<T>` value via a `FromX(...)` mapping helper or inline construction in the endpoint (see spec.md §5.5). The only exception is enums shared across the boundary (`StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`), which are plain string-serialized discriminators, not models.
+- `Features/Fits/` — "what is this file?": `Upload/` (stage a raw FITS file), `Inspect/` (walk every HDU, classify the file's `FitsDatasetKind`, and return that plus per-HDU/header metadata)
+- `Features/Images/` — 2D image data type: `Render/` (FITS → PNG), `Statistics/` (pixel statistics), `Photometry/` (aperture flux measurement) all require the file to classify as `Image` (`FitsDatasetReader.LoadImageAsync`); `Sources/` (source detection) and `Astrometry/` (WCS) are scaffolded (DTOs + routes) but return HTTP 501 pending their Core primitives
+- `Features/Spectroscopy/` — 1D spectrum data type: `Extract/` (boxcar extraction + wavelength calibration) requires the file to classify as `Spectrum` (`FitsDatasetReader.LoadSpectrumImageAsync`); `Calibrate/`, `Lines/`, and `Redshift/` are scaffolded but return HTTP 501 pending their Core primitives
+- `Features/TimeSeries/` — scaffolded roadmap feature (`LightCurve/`, `Detrend/`, `PeriodSearch/`); every route returns HTTP 501 pending both an `AstroLab.Core.TimeSeries` namespace and table-HDU pixel reading in `FitsDatasetReader`
+- `Features/Catalogues/` — scaffolded roadmap feature (`Query/`, `CrossMatch/`); every route returns HTTP 501 pending an `AstroLab.Core.Catalogues` namespace and an external catalogue HTTP client
+- `Features/Archives/` — archive metadata search/download: `Search/`, `Download/`, plus a shared `ArchiveClientResolver`
 - `Features/ResultEndpointExtensions.cs` — `Result<T>.ToApiResult(...)` maps a Core/Infrastructure `Result` into an `IResult` HTTP response via pattern matching; use this instead of hand-rolling status code mapping in a new endpoint
+- `Features/NotImplementedResult.cs` — the standard HTTP 501 body every roadmap slice's handler returns (see spec.md §5.5) — replace the call with the real Request → Infrastructure → Core → `Result<T>` → Response flow once that slice's Core algorithm lands, rather than scaffolding further ahead of it.
 
 Endpoint flow: receive request → resolve Infrastructure resources (file store, archive client, native buffer) → call into `AstroLab.Core` for any calculation → map the `Result<T>` to an HTTP response. Endpoints stay thin; no scientific/domain logic belongs in `Features/`.
 
 Enums (e.g. `StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`) are serialized as strings via a global `JsonStringEnumConverter` registered in `Program.cs`.
+
+`GlobalExceptionHandler` (root of `AstroLab.Api`, registered via `AddExceptionHandler<T>()`/`AddProblemDetails()` and `app.UseExceptionHandler()` ahead of every route in `Program.cs`) is the last-resort catch for exceptions that escape `Result<T>` handling — see spec.md §5.8. It always returns a generic `ProblemDetails` (500, `unexpected_error`); never add a scenario-specific `catch` here — a failure mode you can name belongs in `Result<T>` instead.
+
+## Deployment
+
+`Dockerfile` (repo root) is a multi-stage build producing a Linux container image (`mcr.microsoft.com/dotnet/aspnet:10.0`, non-root user, listens on `:8080`, `/app/storage` as a volume). It does not include the native `cfitsio` binary — harmless today since `AstroLab.Infrastructure.Fits.NativeMethods` isn't called from anywhere in the current FITS read/write path (see spec.md §5.3) — but wiring up real cfitsio P/Invoke calls will require adding a `native/linux-x64/*.so` item group to `Directory.Build.props` and copying it into the image's runtime stage.
 
 ## Performance constraints
 

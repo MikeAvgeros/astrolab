@@ -22,6 +22,9 @@ public enum ErrorCategory
     /// <summary>An upstream or infrastructure dependency failed (disk, network, native interop).</summary>
     Infrastructure,
 
+    /// <summary>The requested operation is a known, real capability that has not been implemented yet.</summary>
+    NotImplemented,
+
     /// <summary>The operation was cancelled before it could complete.</summary>
     Cancelled,
 

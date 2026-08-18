@@ -20,9 +20,13 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         _client = factory.CreateClient();
     }
 
-    private async Task<string> UploadGradientImageAsync()
+    private async Task<string> UploadGradientImageAsync() => await UploadAsync(SyntheticFits.SmallGradientImage());
+
+    private async Task<string> UploadGradientSpectrumFrameAsync() => await UploadAsync(SyntheticFits.SmallGradientSpectrumFrame());
+
+    private async Task<string> UploadAsync(byte[] fitsBytes)
     {
-        using var content = new ByteArrayContent(SyntheticFits.SmallGradientImage());
+        using var content = new ByteArrayContent(fitsBytes);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _client.PostAsync("/api/fits/upload", content);
@@ -72,11 +76,59 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task GetHeader_EmptyFile_ReturnsBadRequestInsteadOfCrashing()
+    {
+        var fileId = await UploadAsync([]);
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("fits.header.empty_file", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task GetHeader_UnrelatedExtensionSpectralMarker_DoesNotMisclassifyLoadedImage()
+    {
+        var fileId = await UploadAsync(SyntheticFits.MultiHduImageWithUnrelatedSpectralMarker());
+
+        var headerResponse = await _client.GetAsync($"/api/fits/{fileId}/header");
+        var headerBody = await headerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Image", headerBody.GetProperty("datasetKind").GetString());
+
+        var statisticsResponse = await _client.GetAsync($"/api/images/{fileId}/statistics");
+        Assert.Equal(HttpStatusCode.OK, statisticsResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetHeader_ReportsImageDatasetKind()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Image", body.GetProperty("datasetKind").GetString());
+        Assert.Equal(1, body.GetProperty("hdus").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetHeader_ReportsSpectrumDatasetKind()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Spectrum", body.GetProperty("datasetKind").GetString());
+    }
+
+    [Fact]
     public async Task GetStatistics_ComputesExactMomentsForKnownImage()
     {
         var fileId = await UploadGradientImageAsync();
 
-        var response = await _client.GetAsync($"/api/imaging/{fileId}/statistics");
+        var response = await _client.GetAsync($"/api/images/{fileId}/statistics");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -92,7 +144,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     {
         var fileId = await UploadGradientImageAsync();
 
-        var response = await _client.GetAsync($"/api/imaging/{fileId}/render?stretch=Linear&blackPoint=0&whitePoint=80");
+        var response = await _client.GetAsync($"/api/images/{fileId}/render?stretch=Linear&blackPoint=0&whitePoint=80");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
@@ -114,7 +166,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
             AnnulusOuterRadius = 1.8,
         };
 
-        var response = await _client.PostAsJsonAsync($"/api/photometry/{fileId}/aperture", request);
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -123,9 +175,29 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task MeasureAperture_OnSpectrumFrame_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+        var request = new
+        {
+            CenterX = 0.5,
+            CenterY = 0.5,
+            ApertureRadius = 0.3,
+            AnnulusInnerRadius = 1.0,
+            AnnulusOuterRadius = 1.8,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task ExtractSpectrum_SumsRowsPerColumnExactly()
     {
-        var fileId = await UploadGradientImageAsync();
+        var fileId = await UploadGradientSpectrumFrameAsync();
         var request = new
         {
             Axis = "Horizontal",
@@ -143,9 +215,27 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task ExtractSpectrum_OnPlainImage_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+        var request = new
+        {
+            Axis = "Horizontal",
+            TraceCenters = new[] { 1.0, 1.0, 1.0, 1.0 },
+            ApertureHalfWidth = 1.0,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/extract", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task SearchObservations_MissingRequiredArchiveParameter_ReturnsBadRequest()
     {
-        var response = await _client.GetAsync("/api/observations/search?target=M31");
+        var response = await _client.GetAsync("/api/archives/search?target=M31");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

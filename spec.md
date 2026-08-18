@@ -24,6 +24,7 @@ see `CLAUDE.md` instead.
    - 4.1 [Solution Structure](#41-solution-structure)
    - 4.2 [Dependency Rules](#42-dependency-rules)
    - 4.3 [Request Flow](#43-request-flow)
+   - 4.4 [FITS Dataset Classification](#44-fits-dataset-classification)
 5. [Core Implementation Patterns](#5-core-implementation-patterns)
    - 5.1 [Result Pattern](#51-result-pattern)
    - 5.2 [Functional Core: Purity and Spans](#52-functional-core-purity-and-spans)
@@ -31,6 +32,8 @@ see `CLAUDE.md` instead.
    - 5.4 [Pipeline Streaming](#54-pipeline-streaming)
    - 5.5 [Vertical Slice API Endpoints (REPR Pattern)](#55-vertical-slice-api-endpoints-repr-pattern)
    - 5.6 [Archive Clients: ESO and MAST](#56-archive-clients-eso-and-mast)
+   - 5.7 [Visualization as a Separate Capability](#57-visualization-as-a-separate-capability)
+   - 5.8 [Global Exception Handling](#58-global-exception-handling)
 6. [Testing Standards](#6-testing-standards)
    - 6.1 [Core Unit Tests](#61-core-unit-tests)
    - 6.2 [Allocation Tests](#62-allocation-tests)
@@ -90,12 +93,23 @@ enforced for both human contributors and AI coding agents working in this reposi
 
 ### 4.1 Solution Structure
 
+Feature slices drive the shape of the solution: `AstroLab.Api/Features` is organized around the
+four conceptual layers a FITS dataset passes through — **understand the file** (Fits), **make the
+data scientifically usable and learn from it** per data type (Images for 2D image data,
+Spectroscopy for 1D spectra, with TimeSeries and Catalogues as planned future data-type slices —
+see the roadmap note below), each slice pairing calibration/cleaning concerns with the analysis
+they enable. Visualization (PNG rendering) is treated as its own concern within each data-type
+slice, not folded into the scientific algorithms that back it — see §5.7.
+
 ```text
 AstroLab.slnx
 │
 ├── src/
 │   ├── AstroLab.Core/                              # Pure Functional Core (Zero Dependencies)
 │   │   ├── Fits/                                   # Domain models for HDUs and Headers
+│   │   │   ├── HduDescriptor.cs                    # Per-HDU metadata (type, header, image shape, data size)
+│   │   │   ├── FitsDatasetKind.cs                  # Image / Spectrum / TimeSeries / Table / Unknown
+│   │   │   └── FitsDatasetClassifier.cs            # Classify(...) + EnsureKind(...) — see §4.4
 │   │   ├── Imaging/                                # Pure pixel scaling, stretching & visualization math
 │   │   │   ├── ImageScaler.cs
 │   │   │   ├── ImageStatistics.cs
@@ -105,10 +119,9 @@ AstroLab.slnx
 │   │   └── Result/                                 # Result<T> / Error discriminated union
 │   │
 │   ├── AstroLab.Infrastructure/                    # Imperative Shell (Side Effects & Native Interop)
-│   │   ├── CFITSIO/                                # Low-level cfitsio P/Invoke & Native Buffers
+│   │   ├── Fits/                                   # Low-level cfitsio P/Invoke & Native Buffers
 │   │   ├── Storage/                                # Local disk staging via System.IO.Pipelines
-│   │   ├── ESO/                                    # European Southern Observatory HTTP Client
-│   │   ├── MAST/                                   # Mikulski Archive HTTP Client
+│   │   ├── Archives/                               # ESO and MAST archive HTTP clients + shared archive models
 │   │   └── ImageRendering/                         # FITS → browser image rendering
 │   │       ├── FitsImageRenderer.cs
 │   │       ├── PngRenderer.cs
@@ -116,11 +129,30 @@ AstroLab.slnx
 │   │
 │   ├── AstroLab.Api/                               # API Host & Vertical Slice Endpoints
 │   │   ├── Features/                               # Vertical Slices (REPR Pattern)
-│   │   │   ├── Observations/                       # Archive metadata search/query
-│   │   │   ├── Fits/                               # File upload & header inspection
-│   │   │   ├── Imaging/                            # FITS image visualization endpoints
-│   │   │   ├── Photometry/                         # Aperture measurement endpoints
-│   │   │   └── Spectroscopy/                       # Spectrum extraction endpoints
+│   │   │   ├── Fits/                               # "What is this file?"
+│   │   │   │   ├── Upload/                         #   Stage a raw FITS file to local storage
+│   │   │   │   └── Inspect/                        #   Parse every HDU, classify data type, return metadata
+│   │   │   ├── Images/                             # "What can I learn from this image?"
+│   │   │   │   ├── Render/                         #   FITS → PNG visualization
+│   │   │   │   ├── Statistics/                     #   Pixel statistics
+│   │   │   │   ├── Photometry/                     #   Aperture flux measurement
+│   │   │   │   ├── Sources/                        #   Source detection — roadmap, HTTP 501 (§4.1 note)
+│   │   │   │   └── Astrometry/                     #   Pixel↔world WCS — roadmap, HTTP 501 (§4.1 note)
+│   │   │   ├── Spectroscopy/                       # "What can I learn from this spectrum?"
+│   │   │   │   ├── Extract/                        #   Boxcar extraction + wavelength calibration
+│   │   │   │   ├── Calibrate/                      #   Wavelength-dispersion fitting — roadmap, HTTP 501
+│   │   │   │   ├── Lines/                          #   Spectral line detection — roadmap, HTTP 501
+│   │   │   │   └── Redshift/                       #   Redshift estimation — roadmap, HTTP 501
+│   │   │   ├── TimeSeries/                         # "What can I learn from this time series?" — roadmap feature
+│   │   │   │   ├── LightCurve/                     #   Flux-vs-time extraction — HTTP 501
+│   │   │   │   ├── Detrend/                        #   Trend removal — HTTP 501
+│   │   │   │   └── PeriodSearch/                   #   Periodicity search — HTTP 501
+│   │   │   ├── Catalogues/                         # External catalogue integration — roadmap feature
+│   │   │   │   ├── Query/                          #   Cone-search query — HTTP 501
+│   │   │   │   └── CrossMatch/                     #   Source cross-match — HTTP 501
+│   │   │   └── Archives/                           # Archive metadata search/download
+│   │   │       ├── Search/
+│   │   │       └── Download/
 │   │   └── Program.cs                              # Web host & service registrations
 │   │
 │   └── AstroLab.Tests/                             # Comprehensive Test Suite
@@ -130,6 +162,25 @@ AstroLab.slnx
 │
 └── storage/                                        # Local disk directory for raw FITS files (gitignored)
 ```
+
+> **Roadmap (not yet implemented):** `Images/Sources`, `Images/Astrometry`, `Spectroscopy/Calibrate`,
+> `Spectroscopy/Lines`, `Spectroscopy/Redshift`, and the `TimeSeries` and `Catalogues` features are
+> scaffolded at the API boundary — real request/response DTOs, routed and visible in OpenAPI — but
+> every one of them returns HTTP 501 via the shared `NotImplementedResult` helper (§5.5), because the
+> Core algorithm behind each does not exist yet:
+> - `Images/Sources` (source detection) and `Images/Astrometry` (WCS), backed by a future
+>   `AstroLab.Core.Astrometry` namespace (`Wcs`) and image-domain source-detection primitives.
+> - `Spectroscopy/Calibrate`, `Spectroscopy/Lines`, and `Spectroscopy/Redshift`, backed by a future
+>   `SpectralLine`/`Redshift` primitive family in `AstroLab.Core.Spectroscopy`.
+> - `TimeSeries` (`LightCurve`, `Detrend`, `PeriodSearch`), backed by a future
+>   `AstroLab.Core.TimeSeries` namespace — and, before that, by table-HDU pixel-data reading in
+>   `AstroLab.Infrastructure.Storage` (today's `FitsDatasetReader` only loads image-bearing HDUs).
+> - `Catalogues` (`Query`, `CrossMatch`), backed by a future `AstroLab.Core.Catalogues` namespace and
+>   an external catalogue HTTP client in `AstroLab.Infrastructure`.
+>
+> When one of these Core algorithms lands, replace its endpoint's `NotImplementedResult.Value(...)`
+> body with the real Request → Infrastructure → Core → `Result<T>` → Response flow (§4.3) — the DTOs
+> and routing already in place should not need to change shape for straightforward cases.
 
 ### 4.2 Dependency Rules
 
@@ -194,6 +245,78 @@ Result<T>
 HTTP Response
 ```
 
+### 4.4 FITS Dataset Classification
+
+**Location:** `AstroLab.Core/Fits/FitsDatasetKind.cs`, `FitsDatasetClassifier.cs`
+
+Before any type-specific analysis runs, the system identifies *what kind of scientific data* a
+staged FITS file actually contains, and refuses to run an analysis against the wrong kind:
+
+```text
+FITS File
+     │
+     ▼
+Fits Reader                 (AstroLab.Infrastructure.Storage.FitsHeaderReader/FitsDatasetReader)
+     │
+     ▼
+Inspect HDUs                (FitsHeaderReader.ReadAllHeadersAsync walks every HDU, skipping data
+     │                        segments via HduDescriptor.DataSizeBytes)
+     ▼
+Read Metadata                (HduDescriptor.FromHeader per HDU — type, header, image shape)
+     │
+     ▼
+Identify Data Type           (FitsDatasetClassifier.Classify — pure, Core)
+     │
+     ├─────────────┬─────────────┬─────────────┐
+     ▼             ▼             ▼             ▼
+   Image        Spectrum      TimeSeries      Table / Unknown
+     │             │             │
+     ▼             ▼             ▼
+FitsDatasetClassifier.EnsureKind(hdus, required)   ◄── the validation gate every analysis
+     │                                                  entry point calls first
+     ├─ match ──────────────────────► proceed: FitsDatasetReader.LoadImageAsync /
+     │                                          LoadSpectrumImageAsync → Core algorithm → Result<T>
+     └─ mismatch ───────────────────► Error.Validation("fits.data.unsupported_type", ...)
+                                       → HTTP 400 via ToApiResult/ToProblem (§5.1, §5.5)
+```
+
+`FitsDatasetClassifier.Classify` inspects the full ordered list of a file's `HduDescriptor`s and
+returns a `FitsDatasetKind`:
+
+1. Any table HDU (`AsciiTable`/`BinaryTable`) with a `TTYPEn` column named `TIME` → `TimeSeries`.
+   This check alone is file-wide, since a lightcurve table doesn't compete with an image HDU for
+   which data gets analyzed.
+2. Otherwise, find the first HDU with non-empty pixel data (`FitsDatasetClassifier.HasPixelData` —
+   the exact same predicate `FitsDatasetReader` uses to pick which HDU to load pixels from, so
+   classification and loading can never disagree on *which* HDU is being described). That HDU alone
+   is then checked: a single-axis (`NAXIS = 1`) array, or a `DISPAXIS` keyword, or a `CTYPEn` value
+   starting with `WAVE`, `FREQ`, `ENER`, `AWAV`, or `VELO` — all evaluated only against *this* HDU's
+   own header, never any other HDU's — classifies it `Spectrum` (this is what lets a raw 2D
+   long-slit spectrogram — a spatial axis plus a dispersion axis, still stored as ordinary FITS
+   image data — classify as `Spectrum` rather than `Image`); otherwise it classifies `Image`. An
+   unrelated extension's stray `DISPAXIS`/`CTYPE` card must never reclassify a *different* HDU's
+   plain image data — that was a real bug (classification scanned every HDU for markers while
+   loading only ever looked at the first data-bearing HDU) fixed by scoping the marker check to the
+   one HDU both operations agree on.
+3. If no HDU has pixel data, any table HDU present → `Table`.
+4. Otherwise → `Unknown`.
+
+`FitsDatasetClassifier.EnsureKind(hdus, required)` classifies and returns `Result<FitsDatasetKind>`
+— `Success` when the classification matches `required`, otherwise a validation `Error` naming both
+the required and actual kind. `AstroLab.Infrastructure.Storage.FitsDatasetReader` calls this before
+reading any pixel data (`LoadImageAsync` requires `Image`; `LoadSpectrumImageAsync` requires
+`Spectrum`), so every Images-family and Spectroscopy-family endpoint is gated by it today. `Table`
+and `TimeSeries` are classified but not yet consumed by any endpoint — `Catalogues` and `TimeSeries`
+are still HTTP 501 roadmap stubs (§4.1) — but the same `EnsureKind` call is what their real Core
+work will use once it lands.
+
+Walking every HDU (`FitsHeaderReader.ReadAllHeadersAsync`) fails fast with a validation `Error`
+(`fits.header.empty_file`) when a staged file contains zero HDUs — a 0-byte upload, most obviously
+— rather than letting an empty result ripple downstream into an out-of-bounds access. A table HDU's
+`DataSizeBytes` (`HduDescriptor`) is `(NAXIS1 * NAXIS2) + PCOUNT` (row bytes plus the
+variable-length-array heap size), with every component clamped to non-negative before combining, so
+a malformed header can't compute a negative or nonsensical skip distance to the next HDU.
+
 ---
 
 ## 5. Core Implementation Patterns
@@ -209,7 +332,11 @@ and `Deconstruct` for composing and pattern-matching against outcomes, so API en
 translate domain outcomes directly into HTTP responses via C# pattern matching.
 
 `Error` is a lightweight value type carrying a stable machine-readable code, a human-readable
-message, and an `ErrorCategory` used to map the failure onto a transport response.
+message, and an `ErrorCategory` used to map the failure onto a transport response. `ErrorCategory`
+includes `NotImplemented` — for a real, named capability whose Core/Infrastructure implementation
+doesn't exist yet (e.g. `EsoArchiveClient`/`MastArchiveClient`, §5.6) — which `ResultEndpointExtensions`
+maps to HTTP 501, the same status the API-boundary-only `NotImplementedResult` helper (§5.5) returns
+for roadmap endpoints that never produce a `Result<T>` in the first place.
 
 Exceptions must not be used for normal domain validation, calculation failures, invalid FITS data,
 or other expected failure conditions. Exceptions may still be used at the imperative shell boundary
@@ -253,7 +380,7 @@ compromise the purity or usability of the functional core.
 
 ### 5.3 Unmanaged Native Buffers
 
-**Location:** `AstroLab.Infrastructure/CFITSIO`
+**Location:** `AstroLab.Infrastructure/Fits`
 
 `AstroLab.Infrastructure` contains all side effects: native interop, filesystem access, network
 communication, and resource management. `cfitsio` raw pixel allocations are wrapped using
@@ -270,7 +397,7 @@ image buffers — potentially several gigabytes — must exist outside the manag
 
 ### 5.4 Pipeline Streaming
 
-**Location:** `AstroLab.Infrastructure/Storage`, `AstroLab.Infrastructure/ESO`, `AstroLab.Infrastructure/MAST`
+**Location:** `AstroLab.Infrastructure/Storage`, `AstroLab.Infrastructure/Archives`
 
 Incoming archive data from ESO and MAST must be streamed directly to local storage without
 unnecessarily buffering the entire FITS file in managed memory, using
@@ -294,6 +421,15 @@ same feature slice.
 - Each feature slice owns its endpoint-specific request/response DTOs (one type per file, per the
   §3 one-type-per-file rule) and endpoint mapping (a `Map*Endpoints()` extension member on
   `IEndpointRouteBuilder`) — see §4.3 for the request flow each endpoint follows.
+- **Features drive the folder structure, at leaf granularity.** A top-level feature area (`Fits`,
+  `Images`, `Spectroscopy`, `Archives`, ...) is a route group, not an endpoint: it owns a top-level
+  `{Feature}Endpoints.cs` that creates the `RouteGroupBuilder` and composes the leaves beneath it. A
+  leaf subfolder (`Render`, `Statistics`, `Photometry`, `Inspect`, `Upload`, `Extract`, `Search`,
+  `Download`, ...) is one self-contained endpoint: its own `{Leaf}Endpoint.cs` (a `Map{Leaf}Endpoint`
+  extension member on `IEndpointRouteBuilder` mapping exactly one route) plus its own request/response
+  DTOs, all sharing the leaf's namespace (`AstroLab.Api.Features.{Feature}.{Leaf}`). This keeps each
+  slice small enough to reason about in isolation and lets a feature area grow (e.g. `Images` gaining
+  a `Sources` or `Astrometry` leaf) without touching unrelated leaves.
 - **A domain or infrastructure model — anything defined in `AstroLab.Core` or
   `AstroLab.Infrastructure` (FITS domain models, `ArchiveObservation`, aperture/spectrum
   measurement results, etc.) — must never be returned directly as, or embedded unmapped inside, an
@@ -307,10 +443,18 @@ same feature slice.
 - Avoid creating a large centralized controller or service containing unrelated application
   functionality; endpoints stay thin and never contain the implementation of photometry, image
   scaling, spectral extraction, or other scientific algorithms.
+- **Roadmap slices return HTTP 501, never a half-built implementation.** A feature slice scaffolded
+  ahead of its Core algorithm (§4.1's roadmap note) still gets real request/response DTOs and a
+  mapped route, but its handler body is exactly one call to
+  `AstroLab.Api.Features.NotImplementedResult.Value(code, message)`, which returns
+  `Results.Problem(..., statusCode: 501, title: code)`. This keeps the wire contract final and
+  visible in OpenAPI while being explicit that the analysis behind it doesn't exist yet — never
+  fake success, a hardcoded value, or partial logic. When the Core algorithm lands, the stub call is
+  replaced by the real Request → Infrastructure → Core → `Result<T>` → Response flow (§4.3).
 
 ### 5.6 Archive Clients: ESO and MAST
 
-**Location:** `AstroLab.Infrastructure/ESO`, `AstroLab.Infrastructure/MAST`
+**Location:** `AstroLab.Infrastructure/Archives`
 
 The ESO and MAST clients are stub HTTP client abstractions: each archive's real query/download
 surface is not yet fully wired up, but the HTTP plumbing is — a resilient, retrying `HttpClient`
@@ -319,6 +463,65 @@ resolved via `IHttpClientFactory` (registered with `AddHttpClient<TInterface, TI
 request/response contracts can be filled in later without touching callers, `AstroLab.Core`, or the
 API feature slices, and so that MAST's implementation can evolve independently while following the
 same architectural principles as ESO's.
+
+Neither client issues a request against a guessed URL on the real archive host: until the real
+query/download contract for an archive is known, `SearchAsync`/`DownloadAsync` return
+`Error.NotImplemented(...)` directly rather than calling `_httpClient` against a fabricated path —
+a coincidental 2xx from an unrelated page on the real host must never be reported as "search
+succeeded, zero results." The injected, resilience-wrapped `HttpClient` stays in place so the real
+implementation is a matter of filling in the method body, not re-wiring DI.
+
+### 5.7 Visualization as a Separate Capability
+
+**Location:** `AstroLab.Infrastructure/ImageRendering`, `AstroLab.Api/Features/Images/Render`
+
+Visualization is an infrastructure-and-API concern, not a scientific one, and must never be
+implemented inside `AstroLab.Core`. Core produces scientific results — scaled/stretched pixel
+values, statistics, source measurements — as plain data; it has no knowledge of PNG, JPEG, or any
+other output encoding, and no dependency on an imaging codec library. A rendering library
+(`PngRenderer`) belongs in `AstroLab.Infrastructure` precisely because it is a concrete third-party
+dependency with its own I/O and encoding concerns, exactly like `cfitsio` or an archive `HttpClient`.
+
+The render request flow illustrates why this separation matters — each step touches exactly one
+layer, and Core never learns that its output will become a PNG:
+
+```text
+HTTP request (RenderEndpoint)
+     │
+     ▼
+AstroLab.Infrastructure/Fits    (cfitsio-backed pixel read → UnmanagedFitsBuffer / spans)
+     │
+     ▼
+AstroLab.Core/Imaging           (ImageScaler, ImageStatistics, ColorMapper — pure scaling/stretch math)
+     │
+     ▼
+AstroLab.Infrastructure/ImageRendering  (FitsImageRenderer + PngRenderer — pixels → PNG bytes)
+     │
+     ▼
+HTTP response (image/png)
+```
+
+This same pattern generalizes to every other visualization the roadmap in §4.1 anticipates
+(spectrum plots, light curves, source overlays, RGB composites, false-colour images): Core supplies
+the scientific values, and a renderer living in `AstroLab.Infrastructure` (or a thin mapping in the
+API feature slice, for simple JSON-shaped visualizations like a spectrum plot's point series) turns
+them into the requested visual/wire representation. A Core algorithm must never be written to know
+or care whether its result becomes a PNG, a JSON response, a FITS file, or something else.
+
+### 5.8 Global Exception Handling
+
+**Location:** `AstroLab.Api/GlobalExceptionHandler.cs`, `Program.cs`
+
+`Result<T>` (§5.1) covers every *expected* failure — validation, missing data, an unimplemented
+capability — and every endpoint maps one to a response via `ResultEndpointExtensions`. It does not,
+and must not, cover genuinely unexpected failures (a native interop crash, a programmer error): an
+exception escaping an endpoint is caught by `GlobalExceptionHandler` (registered via
+`AddExceptionHandler<T>()` + `AddProblemDetails()` in `Program.cs`, and wired into the pipeline with
+`app.UseExceptionHandler()`, ahead of every route). It logs the full exception server-side and
+returns a generic `ProblemDetails` (HTTP 500, title `unexpected_error`) — the caller never sees a
+stack trace or exception message, and the site the failure actually happened at is only ever visible
+in the server-side log. This is a safety net, not a substitute for `Result<T>`: a new failure mode
+that can be anticipated still belongs in `Result<T>`, not left to fall through to this handler.
 
 ---
 

@@ -1,7 +1,5 @@
 using System.Net;
-using AstroLab.Infrastructure.ESO;
-using AstroLab.Infrastructure.ImageRendering;
-using AstroLab.Infrastructure.MAST;
+using AstroLab.Infrastructure.Archives;
 using AstroLab.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +9,7 @@ using Polly.Timeout;
 
 namespace AstroLab.Infrastructure;
 
-/// <summary>Registers every Infrastructure-layer service: local storage, archive clients, and image rendering.</summary>
+/// <summary>Registers every Infrastructure-layer service: local storage and archive clients. Image rendering (<see cref="AstroLab.Infrastructure.ImageRendering.FitsImageRenderer"/>) is fully static and needs no registration.</summary>
 public static class InfrastructureServiceCollectionExtensions
 {
     private const int ArchiveRetryMaxAttempts = 3;
@@ -30,7 +28,6 @@ public static class InfrastructureServiceCollectionExtensions
             services.Configure<MastArchiveOptions>(configuration.GetSection(MastArchiveOptions.SectionName));
 
             services.TryAddSingleton<ILocalFileStore, LocalFileStore>();
-            services.TryAddSingleton<FitsImageRenderer>();
             services.TryAddSingleton<FitsDatasetReader>();
 
             var esoBaseAddress = new Uri(configuration[$"{EsoArchiveOptions.SectionName}:{nameof(EsoArchiveOptions.BaseAddress)}"]

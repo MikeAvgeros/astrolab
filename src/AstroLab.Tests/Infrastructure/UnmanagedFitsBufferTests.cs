@@ -1,4 +1,4 @@
-using AstroLab.Infrastructure.CFITSIO;
+using AstroLab.Infrastructure.Fits;
 
 namespace AstroLab.Tests.Infrastructure;
 

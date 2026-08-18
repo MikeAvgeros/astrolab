@@ -13,34 +13,117 @@ internal static class SyntheticFits
     /// every downstream computation (statistics, aperture flux, spectral extraction) an exact,
     /// hand-checkable expected result.
     /// </summary>
-    public static byte[] SmallGradientImage()
+    public static byte[] SmallGradientImage() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    4",
+        "NAXIS2  =                    2",
+        "END",
+    ]);
+
+    /// <summary>
+    /// The same 4x2 gradient pixel data as <see cref="SmallGradientImage"/>, but carrying a
+    /// <c>DISPAXIS</c> keyword — the standard FITS marker for a 2D spectroscopic frame (a
+    /// long-slit spectrogram with a spatial axis and a dispersion axis) — so
+    /// <c>FitsDatasetClassifier</c> identifies it as <c>Spectrum</c> rather than <c>Image</c>.
+    /// </summary>
+    public static byte[] SmallGradientSpectrumFrame() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    4",
+        "NAXIS2  =                    2",
+        "DISPAXIS=                    1",
+        "END",
+    ]);
+
+    /// <summary>
+    /// A 3-HDU file where the ONLY HDU with pixel data (extension 1, a plain 4x2 gradient image)
+    /// carries no spectral marker of its own, but an unrelated, dataless extension (2) carries a
+    /// stray <c>DISPAXIS</c> card. Regression fixture for the classify/load HDU-selection mismatch:
+    /// <c>FitsDatasetClassifier</c> must classify based on the same HDU
+    /// <c>FitsDatasetReader</c> actually loads pixels from, not on whichever HDU happens to carry a
+    /// marker — otherwise this file misclassifies as <c>Spectrum</c> even though the HDU that gets
+    /// analyzed is a plain image.
+    /// </summary>
+    public static byte[] MultiHduImageWithUnrelatedSpectralMarker()
+    {
+        var primary = (
+            Cards: new[]
+            {
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    0",
+                "END",
+            },
+            Data: Array.Empty<byte>());
+
+        var imageExtension = (
+            Cards: new[]
+            {
+                "XTENSION= 'IMAGE   '",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                    4",
+                "NAXIS2  =                    2",
+                "END",
+            },
+            Data: new byte[] { 10, 20, 30, 40, 50, 60, 70, 80 });
+
+        var strayMarkerExtension = (
+            Cards: new[]
+            {
+                "XTENSION= 'IMAGE   '",
+                "BITPIX  =                    8",
+                "NAXIS   =                    0",
+                "DISPAXIS=                    1",
+                "END",
+            },
+            Data: Array.Empty<byte>());
+
+        return BuildMultiHdu([primary, imageExtension, strayMarkerExtension]);
+    }
+
+    private static byte[] BuildSingleHdu(string[] cards)
     {
         byte[] pixels = [10, 20, 30, 40, 50, 60, 70, 80];
-        string[] cards =
-        [
-            "SIMPLE  =                    T",
-            "BITPIX  =                    8",
-            "NAXIS   =                    2",
-            "NAXIS1  =                    4",
-            "NAXIS2  =                    2",
-            "END",
-        ];
+        return BuildMultiHdu([(cards, pixels)]);
+    }
 
-        var header = new StringBuilder();
-        foreach (var card in cards)
+    private static byte[] BuildMultiHdu(IReadOnlyList<(string[] Cards, byte[] Data)> hdus)
+    {
+        using var output = new MemoryStream();
+
+        foreach (var (cards, data) in hdus)
         {
-            header.Append(card.PadRight(CardLength));
+            var header = new StringBuilder();
+            foreach (var card in cards)
+            {
+                header.Append(card.PadRight(CardLength));
+            }
+
+            while (header.Length % BlockSize != 0)
+            {
+                header.Append(' ', CardLength);
+            }
+
+            var headerBytes = Encoding.ASCII.GetBytes(header.ToString());
+            output.Write(headerBytes);
+
+            if (data.Length > 0)
+            {
+                output.Write(data);
+                var padding = (BlockSize - (data.Length % BlockSize)) % BlockSize;
+                if (padding > 0)
+                {
+                    output.Write(new byte[padding]);
+                }
+            }
         }
 
-        while (header.Length % BlockSize != 0)
-        {
-            header.Append(' ', CardLength);
-        }
-
-        var headerBytes = Encoding.ASCII.GetBytes(header.ToString());
-        var result = new byte[headerBytes.Length + pixels.Length];
-        headerBytes.CopyTo(result, 0);
-        pixels.CopyTo(result, headerBytes.Length);
-        return result;
+        return output.ToArray();
     }
 }

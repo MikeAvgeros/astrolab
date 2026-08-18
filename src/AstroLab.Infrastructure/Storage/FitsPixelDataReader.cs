@@ -1,6 +1,6 @@
 using AstroLab.Core.Fits;
 using AstroLab.Core.Result;
-using AstroLab.Infrastructure.CFITSIO;
+using AstroLab.Infrastructure.Fits;
 
 namespace AstroLab.Infrastructure.Storage;
 

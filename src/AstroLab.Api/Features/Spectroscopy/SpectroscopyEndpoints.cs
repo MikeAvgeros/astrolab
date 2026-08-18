@@ -1,9 +1,15 @@
-using AstroLab.Core.Spectroscopy;
-using AstroLab.Infrastructure.Storage;
+using AstroLab.Api.Features.Spectroscopy.Calibrate;
+using AstroLab.Api.Features.Spectroscopy.Extract;
+using AstroLab.Api.Features.Spectroscopy.Lines;
+using AstroLab.Api.Features.Spectroscopy.Redshift;
 
 namespace AstroLab.Api.Features.Spectroscopy;
 
-/// <summary>One-dimensional spectral extraction endpoints: boxcar extraction and wavelength calibration.</summary>
+/// <summary>
+/// "What can I learn from this spectrum?" — 1D spectral extraction and analysis. Extract holds
+/// boxcar flux extraction with optional wavelength calibration; Calibrate, Lines, and Redshift are
+/// scaffolded roadmap slices that return HTTP 501 pending their Core algorithms (see spec.md).
+/// </summary>
 public static class SpectroscopyEndpoints
 {
     extension(IEndpointRouteBuilder app)
@@ -12,54 +18,12 @@ public static class SpectroscopyEndpoints
         {
             var group = app.MapGroup("/api/spectroscopy").WithTags("Spectroscopy");
 
-            group.MapPost("/{fileId}/extract", ExtractAsync)
-                .WithSummary("Extracts a 1D flux spectrum (optionally wavelength-calibrated) from the primary image HDU.");
+            group.MapExtractEndpoint();
+            group.MapCalibrateEndpoint();
+            group.MapLinesEndpoint();
+            group.MapRedshiftEndpoint();
 
             return group;
         }
-    }
-
-    private static async Task<IResult> ExtractAsync(
-        string fileId,
-        SpectrumExtractionRequest request,
-        FitsDatasetReader datasetReader,
-        CancellationToken cancellationToken)
-    {
-        var datasetResult = await datasetReader.LoadPrimaryImageAsync(fileId, cancellationToken);
-        if (datasetResult.IsFailure)
-        {
-            return datasetResult.Error.ToProblem();
-        }
-
-        var dataset = datasetResult.Value;
-        var (width, height) = dataset.Image.Resolve2DDimensions();
-        var dispersionBins = request.Axis == DispersionAxis.Horizontal ? width : height;
-
-        var spectrum = new double[dispersionBins];
-        var extractResult = SpectrumExtractor.ExtractBoxcar(
-            dataset.Pixels, width, height, request.Axis, request.TraceCenters, request.ApertureHalfWidth, spectrum);
-        if (extractResult.IsFailure)
-        {
-            return extractResult.Error.ToProblem();
-        }
-
-        double[]? wavelengths = null;
-        if (request.DispersionCoefficients is { Length: > 0 })
-        {
-            wavelengths = new double[dispersionBins];
-            var pixelIndices = new double[dispersionBins];
-            for (var i = 0; i < dispersionBins; i++)
-            {
-                pixelIndices[i] = i;
-            }
-
-            var wavelengthResult = SpectrumExtractor.ComputeWavelengths(pixelIndices, request.DispersionCoefficients, wavelengths);
-            if (wavelengthResult.IsFailure)
-            {
-                return wavelengthResult.Error.ToProblem();
-            }
-        }
-
-        return Results.Ok(new SpectrumExtractionResponse(fileId, wavelengths, spectrum));
     }
 }

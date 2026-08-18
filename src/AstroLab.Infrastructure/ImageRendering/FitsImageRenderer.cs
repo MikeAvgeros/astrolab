@@ -6,17 +6,18 @@ namespace AstroLab.Infrastructure.ImageRendering;
 /// <summary>
 /// Orchestrates the FITS-pixel-array-to-browser-image pipeline: optional auto black/white-point
 /// detection, non-linear stretch, color mapping, and PNG encoding. All scientific computation is
-/// delegated to <c>AstroLab.Core.Imaging</c>; this class only sequences those pure calls and owns
-/// the managed output buffers, which is why it lives in the imperative shell rather than Core.
+/// delegated to <c>AstroLab.Core.Imaging</c>; this class only sequences those pure calls, which is
+/// why it lives in the imperative shell rather than Core. It carries no instance state, so every
+/// member is static.
 /// </summary>
-public sealed class FitsImageRenderer
+public static class FitsImageRenderer
 {
     private const double DefaultBlackPoint = 0.0;
     private const double DefaultWhitePoint = 1.0;
     private const int RgbChannelCount = 3;
 
     /// <summary>Applies stretch and color mapping, producing an in-memory RGB image without modifying the source pixels.</summary>
-    public Result<RenderedImage> Render(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options)
+    public static Result<RenderedImage> Render(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options)
     {
         if (width <= 0 || height <= 0 || pixels.Length != width * height)
         {
@@ -60,6 +61,6 @@ public sealed class FitsImageRenderer
     }
 
     /// <summary>Renders and PNG-encodes a pixel array in one step.</summary>
-    public Result<byte[]> RenderToPng(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options) =>
+    public static Result<byte[]> RenderToPng(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options) =>
         Render(pixels, width, height, options).Map(PngRenderer.Encode);
 }

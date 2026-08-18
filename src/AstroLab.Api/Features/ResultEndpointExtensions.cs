@@ -19,6 +19,7 @@ public static class ResultEndpointExtensions
             ErrorCategory.Unauthorized => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status401Unauthorized, title: error.Code),
             ErrorCategory.Cancelled => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status408RequestTimeout, title: error.Code),
             ErrorCategory.Infrastructure => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status502BadGateway, title: error.Code),
+            ErrorCategory.NotImplemented => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status501NotImplemented, title: error.Code),
             ErrorCategory.Unexpected => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status500InternalServerError, title: error.Code),
             _ => Results.Problem(detail: error.Message, statusCode: StatusCodes.Status500InternalServerError, title: error.Code),
         };

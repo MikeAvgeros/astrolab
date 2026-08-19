@@ -32,7 +32,7 @@ see `CLAUDE.md` instead.
    - 5.4 [Pipeline Streaming](#54-pipeline-streaming)
    - 5.5 [Vertical Slice API Endpoints (REPR Pattern)](#55-vertical-slice-api-endpoints-repr-pattern)
    - 5.6 [Archive Clients: ESO and MAST](#56-archive-clients-eso-and-mast)
-   - 5.7 [Visualization as a Separate Capability](#57-visualization-as-a-separate-capability)
+   - 5.7 [Visualisation as a Separate Capability](#57-visualisation-as-a-separate-capability)
    - 5.8 [Global Exception Handling](#58-global-exception-handling)
 6. [Testing Standards](#6-testing-standards)
    - 6.1 [Core Unit Tests](#61-core-unit-tests)
@@ -44,7 +44,7 @@ see `CLAUDE.md` instead.
 ## 1. Overview
 
 **AstroLab** is a high-performance .NET 10 RESTful API platform that downloads, stores, parses,
-analyzes, visualizes, and renders FITS (Flexible Image Transport System) scientific datasets from
+analyses, visualises, and renders FITS (Flexible Image Transport System) scientific datasets from
 astronomical archives (ESO and MAST) as well as direct user uploads.
 
 The system is built on a **Functional Core, Imperative Shell (FCIS)** design: a pure, allocation-
@@ -55,8 +55,8 @@ exceptions for expected failures. Native memory management (`cfitsio` P/Invoke b
 `ReadOnlySpan<T>`, `System.IO.Pipelines`) lets the system process multi-gigabyte astronomical files
 with minimal Garbage Collector (GC) overhead.
 
-A dedicated **FITS Image Visualization** capability provides browser-consumable representations of
-2D FITS image data, including pixel scaling, image stretching, color mapping, NaN/invalid-pixel
+A dedicated **FITS Image Visualisation** capability provides browser-consumable representations of
+2D FITS image data, including pixel scaling, image stretching, colour mapping, NaN/invalid-pixel
 handling, and image statistics.
 
 ---
@@ -69,7 +69,7 @@ handling, and image statistics.
 - **Solution Layout:** Exactly four projects — `AstroLab.Core`, `AstroLab.Infrastructure`, `AstroLab.Api`, `AstroLab.Tests` (full layout and dependency rules in §4.1–§4.2).
 - **Error Handling:** `Result<T>` — a hand-rolled discriminated union (`Result`/`Error`) used for all expected domain and infrastructure outcomes; exceptions are reserved for genuinely unrecoverable failures (§5.1).
 - **Performance:** Zero managed-heap allocation on hot pixel/byte-buffer paths, backed by `ReadOnlySpan<T>`, `NativeMemory`, `stackalloc`, and `System.IO.Pipelines`.
-- **Image Visualization:** 2D FITS image data must be transformable into a browser-displayable representation (PNG) without mutating the original FITS data.
+- **Image Visualisation:** 2D FITS image data must be transformable into a browser-displayable representation (PNG) without mutating the original FITS data.
 
 ---
 
@@ -93,13 +93,15 @@ enforced for both human contributors and AI coding agents working in this reposi
 
 ### 4.1 Solution Structure
 
-Feature slices drive the shape of the solution: `AstroLab.Api/Features` is organized around the
-four conceptual layers a FITS dataset passes through — **understand the file** (Fits), **make the
-data scientifically usable and learn from it** per data type (Images for 2D image data,
-Spectroscopy for 1D spectra, with TimeSeries and Catalogues as planned future data-type slices —
-see the roadmap note below), each slice pairing calibration/cleaning concerns with the analysis
-they enable. Visualization (PNG rendering) is treated as its own concern within each data-type
-slice, not folded into the scientific algorithms that back it — see §5.7.
+Feature slices drive the shape of the solution: `AstroLab.Api/Features` is organised around the
+four conceptual layers a FITS dataset passes through — **understand the file** (Fits), then **make
+the data scientifically usable and learn from it** per data type (Images for 2D image data,
+Spectroscopy for 1D spectra, TimeSeries for tabular time-series data — planned, see the roadmap
+note below), each slice pairing calibration/cleaning concerns with the analysis they enable — plus
+Archives for upstream archive search/download and Catalogues for external catalogue integration
+(also planned), neither of which is a per-data-type slice. Visualisation (PNG rendering) is treated
+as its own concern within each data-type slice, not folded into the scientific algorithms that back
+it — see §5.7.
 
 ```text
 AstroLab.slnx
@@ -110,7 +112,7 @@ AstroLab.slnx
 │   │   │   ├── HduDescriptor.cs                    # Per-HDU metadata (type, header, image shape, data size)
 │   │   │   ├── FitsDatasetKind.cs                  # Image / Spectrum / TimeSeries / Table / Unknown
 │   │   │   └── FitsDatasetClassifier.cs            # Classify(...) + EnsureKind(...) — see §4.4
-│   │   ├── Imaging/                                # Pure pixel scaling, stretching & visualization math
+│   │   ├── Imaging/                                # Pure pixel scaling, stretching & visualisation math
 │   │   │   ├── ImageScaler.cs
 │   │   │   ├── ImageStatistics.cs
 │   │   │   └── ColorMapper.cs
@@ -133,7 +135,7 @@ AstroLab.slnx
 │   │   │   │   ├── Upload/                         #   Stage a raw FITS file to local storage
 │   │   │   │   └── Inspect/                        #   Parse every HDU, classify data type, return metadata
 │   │   │   ├── Images/                             # "What can I learn from this image?"
-│   │   │   │   ├── Render/                         #   FITS → PNG visualization
+│   │   │   │   ├── Render/                         #   FITS → PNG visualisation
 │   │   │   │   ├── Statistics/                     #   Pixel statistics
 │   │   │   │   ├── Photometry/                     #   Aperture flux measurement
 │   │   │   │   ├── Sources/                        #   Source detection — roadmap, HTTP 501 (§4.1 note)
@@ -405,7 +407,7 @@ unnecessarily buffering the entire FITS file in managed memory, using
 
 - Stream network responses incrementally and write directly to local staging storage.
 - Avoid loading complete FITS files into a single `byte[]`.
-- Minimize intermediate buffer allocations and respect backpressure.
+- Minimise intermediate buffer allocations and respect backpressure.
 - Correctly complete and dispose pipeline resources.
 - Propagate cancellation tokens throughout the pipeline.
 
@@ -413,7 +415,7 @@ unnecessarily buffering the entire FITS file in managed memory, using
 
 **Location:** `AstroLab.Api/Features`
 
-API functionality is organized into self-contained vertical slices using ASP.NET Core Minimal APIs,
+API functionality is organised into self-contained vertical slices using ASP.NET Core Minimal APIs,
 with each endpoint following the **REPR pattern** (Request-Endpoint-Response): a single endpoint is
 paired with exactly one request DTO and one response DTO, both defined at the API boundary, in the
 same feature slice.
@@ -439,8 +441,8 @@ same feature slice.
   trivial one-to-one field copy — the boundary DTO still isolates callers from Core/Infrastructure
   representation changes and is what defines the endpoint's actual wire contract.
   Enums shared across the boundary (`StretchMode`, `ColorMap`, `DispersionAxis`, `ArchiveSource`)
-  are the one exception, since they are plain string-serialized discriminators rather than models.
-- Avoid creating a large centralized controller or service containing unrelated application
+  are the one exception, since they are plain string-serialised discriminators rather than models.
+- Avoid creating a large centralised controller or service containing unrelated application
   functionality; endpoints stay thin and never contain the implementation of photometry, image
   scaling, spectral extraction, or other scientific algorithms.
 - **Roadmap slices return HTTP 501, never a half-built implementation.** A feature slice scaffolded
@@ -471,11 +473,11 @@ a coincidental 2xx from an unrelated page on the real host must never be reporte
 succeeded, zero results." The injected, resilience-wrapped `HttpClient` stays in place so the real
 implementation is a matter of filling in the method body, not re-wiring DI.
 
-### 5.7 Visualization as a Separate Capability
+### 5.7 Visualisation as a Separate Capability
 
 **Location:** `AstroLab.Infrastructure/ImageRendering`, `AstroLab.Api/Features/Images/Render`
 
-Visualization is an infrastructure-and-API concern, not a scientific one, and must never be
+Visualisation is an infrastructure-and-API concern, not a scientific one, and must never be
 implemented inside `AstroLab.Core`. Core produces scientific results — scaled/stretched pixel
 values, statistics, source measurements — as plain data; it has no knowledge of PNG, JPEG, or any
 other output encoding, and no dependency on an imaging codec library. A rendering library
@@ -501,10 +503,10 @@ AstroLab.Infrastructure/ImageRendering  (FitsImageRenderer + PngRenderer — pix
 HTTP response (image/png)
 ```
 
-This same pattern generalizes to every other visualization the roadmap in §4.1 anticipates
+This same pattern generalises to every other visualisation the roadmap in §4.1 anticipates
 (spectrum plots, light curves, source overlays, RGB composites, false-colour images): Core supplies
 the scientific values, and a renderer living in `AstroLab.Infrastructure` (or a thin mapping in the
-API feature slice, for simple JSON-shaped visualizations like a spectrum plot's point series) turns
+API feature slice, for simple JSON-shaped visualisations like a spectrum plot's point series) turns
 them into the requested visual/wire representation. A Core algorithm must never be written to know
 or care whether its result becomes a PNG, a JSON response, a FITS file, or something else.
 
@@ -538,7 +540,7 @@ Tests cover the Core, Infrastructure, and API layers.
 Tests verify:
 
 - Photometry calculations are mathematically correct — circular aperture flux, annular background estimation.
-- Image scaling produces expected normalized values, including correct logarithmic-scaling behavior.
+- Image scaling produces expected normalised values, including correct logarithmic-scaling behaviour.
 - Spectrum extraction produces expected one-dimensional output.
 - `Result<T>` success and failure cases behave correctly, and expected domain failures do not require exceptions.
 

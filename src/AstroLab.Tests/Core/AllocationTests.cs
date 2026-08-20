@@ -69,6 +69,22 @@ public class AllocationTests
     }
 
     [Fact]
+    public void ImageStatistics_ComputeSkyBackground_AllocatesNoManagedMemory()
+    {
+        var pixels = new float[50_000];
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = i % 1000;
+        }
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        var allocated = MeasureAllocatedBytes(() => ImageStatistics.ComputeSkyBackground(pixels, stats));
+
+        Assert.Equal(0, allocated);
+    }
+
+    [Fact]
     public void ApertureEngine_MeasureCircularAperture_AllocatesNoManagedMemory()
     {
         const int size = 201;

@@ -148,7 +148,8 @@ AstroLab.slnx
 │   │   │   ├── TimeSeries/                         # "What can I learn from this time series?" — roadmap feature
 │   │   │   │   ├── LightCurve/                     #   Flux-vs-time extraction — HTTP 501
 │   │   │   │   ├── Detrend/                        #   Trend removal — HTTP 501
-│   │   │   │   └── PeriodSearch/                   #   Periodicity search — HTTP 501
+│   │   │   │   ├── PeriodSearch/                   #   Periodicity search — HTTP 501
+│   │   │   │   └── Transit/                        #   Transit (brightness-dip) search — HTTP 501
 │   │   │   ├── Catalogues/                         # External catalogue integration — roadmap feature
 │   │   │   │   ├── Query/                          #   Cone-search query — HTTP 501
 │   │   │   │   └── CrossMatch/                     #   Source cross-match — HTTP 501
@@ -174,7 +175,7 @@ AstroLab.slnx
 >   `AstroLab.Core.Astrometry` namespace (`Wcs`) and image-domain source-detection primitives.
 > - `Spectroscopy/Calibrate`, `Spectroscopy/Lines`, and `Spectroscopy/Redshift`, backed by a future
 >   `SpectralLine`/`Redshift` primitive family in `AstroLab.Core.Spectroscopy`.
-> - `TimeSeries` (`LightCurve`, `Detrend`, `PeriodSearch`), backed by a future
+> - `TimeSeries` (`LightCurve`, `Detrend`, `PeriodSearch`, `Transit`), backed by a future
 >   `AstroLab.Core.TimeSeries` namespace — and, before that, by table-HDU pixel-data reading in
 >   `AstroLab.Infrastructure.Storage` (today's `FitsDatasetReader` only loads image-bearing HDUs).
 > - `Catalogues` (`Query`, `CrossMatch`), backed by a future `AstroLab.Core.Catalogues` namespace and

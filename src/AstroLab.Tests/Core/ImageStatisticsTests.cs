@@ -81,4 +81,32 @@ public class ImageStatisticsTests
         Assert.True(result.IsFailure);
         Assert.Equal("imaging.invalid_percentile_range", result.Error.Code);
     }
+
+    [Fact]
+    public void ComputeSkyBackground_OnUniformDistribution_ApproximatesExpectedSigma()
+    {
+        var pixels = new float[1000];
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = i;
+        }
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+        var skyBackground = ImageStatistics.ComputeSkyBackground(pixels, stats);
+
+        Assert.True(Math.Abs(skyBackground.Q1 - 250) < 15);
+        Assert.True(Math.Abs(skyBackground.Q3 - 750) < 15);
+        Assert.True(Math.Abs(skyBackground.SkySigma - (500.0 / 1.349)) < 15);
+    }
+
+    [Fact]
+    public void ComputeSkyBackground_OnUniformPixelArray_ProducesZeroSigma()
+    {
+        ReadOnlySpan<float> pixels = [5f, 5f, 5f, 5f];
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        var skyBackground = ImageStatistics.ComputeSkyBackground(pixels, stats);
+
+        Assert.Equal(0.0, skyBackground.SkySigma, precision: 6);
+    }
 }

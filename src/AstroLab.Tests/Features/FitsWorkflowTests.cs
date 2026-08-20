@@ -137,6 +137,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal(80.0, body.GetProperty("max").GetDouble(), precision: 6);
         Assert.Equal(45.0, body.GetProperty("mean").GetDouble(), precision: 6);
         Assert.Equal(8, body.GetProperty("validPixelCount").GetInt64());
+        Assert.Equal(0, body.GetProperty("invalidPixelCount").GetInt64());
+        Assert.Equal(0.0, body.GetProperty("deadPixelPercentage").GetDouble(), precision: 6);
+        Assert.True(body.GetProperty("skySigma").GetDouble() > 0);
     }
 
     [Fact]

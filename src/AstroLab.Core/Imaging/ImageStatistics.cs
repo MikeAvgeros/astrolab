@@ -1,3 +1,4 @@
+using System.Buffers;
 using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Imaging;
@@ -15,6 +16,10 @@ public readonly record struct ImageStatistics(
     private const int MaxStackallocHistogramBins = 1024;
     private const double MinPercentile = 0.0;
     private const double MaxPercentile = 100.0;
+    private const double IqrToSigmaFactor = 1.349;
+    private const int SkyBackgroundHistogramBins = 65536;
+    private const double SkyBackgroundLowerPercentile = 25.0;
+    private const double SkyBackgroundUpperPercentile = 75.0;
 
     public long InvalidPixelCount => TotalPixelCount - ValidPixelCount;
 
@@ -145,5 +150,71 @@ public readonly record struct ImageStatistics(
         }
 
         return (lowerBound, upperBound);
+    }
+
+    /// <summary>
+    /// Estimates a robust sky-background sigma via the interquartile range of <paramref name="pixels"/>
+    /// (<c>(Q3 - Q1) / 1.349</c>, the standard IQR-to-Gaussian-sigma conversion), using a fixed-size
+    /// pooled histogram so cost stays O(n) with zero managed-heap allocation regardless of image size —
+    /// no sorting of the full pixel array. <paramref name="stats"/> must be the result of a prior
+    /// successful <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
+    /// </summary>
+    public static SkyBackgroundStatistics ComputeSkyBackground(ReadOnlySpan<float> pixels, ImageStatistics stats)
+    {
+        if (stats.Max == stats.Min)
+        {
+            return new SkyBackgroundStatistics(stats.Min, stats.Max, 0.0);
+        }
+
+        var histogram = ArrayPool<long>.Shared.Rent(SkyBackgroundHistogramBins);
+        try
+        {
+            histogram.AsSpan(0, SkyBackgroundHistogramBins).Clear();
+
+            var range = stats.Max - stats.Min;
+            var scale = SkyBackgroundHistogramBins / range;
+
+            foreach (var value in pixels)
+            {
+                if (!float.IsFinite(value))
+                {
+                    continue;
+                }
+
+                var bin = (int)((value - stats.Min) * scale);
+                bin = Math.Clamp(bin, 0, SkyBackgroundHistogramBins - 1);
+                histogram[bin]++;
+            }
+
+            var lowerTarget = (long)(stats.ValidPixelCount * (SkyBackgroundLowerPercentile / MaxPercentile));
+            var upperTarget = (long)(stats.ValidPixelCount * (SkyBackgroundUpperPercentile / MaxPercentile));
+
+            var q1 = stats.Min;
+            var q3 = stats.Max;
+            long cumulative = 0;
+            var lowerFound = false;
+
+            for (var bin = 0; bin < SkyBackgroundHistogramBins; bin++)
+            {
+                cumulative += histogram[bin];
+                if (!lowerFound && cumulative >= lowerTarget)
+                {
+                    q1 = stats.Min + ((bin + 1) / scale);
+                    lowerFound = true;
+                }
+
+                if (cumulative >= upperTarget)
+                {
+                    q3 = stats.Min + ((bin + 1) / scale);
+                    break;
+                }
+            }
+
+            return new SkyBackgroundStatistics(q1, q3, (q3 - q1) / IqrToSigmaFactor);
+        }
+        finally
+        {
+            ArrayPool<long>.Shared.Return(histogram);
+        }
     }
 }

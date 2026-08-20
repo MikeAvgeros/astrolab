@@ -1,6 +1,7 @@
 using AstroLab.Api.Features.TimeSeries.Detrend;
 using AstroLab.Api.Features.TimeSeries.LightCurve;
 using AstroLab.Api.Features.TimeSeries.PeriodSearch;
+using AstroLab.Api.Features.TimeSeries.Transit;
 
 namespace AstroLab.Api.Features.TimeSeries;
 
@@ -21,6 +22,7 @@ public static class TimeSeriesEndpoints
             group.MapLightCurveEndpoint();
             group.MapDetrendEndpoint();
             group.MapPeriodSearchEndpoint();
+            group.MapTransitEndpoint();
 
             return group;
         }

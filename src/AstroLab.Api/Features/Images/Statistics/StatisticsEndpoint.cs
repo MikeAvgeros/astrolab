@@ -6,6 +6,8 @@ namespace AstroLab.Api.Features.Images.Statistics;
 /// <summary>Computes summary pixel statistics for the first image-bearing HDU of a staged FITS file.</summary>
 public static class StatisticsEndpoint
 {
+    private const double PercentageScale = 100.0;
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapStatisticsEndpoint()
@@ -23,8 +25,16 @@ public static class StatisticsEndpoint
             return datasetResult.Error.ToProblem();
         }
 
-        var statsResult = ImageStatistics.Compute(datasetResult.Value.Pixels);
-        return statsResult.ToApiResult(stats => Results.Ok(new ImageStatisticsResponse(
-            fileId, stats.Min, stats.Max, stats.Mean, stats.StdDev, stats.ValidPixelCount, stats.TotalPixelCount)));
+        var pixels = datasetResult.Value.Pixels;
+        var statsResult = ImageStatistics.Compute(pixels);
+        return statsResult.ToApiResult(stats =>
+        {
+            var skyBackground = ImageStatistics.ComputeSkyBackground(pixels, stats);
+            var deadPixelPercentage = stats.InvalidPixelCount / (double)stats.TotalPixelCount * PercentageScale;
+
+            return Results.Ok(new ImageStatisticsResponse(
+                fileId, stats.Min, stats.Max, stats.Mean, stats.StdDev, stats.ValidPixelCount, stats.TotalPixelCount,
+                stats.InvalidPixelCount, deadPixelPercentage, skyBackground.SkySigma));
+        });
     }
 }

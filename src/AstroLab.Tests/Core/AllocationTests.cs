@@ -16,8 +16,11 @@ public class AllocationTests
         action();
 
         var before = GC.GetAllocatedBytesForCurrentThread();
+
         action();
+
         var after = GC.GetAllocatedBytesForCurrentThread();
+
         return after - before;
     }
 
@@ -25,13 +28,15 @@ public class AllocationTests
     public void ImageScaler_Stretch_AllocatesNoManagedMemory()
     {
         var source = new float[50_000];
+
         for (var i = 0; i < source.Length; i++)
         {
             source[i] = i % 1000;
         }
 
         var destination = new byte[source.Length];
-        var parameters = new ScaleParameters(0, 999, StretchMode.Asinh, 0.1);
+
+        var parameters = ScaleParametersFactory.Create(0, 999, StretchMode.Asinh, 0.1);
 
         var allocated = MeasureAllocatedBytes(() => ImageScaler.Stretch(source, destination, parameters));
 
@@ -42,6 +47,7 @@ public class AllocationTests
     public void ColorMapper_Apply_AllocatesNoManagedMemory()
     {
         var intensities = new byte[50_000];
+
         for (var i = 0; i < intensities.Length; i++)
         {
             intensities[i] = (byte)(i % 256);
@@ -58,6 +64,7 @@ public class AllocationTests
     public void ImageStatistics_Compute_AllocatesNoManagedMemory()
     {
         var pixels = new float[50_000];
+
         for (var i = 0; i < pixels.Length; i++)
         {
             pixels[i] = i % 1000;
@@ -72,6 +79,7 @@ public class AllocationTests
     public void ImageStatistics_ComputeSkyBackground_AllocatesNoManagedMemory()
     {
         var pixels = new float[50_000];
+
         for (var i = 0; i < pixels.Length; i++)
         {
             pixels[i] = i % 1000;
@@ -88,7 +96,9 @@ public class AllocationTests
     public void ApertureEngine_MeasureCircularAperture_AllocatesNoManagedMemory()
     {
         const int size = 201;
+
         var pixels = new float[size * size];
+
         Array.Fill(pixels, 3.0f);
 
         var allocated = MeasureAllocatedBytes(() =>
@@ -101,7 +111,9 @@ public class AllocationTests
     public void ApertureEngine_MeasureAnnulusBackground_Mean_AllocatesNoManagedMemory()
     {
         const int size = 201;
+
         var pixels = new float[size * size];
+
         Array.Fill(pixels, 3.0f);
 
         var allocated = MeasureAllocatedBytes(() =>
@@ -114,7 +126,9 @@ public class AllocationTests
     public void ApertureEngine_MeasureAnnulusBackground_Median_ReusesPooledBuffer_AfterWarmup()
     {
         const int size = 201;
+
         var pixels = new float[size * size];
+
         Array.Fill(pixels, 3.0f);
 
         var allocated = MeasureAllocatedBytes(() =>
@@ -127,12 +141,17 @@ public class AllocationTests
     public void SpectrumExtractor_ExtractBoxcar_AllocatesNoManagedMemory()
     {
         const int width = 500;
+
         const int height = 50;
+
         var image = new float[width * height];
+
         Array.Fill(image, 7.0f);
 
         var traceCenters = new double[width];
+
         Array.Fill(traceCenters, 25.0);
+
         var spectrum = new double[width];
 
         var allocated = MeasureAllocatedBytes(() =>

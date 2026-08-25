@@ -3,28 +3,32 @@ using AstroLab.Core.Fits;
 
 namespace AstroLab.Api.Features.Fits.Inspect;
 
-public sealed record FitsHeaderResponse(
-    string FileId,
-    FitsDatasetKind DatasetKind,
-    IReadOnlyList<FitsHduSummaryDto> Hdus,
-    IReadOnlyList<FitsKeywordDto> Keywords)
+public sealed record FitsHeaderResponse(string FileId, FitsDatasetKind DatasetKind, ImmutableList<FitsHduSummaryDto> Hdus, ImmutableList<FitsKeywordDto> Keywords);
+
+/// <summary>Static factory accompanying <see cref="FitsHeaderResponse"/>. Validates arguments before constructing.</summary>
+public static class FitsHeaderResponseFactory
 {
-    public static FitsHeaderResponse FromInspection(string fileId, ImmutableArray<HduDescriptor> hdus)
+    public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
+
+        return new FitsHeaderResponse(fileId, datasetKind, hdus, keywords);
+    }
+
+    public static FitsHeaderResponse Create(string fileId, ImmutableArray<HduDescriptor> hdus)
     {
         var datasetKind = FitsDatasetClassifier.Classify(hdus);
 
-        var hduSummaries = new List<FitsHduSummaryDto>(hdus.Length);
-        foreach (var hdu in hdus)
-        {
-            var axes = hdu.Image?.NAxes ?? ImmutableArray<int>.Empty;
-            hduSummaries.Add(new FitsHduSummaryDto(hdu.Index, hdu.Type, axes));
-        }
+        var hduSummaries = hdus
+            .Select(hdu => FitsHduSummaryDtoFactory.Create(hdu.Index, hdu.Type, hdu.Image?.NAxes ?? ImmutableArray<int>.Empty))
+            .ToImmutableList();
 
         var primaryHeader = hdus[0].Header;
-        var keywords = new List<FitsKeywordDto>(primaryHeader.Count);
-        keywords.AddRange(primaryHeader.Select(keyword =>
-            new FitsKeywordDto(keyword.Name, keyword.Value.ToString(), keyword.Comment)));
 
-        return new FitsHeaderResponse(fileId, datasetKind, hduSummaries, keywords);
+        var keywords = primaryHeader
+            .Select(keyword => FitsKeywordDtoFactory.Create(keyword.Name, keyword.Value.ToString(), keyword.Comment))
+            .ToImmutableList();
+
+        return Create(fileId, datasetKind, hduSummaries, keywords);
     }
 }

@@ -24,7 +24,8 @@ public static class ImageScaler
 
         if (parameters.Range <= 0 || !double.IsFinite(parameters.Range))
         {
-            return Error.Validation("imaging.invalid_scale_range", "WhitePoint must be strictly greater than BlackPoint.");
+            return Error.Validation("imaging.invalid_scale_range",
+                "WhitePoint must be strictly greater than BlackPoint.");
         }
 
         for (var i = 0; i < source.Length; i++)
@@ -44,7 +45,9 @@ public static class ImageScaler
         }
 
         var t = (value - parameters.BlackPoint) / parameters.Range;
+
         t = Math.Clamp(t, 0.0, 1.0);
+
         return ApplyStretch(t, parameters.Mode, parameters.AsinhSoftening);
     }
 
@@ -61,11 +64,12 @@ public static class ImageScaler
     private const double DefaultAsinhSoftening = 0.1;
     private const double MaxByteValue = 255.0;
 
-    private static double LogStretch(double t) => Math.Log(1.0 + (LogScaleFactor * t)) / Math.Log(1.0 + LogScaleFactor);
+    private static double LogStretch(double t) => Math.Log(1.0 + LogScaleFactor * t) / Math.Log(1.0 + LogScaleFactor);
 
     private static double AsinhStretch(double t, double softening)
     {
         var safeSoftening = softening > 0 ? softening : DefaultAsinhSoftening;
+
         return Math.Asinh(t / safeSoftening) / Math.Asinh(1.0 / safeSoftening);
     }
 

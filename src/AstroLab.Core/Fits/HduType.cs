@@ -7,5 +7,5 @@ public enum HduType
     Image,
     AsciiTable,
     BinaryTable,
-    Unknown,
+    Unknown
 }

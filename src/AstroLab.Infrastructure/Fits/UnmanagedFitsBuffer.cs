@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace AstroLab.Infrastructure.Fits;
 
@@ -22,6 +21,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     private UnmanagedFitsBuffer(byte* pointer, nuint lengthBytes)
     {
         _pointer = pointer;
+
         LengthBytes = lengthBytes;
     }
 
@@ -37,6 +37,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         }
 
         byte* pointer;
+
         try
         {
             pointer = (byte*)NativeMemory.AllocZeroed(lengthBytes);
@@ -54,6 +55,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     public void CopyFrom(ReadOnlySpan<byte> source, nuint destinationOffset = 0)
     {
         ThrowIfDisposed();
+
         if (destinationOffset > LengthBytes || (ulong)source.Length > LengthBytes - destinationOffset)
         {
             throw new ArgumentOutOfRangeException(
@@ -67,6 +69,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     public Span<byte> AsSpan()
     {
         ThrowIfDisposed();
+
         if (LengthBytes > int.MaxValue)
         {
             throw new InvalidOperationException(
@@ -80,6 +83,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     public Span<byte> AsSpan(nuint offset, int length)
     {
         ThrowIfDisposed();
+
         if (length < 0 || offset > LengthBytes || (ulong)length > LengthBytes - offset)
         {
             throw new ArgumentOutOfRangeException(nameof(length), "Requested slice is out of bounds.");
@@ -92,6 +96,7 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     public ReadOnlySpan<float> AsFloatSpan()
     {
         ThrowIfDisposed();
+
         if (LengthBytes % sizeof(float) != 0)
         {
             throw new InvalidOperationException($"Buffer length {LengthBytes:N0} is not a multiple of sizeof(float).");
@@ -121,7 +126,9 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         }
 
         NativeMemory.Free(_pointer);
+
         _pointer = null;
+
         GC.SuppressFinalize(this);
     }
 

@@ -17,6 +17,7 @@ public readonly struct HduLocationDescriptorView : IReadOnlyList<HduDescriptor>
     public HduLocationDescriptorView(ImmutableArray<HduLocation> locations)
     {
         _locations = locations;
+
     }
 
     public int Count => _locations.Length;
@@ -25,10 +26,7 @@ public readonly struct HduLocationDescriptorView : IReadOnlyList<HduDescriptor>
 
     public IEnumerator<HduDescriptor> GetEnumerator()
     {
-        foreach (var location in _locations)
-        {
-            yield return location.Descriptor;
-        }
+        return _locations.Select(location => location.Descriptor).GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

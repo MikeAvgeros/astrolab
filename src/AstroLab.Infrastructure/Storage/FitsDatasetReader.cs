@@ -26,13 +26,16 @@ public sealed class FitsDatasetReader
     public async Task<Result<ImmutableArray<HduDescriptor>>> ReadAllHdusAsync(string relativeKey, CancellationToken cancellationToken = default)
     {
         var openResult = _fileStore.OpenRead(relativeKey);
+
         if (openResult.IsFailure)
         {
             return Result<ImmutableArray<HduDescriptor>>.Failure(openResult.Error);
         }
 
         await using var stream = openResult.Value;
+
         var locationsResult = await FitsHeaderReader.ReadAllHeadersAsync(stream, cancellationToken);
+
         return locationsResult.Map(ToDescriptors);
     }
 
@@ -47,6 +50,7 @@ public sealed class FitsDatasetReader
     private async Task<Result<FitsDataset>> LoadPixelDataAsync(string relativeKey, FitsDatasetKind requiredKind, CancellationToken cancellationToken)
     {
         var openResult = _fileStore.OpenRead(relativeKey);
+
         if (openResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(openResult.Error);
@@ -55,19 +59,23 @@ public sealed class FitsDatasetReader
         await using var stream = openResult.Value;
 
         var locationsResult = await FitsHeaderReader.ReadAllHeadersAsync(stream, cancellationToken);
+
         if (locationsResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(locationsResult.Error);
         }
 
         var locations = locationsResult.Value;
+
         var kindResult = FitsDatasetClassifier.EnsureKind(new HduLocationDescriptorView(locations), requiredKind);
+
         if (kindResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(kindResult.Error);
         }
 
         var imageLocation = FindFirstImageLocation(locations);
+
         if (imageLocation is not { } location || location.Descriptor.Image is not { } descriptor)
         {
             return Error.Validation("fits.data.no_image", "The file does not contain an HDU with pixel data.");
@@ -76,19 +84,23 @@ public sealed class FitsDatasetReader
         stream.Seek(location.DataOffset, SeekOrigin.Begin);
 
         var bufferResult = await FitsPixelDataReader.ReadImageDataAsync(stream, descriptor, cancellationToken);
+
         if (bufferResult.IsFailure)
         {
             return Result<FitsDataset>.Failure(bufferResult.Error);
         }
 
         using var buffer = bufferResult.Value;
-        var pixels = FitsPixelConverter.ToFloatArray(buffer.AsSpan(), descriptor);
-        return new FitsDataset(location.Descriptor, descriptor, pixels);
+
+        var pixelBuffer = FitsPixelConverter.ToFloatBuffer(buffer.AsSpan(), descriptor);
+
+        return new FitsDataset(location.Descriptor, descriptor, pixelBuffer);
     }
 
     private static ImmutableArray<HduDescriptor> ToDescriptors(ImmutableArray<HduLocation> locations)
     {
         var builder = ImmutableArray.CreateBuilder<HduDescriptor>(locations.Length);
+
         foreach (var location in locations)
         {
             builder.Add(location.Descriptor);
@@ -99,14 +111,6 @@ public sealed class FitsDatasetReader
 
     private static HduLocation? FindFirstImageLocation(ImmutableArray<HduLocation> locations)
     {
-        foreach (var location in locations)
-        {
-            if (FitsDatasetClassifier.HasPixelData(location.Descriptor))
-            {
-                return location;
-            }
-        }
-
-        return null;
+        return locations.FirstOrDefault(location => FitsDatasetClassifier.HasPixelData(location.Descriptor));
     }
 }

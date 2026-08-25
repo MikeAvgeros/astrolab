@@ -11,11 +11,16 @@ namespace AstroLab.Core.Imaging;
 /// The softening parameter for <see cref="StretchMode.Asinh"/> (ignored otherwise). Smaller
 /// values increase contrast near the black point; typical values are in the range 0.01–0.5.
 /// </param>
-public readonly record struct ScaleParameters(
-    double BlackPoint,
-    double WhitePoint,
-    StretchMode Mode = StretchMode.Linear,
-    double AsinhSoftening = 0.1)
+public readonly record struct ScaleParameters(double BlackPoint, double WhitePoint, StretchMode Mode = StretchMode.Linear, double AsinhSoftening = ScaleParametersFactory.DefaultAsinhSoftening)
 {
     public double Range => WhitePoint - BlackPoint;
+}
+
+/// <summary>Static factory accompanying <see cref="ScaleParameters"/>.</summary>
+public static class ScaleParametersFactory
+{
+    public const double DefaultAsinhSoftening = 0.1;
+
+    public static ScaleParameters Create(double blackPoint, double whitePoint, StretchMode mode = StretchMode.Linear, double asinhSoftening = DefaultAsinhSoftening) =>
+        new(blackPoint, whitePoint, mode, asinhSoftening);
 }

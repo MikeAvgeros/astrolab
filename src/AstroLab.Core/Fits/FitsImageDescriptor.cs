@@ -7,12 +7,7 @@ namespace AstroLab.Core.Fits;
 /// The pixel-array shape and physical-scaling metadata for an HDU, derived purely from its
 /// <see cref="FitsHeader"/> (<c>BITPIX</c>, <c>NAXISn</c>, <c>BZERO</c>, <c>BSCALE</c>, <c>BLANK</c>).
 /// </summary>
-public readonly record struct FitsImageDescriptor(
-    BitPixType BitPix,
-    ImmutableArray<int> NAxes,
-    double BZero,
-    double BScale,
-    long? Blank)
+public readonly record struct FitsImageDescriptor(BitPixType BitPix, ImmutableArray<int> NAxes, double BZero, double BScale, long? Blank)
 {
     private const double DefaultBZero = 0.0;
     private const double DefaultBScale = 1.0;
@@ -46,10 +41,15 @@ public readonly record struct FitsImageDescriptor(
                 .Map(axes =>
                 {
                     var bzero = header.GetReal("BZERO").GetValueOrDefault(DefaultBZero);
+
                     var bscale = header.GetReal("BSCALE").GetValueOrDefault(DefaultBScale);
+
                     var blankResult = header.GetInteger("BLANK");
+
                     var blank = blankResult.IsSuccess ? blankResult.Value : (long?)null;
-                    return new FitsImageDescriptor(bitpix, axes, bzero, bscale, blank);
+
+                    return FitsImageDescriptorFactory.Create(bitpix, axes, bzero, bscale, blank);
+
                 }));
 
     private static Result<BitPixType> ToBitpixType(long value) =>
@@ -62,25 +62,39 @@ public readonly record struct FitsImageDescriptor(
         if (naxis < 0)
         {
             return Error.Validation("fits.header.invalid_naxis", $"NAXIS must be non-negative, was {naxis}.");
+
         }
 
         if (naxis == 0)
         {
             return Result<ImmutableArray<int>>.Success(ImmutableArray<int>.Empty);
+
         }
 
         var builder = ImmutableArray.CreateBuilder<int>(naxis);
+
         for (var i = 1; i <= naxis; i++)
         {
             var axisResult = header.GetInteger($"NAXIS{i}");
+
             if (axisResult.IsFailure)
             {
                 return Result<ImmutableArray<int>>.Failure(axisResult.Error);
+
             }
 
             builder.Add((int)axisResult.Value);
+
         }
 
         return builder.MoveToImmutable();
+
     }
+}
+
+/// <summary>Static factory accompanying <see cref="FitsImageDescriptor"/>.</summary>
+public static class FitsImageDescriptorFactory
+{
+    public static FitsImageDescriptor Create(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank) =>
+        new(bitPix, nAxes, bZero, bScale, blank);
 }

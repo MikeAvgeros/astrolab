@@ -10,3 +10,14 @@ namespace AstroLab.Infrastructure.Storage;
 /// <param name="Descriptor">The parsed HDU metadata.</param>
 /// <param name="DataOffset">The byte offset, from the start of the stream, of this HDU's data segment.</param>
 public readonly record struct HduLocation(HduDescriptor Descriptor, long DataOffset);
+
+/// <summary>Static factory accompanying <see cref="HduLocation"/>. Validates arguments before constructing.</summary>
+public static class HduLocationFactory
+{
+    public static HduLocation Create(HduDescriptor descriptor, long dataOffset)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(dataOffset);
+
+        return new HduLocation(descriptor, dataOffset);
+    }
+}

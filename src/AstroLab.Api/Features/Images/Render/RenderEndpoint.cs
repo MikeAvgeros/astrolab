@@ -22,17 +22,21 @@ public static class RenderEndpoint
         CancellationToken cancellationToken)
     {
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
         if (datasetResult.IsFailure)
         {
             return datasetResult.Error.ToProblem();
         }
 
-        var dataset = datasetResult.Value;
+        using var dataset = datasetResult.Value;
+
         var (width, height) = dataset.Image.Resolve2DDimensions();
-        var options = new RenderOptions(
+
+        var options = RenderOptionsFactory.Create(
             request.Stretch, request.AsinhSoftening, request.ColorMap, request.BlackPoint, request.WhitePoint, request.LowerPercentile, request.UpperPercentile);
 
         var pngResult = FitsImageRenderer.RenderToPng(dataset.Pixels, width, height, options);
+
         return pngResult.ToApiResult(png => Results.File(png, "image/png"));
     }
 }

@@ -4,13 +4,7 @@ using AstroLab.Core.Result;
 namespace AstroLab.Core.Imaging;
 
 /// <summary>Summary statistics for a pixel array, computed while ignoring non-finite (NaN/Infinity) pixels.</summary>
-public readonly record struct ImageStatistics(
-    double Min,
-    double Max,
-    double Mean,
-    double StdDev,
-    long ValidPixelCount,
-    long TotalPixelCount)
+public readonly record struct ImageStatistics(double Min, double Max, double Mean, double StdDev, long ValidPixelCount, long TotalPixelCount)
 {
     private const int DefaultHistogramBins = 65536;
     private const int MaxStackallocHistogramBins = 1024;
@@ -20,8 +14,11 @@ public readonly record struct ImageStatistics(
     private const int SkyBackgroundHistogramBins = 65536;
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;
+    private const double PercentageScale = 100.0;
 
     public long InvalidPixelCount => TotalPixelCount - ValidPixelCount;
+
+    public double DeadPixelPercentage => InvalidPixelCount / (double)TotalPixelCount * PercentageScale;
 
     /// <summary>
     /// Computes min/max/mean/standard-deviation over <paramref name="pixels"/> in two zero-allocation
@@ -35,8 +32,11 @@ public readonly record struct ImageStatistics(
         }
 
         var min = double.PositiveInfinity;
+
         var max = double.NegativeInfinity;
+
         double sum = 0.0;
+
         long validCount = 0;
 
         foreach (var value in pixels)
@@ -57,6 +57,7 @@ public readonly record struct ImageStatistics(
             }
 
             sum += value;
+
             validCount++;
         }
 
@@ -66,7 +67,9 @@ public readonly record struct ImageStatistics(
         }
 
         var mean = sum / validCount;
+
         double sumSquaredDeviation = 0.0;
+
         foreach (var value in pixels)
         {
             if (!float.IsFinite(value))
@@ -75,11 +78,13 @@ public readonly record struct ImageStatistics(
             }
 
             var deviation = value - mean;
+
             sumSquaredDeviation += deviation * deviation;
         }
 
         var stdDev = Math.Sqrt(sumSquaredDeviation / validCount);
-        return new ImageStatistics(min, max, mean, stdDev, validCount, pixels.Length);
+
+        return ImageStatisticsFactory.Create(min, max, mean, stdDev, validCount, pixels.Length);
     }
 
     /// <summary>
@@ -98,19 +103,24 @@ public readonly record struct ImageStatistics(
         }
 
         var statsResult = Compute(pixels);
+
         if (statsResult.IsFailure)
         {
             return Result<(double, double)>.Failure(statsResult.Error);
+
         }
 
         var stats = statsResult.Value;
+
         if (stats.Max == stats.Min)
         {
             return (stats.Min, stats.Max);
         }
 
         Span<long> histogram = histogramBins <= MaxStackallocHistogramBins ? stackalloc long[histogramBins] : new long[histogramBins];
+
         var range = stats.Max - stats.Min;
+
         var scale = histogramBins / range;
 
         foreach (var value in pixels)
@@ -121,30 +131,39 @@ public readonly record struct ImageStatistics(
             }
 
             var bin = (int)((value - stats.Min) * scale);
+
             bin = Math.Clamp(bin, 0, histogramBins - 1);
+
             histogram[bin]++;
         }
 
         var lowerTarget = (long)(stats.ValidPixelCount * (lowerPercentile / MaxPercentile));
+
         var upperTarget = (long)(stats.ValidPixelCount * (upperPercentile / MaxPercentile));
 
         var lowerBound = stats.Min;
+
         var upperBound = stats.Max;
+
         long cumulative = 0;
+
         var lowerFound = false;
 
         for (var bin = 0; bin < histogramBins; bin++)
         {
             cumulative += histogram[bin];
+
             if (!lowerFound && cumulative >= lowerTarget)
             {
                 lowerBound = stats.Min + ((bin + 1) / scale);
+
                 lowerFound = true;
             }
 
             if (cumulative >= upperTarget)
             {
                 upperBound = stats.Min + ((bin + 1) / scale);
+
                 break;
             }
         }
@@ -163,15 +182,17 @@ public readonly record struct ImageStatistics(
     {
         if (stats.Max == stats.Min)
         {
-            return new SkyBackgroundStatistics(stats.Min, stats.Max, 0.0);
+            return SkyBackgroundStatisticsFactory.Create(stats.Min, stats.Max, 0.0);
         }
 
         var histogram = ArrayPool<long>.Shared.Rent(SkyBackgroundHistogramBins);
+
         try
         {
             histogram.AsSpan(0, SkyBackgroundHistogramBins).Clear();
 
             var range = stats.Max - stats.Min;
+
             var scale = SkyBackgroundHistogramBins / range;
 
             foreach (var value in pixels)
@@ -182,39 +203,61 @@ public readonly record struct ImageStatistics(
                 }
 
                 var bin = (int)((value - stats.Min) * scale);
+
                 bin = Math.Clamp(bin, 0, SkyBackgroundHistogramBins - 1);
+
                 histogram[bin]++;
             }
 
             var lowerTarget = (long)(stats.ValidPixelCount * (SkyBackgroundLowerPercentile / MaxPercentile));
+
             var upperTarget = (long)(stats.ValidPixelCount * (SkyBackgroundUpperPercentile / MaxPercentile));
 
             var q1 = stats.Min;
+
             var q3 = stats.Max;
+
             long cumulative = 0;
+
             var lowerFound = false;
 
             for (var bin = 0; bin < SkyBackgroundHistogramBins; bin++)
             {
                 cumulative += histogram[bin];
+
                 if (!lowerFound && cumulative >= lowerTarget)
                 {
                     q1 = stats.Min + ((bin + 1) / scale);
+
                     lowerFound = true;
                 }
 
                 if (cumulative >= upperTarget)
                 {
                     q3 = stats.Min + ((bin + 1) / scale);
+
                     break;
                 }
             }
 
-            return new SkyBackgroundStatistics(q1, q3, (q3 - q1) / IqrToSigmaFactor);
+            return SkyBackgroundStatisticsFactory.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
         }
         finally
         {
             ArrayPool<long>.Shared.Return(histogram);
         }
+    }
+}
+
+/// <summary>Static factory accompanying <see cref="ImageStatistics"/>. Validates arguments before constructing.</summary>
+public static class ImageStatisticsFactory
+{
+    public static ImageStatistics Create(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(validPixelCount);
+
+        ArgumentOutOfRangeException.ThrowIfNegative(totalPixelCount);
+
+        return new ImageStatistics(min, max, mean, stdDev, validPixelCount, totalPixelCount);
     }
 }

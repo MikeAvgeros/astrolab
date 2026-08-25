@@ -21,9 +21,13 @@ public static class ImagesEndpoints
             var group = app.MapGroup("/api/images").WithTags("Images");
 
             group.MapRenderEndpoint();
+
             group.MapStatisticsEndpoint();
+
             group.MapPhotometryEndpoint();
+
             group.MapSourcesEndpoint();
+
             group.MapAstrometryEndpoint();
 
             return group;

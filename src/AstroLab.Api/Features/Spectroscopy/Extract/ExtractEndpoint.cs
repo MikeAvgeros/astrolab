@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using AstroLab.Core.Spectroscopy;
 using AstroLab.Infrastructure.Storage;
 
@@ -22,40 +23,53 @@ public static class ExtractEndpoint
         CancellationToken cancellationToken)
     {
         var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
+
         if (datasetResult.IsFailure)
         {
             return datasetResult.Error.ToProblem();
         }
 
-        var dataset = datasetResult.Value;
+        using var dataset = datasetResult.Value;
+
         var (width, height) = dataset.Image.Resolve2DDimensions();
+
         var dispersionBins = request.Axis == DispersionAxis.Horizontal ? width : height;
 
         var spectrum = new double[dispersionBins];
+
+        var traceCenters = request.TraceCenters.ToArray();
+
         var extractResult = SpectrumExtractor.ExtractBoxcar(
-            dataset.Pixels, width, height, request.Axis, request.TraceCenters, request.ApertureHalfWidth, spectrum);
+            dataset.Pixels, width, height, request.Axis, traceCenters, request.ApertureHalfWidth, spectrum);
+
         if (extractResult.IsFailure)
         {
             return extractResult.Error.ToProblem();
         }
 
-        double[]? wavelengths = null;
-        if (request.DispersionCoefficients is { Length: > 0 })
+        ImmutableList<double>? wavelengths = null;
+
+        if (request.DispersionCoefficients is { Count: > 0 } dispersionCoefficients)
         {
-            wavelengths = new double[dispersionBins];
+            var wavelengthBuffer = new double[dispersionBins];
+
             var pixelIndices = new double[dispersionBins];
+
             for (var i = 0; i < dispersionBins; i++)
             {
                 pixelIndices[i] = i;
             }
 
-            var wavelengthResult = SpectrumExtractor.ComputeWavelengths(pixelIndices, request.DispersionCoefficients, wavelengths);
+            var wavelengthResult = SpectrumExtractor.ComputeWavelengths(pixelIndices, [.. dispersionCoefficients], wavelengthBuffer);
+
             if (wavelengthResult.IsFailure)
             {
                 return wavelengthResult.Error.ToProblem();
             }
+
+            wavelengths = [.. wavelengthBuffer];
         }
 
-        return Results.Ok(new SpectrumExtractionResponse(fileId, wavelengths, spectrum));
+        return Results.Ok(SpectrumExtractionResponseFactory.Create(fileId, wavelengths, [.. spectrum]));
     }
 }

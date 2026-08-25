@@ -10,7 +10,9 @@ public class ResultTests
         var result = Result<int>.Success(42);
 
         Assert.True(result.IsSuccess);
+
         Assert.False(result.IsFailure);
+
         Assert.Equal(42, result.Value);
     }
 
@@ -18,10 +20,13 @@ public class ResultTests
     public void Failure_ExposesError_AndIsFailureTrue()
     {
         var error = Error.Validation("test.code", "something went wrong");
+
         var result = Result<int>.Failure(error);
 
         Assert.False(result.IsSuccess);
+
         Assert.True(result.IsFailure);
+
         Assert.Equal(error, result.Error);
     }
 
@@ -47,6 +52,7 @@ public class ResultTests
         Result<int> result = 7;
 
         Assert.True(result.IsSuccess);
+
         Assert.Equal(7, result.Value);
     }
 
@@ -62,9 +68,11 @@ public class ResultTests
     public void Match_InvokesCorrectBranch_ForSuccessAndFailure()
     {
         Result<int> success = 5;
+
         Result<int> failure = Error.Unexpected("x", "y");
 
         Assert.Equal("ok:5", success.Match(v => $"ok:{v}", e => $"err:{e.Code}"));
+
         Assert.Equal("err:x", failure.Match(v => $"ok:{v}", e => $"err:{e.Code}"));
     }
 
@@ -72,6 +80,7 @@ public class ResultTests
     public void PatternMatching_WithSwitchExpression_DiscriminatesOnIsSuccess()
     {
         Result<int> success = 5;
+
         Result<int> failure = Error.Unexpected("boom", "y");
 
         static string Describe(Result<int> r) => r switch
@@ -81,6 +90,7 @@ public class ResultTests
         };
 
         Assert.Equal("value=5", Describe(success));
+
         Assert.Equal("error=boom", Describe(failure));
     }
 
@@ -92,7 +102,9 @@ public class ResultTests
         var (isSuccess, value, error) = success;
 
         Assert.True(isSuccess);
+
         Assert.Equal(9, value);
+
         Assert.Equal(default, error);
     }
 
@@ -100,9 +112,11 @@ public class ResultTests
     public void Map_TransformsSuccessValue_LeavesFailureUnchanged()
     {
         Result<int> success = 3;
+
         Result<int> failure = Error.Unexpected("x", "y");
 
         Assert.Equal(6, success.Map(v => v * 2).Value);
+
         Assert.True(failure.Map(v => v * 2).IsFailure);
     }
 
@@ -114,7 +128,9 @@ public class ResultTests
             : Error.Validation("odd", "value must be even");
 
         Assert.Equal(5, Result<int>.Success(10).Bind(Halve).Value);
+
         Assert.True(Result<int>.Success(7).Bind(Halve).IsFailure);
+
         Assert.True(Result<int>.Failure(Error.Unexpected("x", "y")).Bind(Halve).IsFailure);
     }
 
@@ -122,9 +138,11 @@ public class ResultTests
     public void Ensure_DowngradesSuccessToFailure_WhenPredicateFails()
     {
         var error = Error.Validation("negative", "must be positive");
+
         var result = Result<int>.Success(-1).Ensure(v => v > 0, error);
 
         Assert.True(result.IsFailure);
+
         Assert.Equal(error, result.Error);
     }
 

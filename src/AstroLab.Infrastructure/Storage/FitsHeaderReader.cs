@@ -19,11 +19,13 @@ public static class FitsHeaderReader
     public static async Task<Result<FitsHeader>> ReadHeaderAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         using var accumulated = new MemoryStream();
+
         var block = new byte[BlockSize];
 
         for (var blockIndex = 0; blockIndex < MaxBlocks; blockIndex++)
         {
             var bytesRead = await ReadExactAsync(stream, block, cancellationToken);
+
             if (bytesRead < BlockSize)
             {
                 return Error.Validation(
@@ -33,6 +35,7 @@ public static class FitsHeaderReader
             accumulated.Write(block);
 
             var parseResult = FitsHeader.Parse(accumulated.GetBuffer().AsSpan(0, (int)accumulated.Length));
+
             if (parseResult.IsSuccess || parseResult.Error.Code != "fits.header.missing_end")
             {
                 return parseResult;
@@ -57,16 +60,20 @@ public static class FitsHeaderReader
         for (var index = 0; stream.Position < stream.Length; index++)
         {
             var headerResult = await ReadHeaderAsync(stream, cancellationToken);
+
             if (headerResult.IsFailure)
             {
                 return Result<ImmutableArray<HduLocation>>.Failure(headerResult.Error);
             }
 
             var descriptor = HduDescriptor.FromHeader(index, headerResult.Value);
+
             var dataOffset = stream.Position;
-            locations.Add(new HduLocation(descriptor, dataOffset));
+
+            locations.Add(HduLocationFactory.Create(descriptor, dataOffset));
 
             var skipBytes = RoundUpToBlockSize(descriptor.DataSizeBytes);
+
             if (skipBytes > 0)
             {
                 stream.Seek(skipBytes, SeekOrigin.Current);
@@ -84,15 +91,18 @@ public static class FitsHeaderReader
     private static long RoundUpToBlockSize(long byteCount)
     {
         var nonNegativeByteCount = Math.Max(byteCount, 0);
-        return ((nonNegativeByteCount + BlockSize - 1) / BlockSize) * BlockSize;
+
+        return (nonNegativeByteCount + BlockSize - 1) / BlockSize * BlockSize;
     }
 
     private static async Task<int> ReadExactAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
     {
         var totalRead = 0;
+
         while (totalRead < buffer.Length)
         {
             var read = await stream.ReadAsync(buffer.AsMemory(totalRead), cancellationToken);
+
             if (read == 0)
             {
                 break;

@@ -40,6 +40,7 @@ public static class SpectrumExtractor
         }
 
         var dispersionBins = axis == DispersionAxis.Horizontal ? width : height;
+
         var spatialExtent = axis == DispersionAxis.Horizontal ? height : width;
 
         if (traceCenters.Length != dispersionBins)
@@ -58,28 +59,35 @@ public static class SpectrumExtractor
 
         if (apertureHalfWidth <= 0 || !double.IsFinite(apertureHalfWidth))
         {
-            return Error.Validation("spectroscopy.invalid_aperture", "apertureHalfWidth must be a finite, positive value.");
+            return Error.Validation("spectroscopy.invalid_aperture",
+                "apertureHalfWidth must be a finite, positive value.");
         }
 
         for (var d = 0; d < dispersionBins; d++)
         {
             var center = traceCenters[d];
+
             var lowerEdge = center - apertureHalfWidth;
+
             var upperEdge = center + apertureHalfWidth;
 
             var sMin = Math.Max(0, (int)Math.Floor(lowerEdge));
+
             var sMax = Math.Min(spatialExtent - 1, (int)Math.Ceiling(upperEdge) - 1);
 
             double flux = 0.0;
+
             for (var s = sMin; s <= sMax; s++)
             {
                 var overlap = Math.Min(s + 1, upperEdge) - Math.Max(s, lowerEdge);
+
                 if (overlap <= 0)
                 {
                     continue;
                 }
 
                 var value = image[axis == DispersionAxis.Horizontal ? (s * width) + d : (d * width) + s];
+
                 if (!float.IsFinite(value))
                 {
                     continue;
@@ -119,9 +127,10 @@ public static class SpectrumExtractor
     public static double EvaluateWavelength(double pixelIndex, ReadOnlySpan<double> dispersionCoefficients)
     {
         var result = 0.0;
+
         for (var i = dispersionCoefficients.Length - 1; i >= 0; i--)
         {
-            result = (result * pixelIndex) + dispersionCoefficients[i];
+            result = result * pixelIndex + dispersionCoefficients[i];
         }
 
         return result;
@@ -140,7 +149,8 @@ public static class SpectrumExtractor
 
         if (dispersionCoefficients.IsEmpty)
         {
-            return Error.Validation("spectroscopy.empty_dispersion_solution", "dispersionCoefficients must contain at least one coefficient.");
+            return Error.Validation("spectroscopy.empty_dispersion_solution",
+                "dispersionCoefficients must contain at least one coefficient.");
         }
 
         for (var i = 0; i < pixelIndices.Length; i++)

@@ -27,37 +27,44 @@ public static class FitsImageRenderer
         }
 
         var blackPoint = options.BlackPoint ?? DefaultBlackPoint;
+        
         var whitePoint = options.WhitePoint ?? DefaultWhitePoint;
 
         if (options.RequiresAutoScale)
         {
             var boundsResult = ImageStatistics.ComputePercentileBounds(pixels, options.AutoLowerPercentile, options.AutoUpperPercentile);
+
             if (boundsResult.IsFailure)
             {
                 return Result<RenderedImage>.Failure(boundsResult.Error);
             }
 
             blackPoint = options.BlackPoint ?? boundsResult.Value.Lower;
+            
             whitePoint = options.WhitePoint ?? boundsResult.Value.Upper;
         }
 
-        var scaleParameters = new ScaleParameters(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);
+        var scaleParameters = ScaleParametersFactory.Create(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);
 
         var grayscale = new byte[pixels.Length];
+
         var stretchResult = ImageScaler.Stretch(pixels, grayscale, scaleParameters);
+
         if (stretchResult.IsFailure)
         {
             return Result<RenderedImage>.Failure(stretchResult.Error);
         }
 
         var rgb = new byte[pixels.Length * RgbChannelCount];
+
         var colorResult = ColorMapper.Apply(grayscale, rgb, options.ColorMap);
+
         if (colorResult.IsFailure)
         {
             return Result<RenderedImage>.Failure(colorResult.Error);
         }
 
-        return new RenderedImage(width, height, rgb);
+        return RenderedImageFactory.Create(width, height, rgb);
     }
 
     /// <summary>Renders and PNG-encodes a pixel array in one step.</summary>

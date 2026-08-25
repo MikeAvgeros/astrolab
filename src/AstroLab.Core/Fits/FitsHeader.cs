@@ -17,10 +17,13 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
         _keywords = keywords;
 
         _index = new Dictionary<string, int>(keywords.Length, StringComparer.Ordinal);
+
         for (var i = 0; i < keywords.Length; i++)
         {
             _index.TryAdd(keywords[i].Name, i);
+
         }
+
     }
 
     public int Count => _keywords.Length;
@@ -36,11 +39,15 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
         if (_index.TryGetValue(keyword, out var i))
         {
             value = _keywords[i].Value;
+
             return value.Kind != FitsValueKind.None;
+
         }
 
         value = FitsValue.None;
+
         return false;
+
     }
 
     public Result<FitsValue> Get(string keyword) => TryGetValue(keyword, out var value)
@@ -75,30 +82,40 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
             return Error.Validation(
                 "fits.header.misaligned_block",
                 $"Header block length ({headerBlock.Length}) is not a multiple of {FitsCardParser.CardLength}.");
+
         }
 
         var cardCount = headerBlock.Length / FitsCardParser.CardLength;
+
         var keywords = new List<FitsKeyword>(cardCount);
+
         Span<char> cardChars = stackalloc char[FitsCardParser.CardLength];
 
         for (var i = 0; i < cardCount; i++)
         {
             var cardBytes = headerBlock.Slice(i * FitsCardParser.CardLength, FitsCardParser.CardLength);
+
             Encoding.ASCII.GetChars(cardBytes, cardChars);
 
             var parsed = FitsCardParser.Parse(cardChars);
+
             if (parsed.IsFailure)
             {
                 return Result<FitsHeader>.Failure(parsed.Error);
+
             }
 
             keywords.Add(parsed.Value);
+
             if (parsed.Value.Name == "END")
             {
                 return new FitsHeader(keywords.ToArray());
+
             }
+
         }
 
         return Error.Validation("fits.header.missing_end", "Header block did not contain a terminating END card.");
+
     }
 }

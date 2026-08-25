@@ -31,9 +31,13 @@ public static class ColorMapper
         for (var i = 0; i < intensities.Length; i++)
         {
             var (r, g, b) = Map(intensities[i], colorMap);
+
             var offset = i * RgbChannelCount;
+
             rgb[offset] = r;
+
             rgb[offset + 1] = g;
+
             rgb[offset + 2] = b;
         }
 
@@ -52,9 +56,13 @@ public static class ColorMapper
     private static (byte R, byte G, byte B) MapHot(byte intensity)
     {
         var t = intensity / MaxByteValue;
+
         var r = Clamp01(HotChannelSlope * t);
+
         var g = Clamp01((HotChannelSlope * t) - HotGreenChannelOffset);
+
         var b = Clamp01((HotChannelSlope * t) - HotBlueChannelOffset);
+
         return (ToByte(r), ToByte(g), ToByte(b));
     }
 
@@ -74,17 +82,22 @@ public static class ColorMapper
     private static (byte R, byte G, byte B) MapViridis(byte intensity)
     {
         var t = intensity / MaxByteValueF;
+
         var stops = ViridisStops;
 
         var upperIndex = 1;
+
         while (upperIndex < stops.Length - 1 && t > stops[upperIndex].Position)
         {
             upperIndex++;
         }
 
         var lower = stops[upperIndex - 1];
+
         var upper = stops[upperIndex];
+
         var span = upper.Position - lower.Position;
+
         var localT = span > 0 ? (t - lower.Position) / span : 0f;
 
         return (

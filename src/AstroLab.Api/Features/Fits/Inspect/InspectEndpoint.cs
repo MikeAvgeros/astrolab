@@ -17,6 +17,7 @@ public static class InspectEndpoint
     private static async Task<IResult> GetHeaderAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         var hdusResult = await datasetReader.ReadAllHdusAsync(fileId, cancellationToken);
-        return hdusResult.ToApiResult(hdus => Results.Ok(FitsHeaderResponse.FromInspection(fileId, hdus)));
+
+        return hdusResult.ToApiResult(hdus => Results.Ok(FitsHeaderResponseFactory.Create(fileId, hdus)));
     }
 }

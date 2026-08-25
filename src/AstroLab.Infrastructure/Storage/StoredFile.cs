@@ -5,3 +5,18 @@ namespace AstroLab.Infrastructure.Storage;
 /// <param name="FullPath">The absolute path on disk where the file was written.</param>
 /// <param name="SizeBytes">The total number of bytes written.</param>
 public readonly record struct StoredFile(string RelativeKey, string FullPath, long SizeBytes);
+
+/// <summary>Static factory accompanying <see cref="StoredFile"/>. Validates arguments before constructing.</summary>
+public static class StoredFileFactory
+{
+    public static StoredFile Create(string relativeKey, string fullPath, long sizeBytes)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativeKey);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(fullPath);
+
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeBytes);
+
+        return new StoredFile(relativeKey, fullPath, sizeBytes);
+    }
+}

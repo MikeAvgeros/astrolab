@@ -13,6 +13,7 @@ public static class ArchivesEndpoints
             var group = app.MapGroup("/api/archives").WithTags("Archives");
 
             group.MapSearchEndpoint();
+
             group.MapDownloadEndpoint();
 
             return group;

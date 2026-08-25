@@ -30,6 +30,7 @@ public static class FitsDatasetClassifier
         }
 
         var imageHdu = FindFirstImageHdu(hdus);
+
         if (imageHdu is { } descriptor)
         {
             return IsSpectrum(descriptor) ? FitsDatasetKind.Spectrum : FitsDatasetKind.Image;
@@ -54,6 +55,7 @@ public static class FitsDatasetClassifier
     public static Result<FitsDatasetKind> EnsureKind(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind required)
     {
         var actual = Classify(hdus);
+
         return actual == required
             ? Result<FitsDatasetKind>.Success(actual)
             : Error.Validation(
@@ -63,18 +65,19 @@ public static class FitsDatasetClassifier
 
     private static bool HasTimeColumn(IReadOnlyList<HduDescriptor> hdus)
     {
-        for (var i = 0; i < hdus.Count; i++)
+        foreach (var hdu in hdus)
         {
-            var hdu = hdus[i];
             if (hdu.Type is not (HduType.AsciiTable or HduType.BinaryTable))
             {
                 continue;
             }
 
             var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
+
             for (var field = FirstFieldNumber; field <= fieldCount; field++)
             {
                 var nameResult = hdu.Header.GetString($"TTYPE{field}");
+
                 if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), TimeColumnName, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
@@ -105,21 +108,22 @@ public static class FitsDatasetClassifier
         }
 
         var axisCount = hdu.Image?.NAxes.Length ?? NoFields;
+
         for (var axis = FirstFieldNumber; axis <= axisCount; axis++)
         {
             var ctypeResult = hdu.Header.GetString($"CTYPE{axis}");
+
             if (ctypeResult.IsFailure)
             {
                 continue;
             }
 
             var value = ctypeResult.Value.Trim();
-            for (var prefixIndex = 0; prefixIndex < SpectralCTypePrefixes.Length; prefixIndex++)
+
+            if (SpectralCTypePrefixes.Any(spectralCTypePrefix => 
+                    value.StartsWith(spectralCTypePrefix, StringComparison.OrdinalIgnoreCase)))
             {
-                if (value.StartsWith(SpectralCTypePrefixes[prefixIndex], StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
@@ -128,11 +132,11 @@ public static class FitsDatasetClassifier
 
     private static HduDescriptor? FindFirstImageHdu(IReadOnlyList<HduDescriptor> hdus)
     {
-        for (var i = 0; i < hdus.Count; i++)
+        foreach (var hdu in hdus)
         {
-            if (HasPixelData(hdus[i]))
+            if (HasPixelData(hdu))
             {
-                return hdus[i];
+                return hdu;
             }
         }
 
@@ -141,9 +145,9 @@ public static class FitsDatasetClassifier
 
     private static bool HasTable(IReadOnlyList<HduDescriptor> hdus)
     {
-        for (var i = 0; i < hdus.Count; i++)
+        foreach (var hdu in hdus)
         {
-            if (hdus[i].Type is HduType.AsciiTable or HduType.BinaryTable)
+            if (hdu.Type is HduType.AsciiTable or HduType.BinaryTable)
             {
                 return true;
             }

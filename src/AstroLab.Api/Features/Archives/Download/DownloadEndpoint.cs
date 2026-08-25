@@ -25,16 +25,19 @@ public static class DownloadEndpoint
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 
         var downloadResult = await client.DownloadAsync(request.DatasetId, cancellationToken);
+
         if (downloadResult.IsFailure)
         {
             return downloadResult.Error.ToProblem();
         }
 
         await using var download = downloadResult.Value;
+
         var fileId = fileStore.CreateStagingKey("fits");
+
         var writeResult = await fileStore.WriteAsync(fileId, download.Content, cancellationToken);
 
         return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", new DownloadResponse(fileId, request.Archive, stored.SizeBytes)));
+            Results.Created($"/api/fits/{fileId}/header", DownloadResponseFactory.Create(fileId, request.Archive, stored.SizeBytes)));
     }
 }

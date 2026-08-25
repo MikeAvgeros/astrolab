@@ -1,10 +1,5 @@
 namespace AstroLab.Core.Result;
 
-/// <summary>
-/// Broad classification of a domain failure, used by the API layer to translate
-/// a failed <see cref="Result{TValue}"/> into an appropriate HTTP response without
-/// the Core project ever depending on ASP.NET Core.
-/// </summary>
 public enum ErrorCategory
 {
     /// <summary>The request or input data failed validation.</summary>

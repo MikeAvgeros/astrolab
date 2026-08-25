@@ -19,8 +19,11 @@ public static class SpectroscopyEndpoints
             var group = app.MapGroup("/api/spectroscopy").WithTags("Spectroscopy");
 
             group.MapExtractEndpoint();
+
             group.MapCalibrateEndpoint();
+
             group.MapLinesEndpoint();
+
             group.MapRedshiftEndpoint();
 
             return group;

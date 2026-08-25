@@ -27,6 +27,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        
         if (disposing && Directory.Exists(StorageRoot))
         {
             Directory.Delete(StorageRoot, recursive: true);

@@ -20,12 +20,30 @@ namespace AstroLab.Infrastructure.ImageRendering;
 /// <param name="AutoUpperPercentile">Upper percentile used to derive <paramref name="WhitePoint"/> when it is not supplied.</param>
 public readonly record struct RenderOptions(
     StretchMode Stretch = StretchMode.Asinh,
-    double AsinhSoftening = 0.1,
+    double AsinhSoftening = RenderOptionsFactory.DefaultAsinhSoftening,
     ColorMap ColorMap = ColorMap.Grayscale,
     double? BlackPoint = null,
     double? WhitePoint = null,
-    double AutoLowerPercentile = 1.0,
-    double AutoUpperPercentile = 99.0)
+    double AutoLowerPercentile = RenderOptionsFactory.DefaultAutoLowerPercentile,
+    double AutoUpperPercentile = RenderOptionsFactory.DefaultAutoUpperPercentile)
 {
     public bool RequiresAutoScale => BlackPoint is null || WhitePoint is null;
+}
+
+/// <summary>Static factory accompanying <see cref="RenderOptions"/>.</summary>
+public static class RenderOptionsFactory
+{
+    public const double DefaultAsinhSoftening = 0.1;
+    public const double DefaultAutoLowerPercentile = 1.0;
+    public const double DefaultAutoUpperPercentile = 99.0;
+
+    public static RenderOptions Create(
+        StretchMode stretch = StretchMode.Asinh,
+        double asinhSoftening = DefaultAsinhSoftening,
+        ColorMap colorMap = ColorMap.Grayscale,
+        double? blackPoint = null,
+        double? whitePoint = null,
+        double autoLowerPercentile = DefaultAutoLowerPercentile,
+        double autoUpperPercentile = DefaultAutoUpperPercentile) =>
+        new(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, autoLowerPercentile, autoUpperPercentile);
 }

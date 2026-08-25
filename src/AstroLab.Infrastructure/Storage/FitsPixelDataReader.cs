@@ -22,25 +22,32 @@ public static class FitsPixelDataReader
         }
 
         var totalBytes = checked((nuint)descriptor.DataSizeBytes);
+
         var buffer = UnmanagedFitsBuffer.Allocate(totalBytes);
 
         try
         {
             var chunk = new byte[Math.Min(ChunkSize, (int)Math.Min(totalBytes, int.MaxValue))];
+
             nuint offset = 0;
 
             while (offset < totalBytes)
             {
                 var remaining = totalBytes - offset;
+
                 var toRead = (int)Math.Min((nuint)chunk.Length, remaining);
+
                 var bytesRead = await stream.ReadAsync(chunk.AsMemory(0, toRead), cancellationToken);
+
                 if (bytesRead == 0)
                 {
                     buffer.Dispose();
+
                     return Error.Validation("fits.data.truncated", "File ended before all pixel data was read.");
                 }
 
                 buffer.CopyFrom(chunk.AsSpan(0, bytesRead), offset);
+
                 offset += (nuint)bytesRead;
             }
 
@@ -49,6 +56,7 @@ public static class FitsPixelDataReader
         catch
         {
             buffer.Dispose();
+
             throw;
         }
     }

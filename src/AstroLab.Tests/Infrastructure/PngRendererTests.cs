@@ -67,7 +67,7 @@ public class PngRendererTests
     public void Encode_RoundTripsPixelDataThroughPngStructure()
     {
         byte[] rgb = [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
-        var image = new RenderedImage(2, 2, rgb);
+        var image = RenderedImageFactory.Create(2, 2, rgb);
 
         var png = PngRenderer.Encode(image);
         var decoded = Decode(png);
@@ -80,7 +80,7 @@ public class PngRendererTests
     [Fact]
     public void Encode_ProducesValidPngSignature()
     {
-        var image = new RenderedImage(1, 1, [10, 20, 30]);
+        var image = RenderedImageFactory.Create(1, 1, [10, 20, 30]);
 
         var png = PngRenderer.Encode(image);
 

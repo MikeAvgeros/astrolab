@@ -27,7 +27,8 @@ public static class PhotometryEndpoint
             return datasetResult.Error.ToProblem();
         }
 
-        var dataset = datasetResult.Value;
+        using var dataset = datasetResult.Value;
+
         var (width, height) = dataset.Image.Resolve2DDimensions();
 
         var measurementResult = ApertureEngine.MeasureNetFlux(
@@ -41,7 +42,7 @@ public static class PhotometryEndpoint
             request.AnnulusOuterRadius,
             request.BackgroundMethod);
 
-        return measurementResult.ToApiResult(measurement => Results.Ok(new AperturePhotometryResponse(
+        return measurementResult.ToApiResult(measurement => Results.Ok(AperturePhotometryResponseFactory.Create(
             fileId,
             measurement.RawFlux,
             measurement.ApertureArea,

@@ -26,6 +26,7 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
     public EsoArchiveClient(HttpClient httpClient, ILogger<EsoArchiveClient> logger)
     {
         _httpClient = httpClient;
+
         _logger = logger;
     }
 

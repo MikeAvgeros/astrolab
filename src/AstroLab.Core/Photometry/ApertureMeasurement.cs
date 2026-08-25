@@ -9,3 +9,16 @@ public readonly record struct ApertureMeasurement(double Flux, double Area, int 
 {
     public double MeanValue => Area > 0 ? Flux / Area : 0.0;
 }
+
+/// <summary>Static factory accompanying <see cref="ApertureMeasurement"/>. Validates arguments before constructing.</summary>
+public static class ApertureMeasurementFactory
+{
+    public static ApertureMeasurement Create(double flux, double area, int sampledPixelCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(area);
+
+        ArgumentOutOfRangeException.ThrowIfNegative(sampledPixelCount);
+
+        return new ApertureMeasurement(flux, area, sampledPixelCount);
+    }
+}

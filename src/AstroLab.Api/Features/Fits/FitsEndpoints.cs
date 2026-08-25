@@ -16,6 +16,7 @@ public static class FitsEndpoints
             var group = app.MapGroup("/api/fits").WithTags("Fits");
 
             group.MapUploadEndpoint();
+
             group.MapInspectEndpoint();
 
             return group;

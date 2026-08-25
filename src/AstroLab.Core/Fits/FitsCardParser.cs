@@ -26,34 +26,41 @@ public static class FitsCardParser
         }
 
         var name = card[..KeywordLength].ToString().TrimEnd().ToUpperInvariant();
+
         var rest = card[KeywordLength..];
 
         if (name.Length == 0 || name is "COMMENT" or "HISTORY")
         {
             var text = rest.ToString().TrimEnd();
-            return new FitsKeyword(name, FitsValue.None, text.Length == 0 ? null : text);
+
+            return FitsKeywordFactory.Create(name, FitsValue.None, text.Length == 0 ? null : text);
         }
 
         if (name == "END")
         {
-            return new FitsKeyword(name, FitsValue.None, null);
+            return FitsKeywordFactory.Create(name, FitsValue.None, null);
         }
 
         var hasValueIndicator = card[ValueIndicatorColumn] == '=' && card[ValueIndicatorColumn + 1] == ' ';
+
         if (!hasValueIndicator)
         {
             var text = rest.ToString().TrimEnd();
-            return new FitsKeyword(name, FitsValue.None, text.Length == 0 ? null : text);
+
+            return FitsKeywordFactory.Create(name, FitsValue.None, text.Length == 0 ? null : text);
         }
 
         var valueField = card[(ValueIndicatorColumn + 2)..];
+
         var (value, comment) = ParseValueAndComment(valueField);
-        return new FitsKeyword(name, value, comment);
+
+        return FitsKeywordFactory.Create(name, value, comment);
     }
 
     private static (FitsValue Value, string? Comment) ParseValueAndComment(ReadOnlySpan<char> field)
     {
         var index = 0;
+
         while (index < field.Length && field[index] == ' ')
         {
             index++;
@@ -67,7 +74,9 @@ public static class FitsCardParser
         if (field[index] == '\'')
         {
             index++;
+
             var builder = new StringBuilder();
+
             while (index < field.Length)
             {
                 if (field[index] == '\'')
@@ -75,28 +84,38 @@ public static class FitsCardParser
                     if (index + 1 < field.Length && field[index + 1] == '\'')
                     {
                         builder.Append('\'');
+
                         index += 2;
+
                         continue;
                     }
 
                     index++;
+
                     break;
                 }
 
                 builder.Append(field[index]);
+
                 index++;
             }
 
             var stringValue = builder.ToString().TrimEnd();
+
             var comment = ExtractComment(field[index..]);
+
             return (FitsValue.OfString(stringValue), comment);
         }
         else
         {
             var slashIndex = field[index..].IndexOf('/');
+
             var tokenEnd = slashIndex < 0 ? field.Length : index + slashIndex;
+
             var token = field[index..tokenEnd].ToString().Trim();
+
             var comment = ExtractComment(slashIndex < 0 ? ReadOnlySpan<char>.Empty : field[tokenEnd..]);
+
             return (ParseScalarToken(token), comment);
         }
     }
@@ -104,12 +123,14 @@ public static class FitsCardParser
     private static string? ExtractComment(ReadOnlySpan<char> remainder)
     {
         var slashIndex = remainder.IndexOf('/');
+
         if (slashIndex < 0)
         {
             return null;
         }
 
         var comment = remainder[(slashIndex + 1)..].ToString().Trim();
+
         return comment.Length == 0 ? null : comment;
     }
 
@@ -136,6 +157,7 @@ public static class FitsCardParser
         }
 
         var normalized = token.Replace('D', 'E').Replace('d', 'e');
+
         if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var real))
         {
             return FitsValue.OfReal(real);

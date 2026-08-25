@@ -9,7 +9,7 @@ public class FitsImageRendererTests
     public void Render_WithExplicitBlackWhitePoints_ProducesExpectedGrayscale()
     {
         float[] pixels = [0f, 5f, 10f];
-        var options = new RenderOptions(StretchMode.Linear, ColorMap: ColorMap.Grayscale, BlackPoint: 0, WhitePoint: 10);
+        var options = RenderOptionsFactory.Create(StretchMode.Linear, colorMap: ColorMap.Grayscale, blackPoint: 0, whitePoint: 10);
 
         var result = FitsImageRenderer.Render(pixels, width: 3, height: 1, options);
 
@@ -28,7 +28,7 @@ public class FitsImageRendererTests
             pixels[i] = i;
         }
 
-        var options = new RenderOptions(StretchMode.Linear, ColorMap: ColorMap.Grayscale, AutoLowerPercentile: 0, AutoUpperPercentile: 100);
+        var options = RenderOptionsFactory.Create(StretchMode.Linear, colorMap: ColorMap.Grayscale, autoLowerPercentile: 0, autoUpperPercentile: 100);
 
         var result = FitsImageRenderer.Render(pixels, width: 1000, height: 1, options);
 
@@ -44,7 +44,7 @@ public class FitsImageRendererTests
     {
         float[] pixels = [1f, 2f, 3f];
 
-        var result = FitsImageRenderer.Render(pixels, width: 2, height: 2, new RenderOptions());
+        var result = FitsImageRenderer.Render(pixels, width: 2, height: 2, RenderOptionsFactory.Create());
 
         Assert.True(result.IsFailure);
         Assert.Equal("rendering.invalid_image_bounds", result.Error.Code);
@@ -54,7 +54,7 @@ public class FitsImageRendererTests
     public void RenderToPng_ProducesValidPngBytes()
     {
         float[] pixels = [0f, 1f, 2f, 3f];
-        var options = new RenderOptions(StretchMode.Linear, BlackPoint: 0, WhitePoint: 3);
+        var options = RenderOptionsFactory.Create(StretchMode.Linear, blackPoint: 0, whitePoint: 3);
 
         var result = FitsImageRenderer.RenderToPng(pixels, width: 2, height: 2, options);
 

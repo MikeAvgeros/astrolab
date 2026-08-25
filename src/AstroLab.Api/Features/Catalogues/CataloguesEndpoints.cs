@@ -17,6 +17,7 @@ public static class CataloguesEndpoints
             var group = app.MapGroup("/api/catalogues").WithTags("Catalogues");
 
             group.MapQueryEndpoint();
+
             group.MapCrossMatchEndpoint();
 
             return group;

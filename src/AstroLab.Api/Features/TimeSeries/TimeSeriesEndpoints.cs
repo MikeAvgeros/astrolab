@@ -20,8 +20,11 @@ public static class TimeSeriesEndpoints
             var group = app.MapGroup("/api/timeseries").WithTags("TimeSeries");
 
             group.MapLightCurveEndpoint();
+
             group.MapDetrendEndpoint();
+
             group.MapPeriodSearchEndpoint();
+
             group.MapTransitEndpoint();
 
             return group;

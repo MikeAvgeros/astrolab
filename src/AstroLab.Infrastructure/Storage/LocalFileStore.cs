@@ -18,6 +18,7 @@ public sealed class LocalFileStore : ILocalFileStore
     public LocalFileStore(IOptions<LocalFileStoreOptions> options)
     {
         _rootPath = Path.GetFullPath(options.Value.RootPath);
+
         Directory.CreateDirectory(_rootPath);
     }
 
@@ -29,6 +30,7 @@ public sealed class LocalFileStore : ILocalFileStore
         }
 
         var combined = Path.GetFullPath(Path.Combine(_rootPath, relativeKey));
+
         var rootWithSeparator = _rootPath.EndsWith(Path.DirectorySeparatorChar)
             ? _rootPath
             : _rootPath + Path.DirectorySeparatorChar;
@@ -44,28 +46,36 @@ public sealed class LocalFileStore : ILocalFileStore
     public string CreateStagingKey(string? fileExtension = null)
     {
         var name = Guid.NewGuid().ToString("N");
+
         return string.IsNullOrEmpty(fileExtension) ? name : $"{name}.{fileExtension.TrimStart('.')}";
     }
 
     public async Task<Result<StoredFile>> WriteAsync(string relativeKey, PipeReader source, CancellationToken cancellationToken = default)
     {
         var pathResult = ResolvePath(relativeKey);
+
         if (pathResult.IsFailure)
         {
             await source.CompleteAsync();
+
             return Result<StoredFile>.Failure(pathResult.Error);
         }
 
         var path = pathResult.Value;
+
         var directory = Path.GetDirectoryName(path);
+
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
         var succeeded = false;
+
         long totalBytesWritten = 0;
+
         FileStream? fileStream = null;
+
         try
         {
             fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: DefaultFileStreamBufferSize, useAsync: true);
@@ -73,11 +83,13 @@ public sealed class LocalFileStore : ILocalFileStore
             while (true)
             {
                 var readResult = await source.ReadAsync(cancellationToken);
+
                 var buffer = readResult.Buffer;
 
                 foreach (var segment in buffer)
                 {
                     await fileStream.WriteAsync(segment, cancellationToken);
+
                     totalBytesWritten += segment.Length;
                 }
 
@@ -90,18 +102,23 @@ public sealed class LocalFileStore : ILocalFileStore
             }
 
             await fileStream.FlushAsync(cancellationToken);
+
             await source.CompleteAsync();
+
             succeeded = true;
-            return new StoredFile(relativeKey, path, totalBytesWritten);
+
+            return StoredFileFactory.Create(relativeKey, path, totalBytesWritten);
         }
         catch (OperationCanceledException ex)
         {
             await source.CompleteAsync(ex);
+
             throw;
         }
         catch (IOException ex)
         {
             await source.CompleteAsync(ex);
+
             return Error.Infrastructure("storage.write_failed", $"Failed to write staged file '{relativeKey}': {ex.Message}");
         }
         finally
@@ -121,12 +138,14 @@ public sealed class LocalFileStore : ILocalFileStore
     public Result<Stream> OpenRead(string relativeKey)
     {
         var pathResult = ResolvePath(relativeKey);
+
         if (pathResult.IsFailure)
         {
             return Result<Stream>.Failure(pathResult.Error);
         }
 
         var path = pathResult.Value;
+
         if (!File.Exists(path))
         {
             return Error.NotFound("storage.file_not_found", $"No staged file exists at '{relativeKey}'.");
@@ -135,6 +154,7 @@ public sealed class LocalFileStore : ILocalFileStore
         try
         {
             Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: DefaultFileStreamBufferSize, useAsync: true);
+
             return Result<Stream>.Success(stream);
         }
         catch (IOException ex)
@@ -149,6 +169,7 @@ public sealed class LocalFileStore : ILocalFileStore
     public Result<Unit> Delete(string relativeKey)
     {
         var pathResult = ResolvePath(relativeKey);
+
         if (pathResult.IsFailure)
         {
             return Result<Unit>.Failure(pathResult.Error);
@@ -157,6 +178,7 @@ public sealed class LocalFileStore : ILocalFileStore
         try
         {
             File.Delete(pathResult.Value);
+
             return Result<Unit>.Success(Unit.Value);
         }
         catch (IOException ex)

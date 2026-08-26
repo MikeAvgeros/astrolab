@@ -15,11 +15,8 @@ public sealed class ArchiveDownload : IAsyncDisposable
     public ArchiveDownload(string suggestedFileName, long? contentLength, PipeReader content, HttpResponseMessage response)
     {
         SuggestedFileName = suggestedFileName;
-
         ContentLength = contentLength;
-
         Content = content;
-
         _response = response;
     }
 

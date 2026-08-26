@@ -91,7 +91,7 @@ public static class ApertureEngine
             }
         }
 
-        return ApertureMeasurementFactory.Create(flux, area, sampledPixels);
+        return ApertureMeasurement.Create(flux, area, sampledPixels);
     }
 
     /// <summary>
@@ -181,7 +181,7 @@ public static class ApertureEngine
 
         var annulus = annulusResult.Value;
 
-        return NetFluxMeasurementFactory.Create(
+        return NetFluxMeasurement.Create(
             rawFlux: aperture.Flux,
             apertureArea: aperture.Area,
             backgroundPerPixel: annulus.BackgroundPerPixel,
@@ -229,7 +229,7 @@ public static class ApertureEngine
         }
 
         return count > 0
-            ? AnnulusMeasurementFactory.Create(sum / count, count)
+            ? AnnulusMeasurement.Create(sum / count, count)
             : Error.Validation("photometry.empty_annulus", "No valid pixels were found within the background annulus.");
     }
 
@@ -290,7 +290,7 @@ public static class ApertureEngine
                 ? samples[count / 2]
                 : (samples[(count / 2) - 1] + samples[count / 2]) / 2.0f;
 
-            return AnnulusMeasurementFactory.Create(median, count);
+            return AnnulusMeasurement.Create(median, count);
         }
         finally
         {

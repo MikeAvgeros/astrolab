@@ -44,7 +44,7 @@ public static class FitsImageRenderer
             whitePoint = options.WhitePoint ?? boundsResult.Value.Upper;
         }
 
-        var scaleParameters = ScaleParametersFactory.Create(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);
+        var scaleParameters = ScaleParameters.Create(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);
 
         var grayscale = new byte[pixels.Length];
 
@@ -64,7 +64,7 @@ public static class FitsImageRenderer
             return Result<RenderedImage>.Failure(colorResult.Error);
         }
 
-        return RenderedImageFactory.Create(width, height, rgb);
+        return RenderedImage.Create(width, height, rgb);
     }
 
     /// <summary>Renders and PNG-encodes a pixel array in one step.</summary>

@@ -7,10 +7,29 @@ namespace AstroLab.Core.Fits;
 /// The pixel-array shape and physical-scaling metadata for an HDU, derived purely from its
 /// <see cref="FitsHeader"/> (<c>BITPIX</c>, <c>NAXISn</c>, <c>BZERO</c>, <c>BSCALE</c>, <c>BLANK</c>).
 /// </summary>
-public readonly record struct FitsImageDescriptor(BitPixType BitPix, ImmutableArray<int> NAxes, double BZero, double BScale, long? Blank)
+public readonly record struct FitsImageDescriptor
 {
     private const double DefaultBZero = 0.0;
     private const double DefaultBScale = 1.0;
+
+    private FitsImageDescriptor(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank)
+    {
+        BitPix = bitPix;
+        NAxes = nAxes;
+        BZero = bZero;
+        BScale = bScale;
+        Blank = blank;
+    }
+
+    public BitPixType BitPix { get; }
+
+    public ImmutableArray<int> NAxes { get; }
+
+    public double BZero { get; }
+
+    public double BScale { get; }
+
+    public long? Blank { get; }
 
     /// <summary>The total number of pixels across all axes, or 0 when the HDU carries no data (<c>NAXIS</c> = 0).</summary>
     public long PixelCount => NAxes.IsDefaultOrEmpty ? 0 : NAxes.Aggregate(1L, (acc, n) => acc * n);
@@ -48,7 +67,7 @@ public readonly record struct FitsImageDescriptor(BitPixType BitPix, ImmutableAr
 
                     var blank = blankResult.IsSuccess ? blankResult.Value : (long?)null;
 
-                    return FitsImageDescriptorFactory.Create(bitpix, axes, bzero, bscale, blank);
+                    return FitsImageDescriptor.Create(bitpix, axes, bzero, bscale, blank);
 
                 }));
 
@@ -90,11 +109,7 @@ public readonly record struct FitsImageDescriptor(BitPixType BitPix, ImmutableAr
         return builder.MoveToImmutable();
 
     }
-}
 
-/// <summary>Static factory accompanying <see cref="FitsImageDescriptor"/>.</summary>
-public static class FitsImageDescriptorFactory
-{
     public static FitsImageDescriptor Create(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank) =>
         new(bitPix, nAxes, bZero, bScale, blank);
 }

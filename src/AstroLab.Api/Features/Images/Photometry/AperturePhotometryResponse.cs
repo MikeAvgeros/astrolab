@@ -1,10 +1,30 @@
 namespace AstroLab.Api.Features.Images.Photometry;
 
-public sealed record AperturePhotometryResponse(string FileId, double RawFlux, double ApertureArea, double BackgroundPerPixel, double NetFlux);
-
-/// <summary>Static factory accompanying <see cref="AperturePhotometryResponse"/>. Validates arguments before constructing.</summary>
-public static class AperturePhotometryResponseFactory
+public sealed record AperturePhotometryResponse
 {
+    private AperturePhotometryResponse(string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
+    {
+        FileId = fileId;
+
+        RawFlux = rawFlux;
+
+        ApertureArea = apertureArea;
+
+        BackgroundPerPixel = backgroundPerPixel;
+
+        NetFlux = netFlux;
+    }
+
+    public string FileId { get; }
+
+    public double RawFlux { get; }
+
+    public double ApertureArea { get; }
+
+    public double BackgroundPerPixel { get; }
+
+    public double NetFlux { get; }
+
     public static AperturePhotometryResponse Create(string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

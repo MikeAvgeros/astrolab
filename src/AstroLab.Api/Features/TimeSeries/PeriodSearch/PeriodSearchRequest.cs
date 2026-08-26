@@ -1,10 +1,17 @@
 namespace AstroLab.Api.Features.TimeSeries.PeriodSearch;
 
-public sealed record PeriodSearchRequest(double MinPeriod, double MaxPeriod);
-
-/// <summary>Static factory accompanying <see cref="PeriodSearchRequest"/>. Validates arguments before constructing.</summary>
-public static class PeriodSearchRequestFactory
+public sealed record PeriodSearchRequest
 {
+    public PeriodSearchRequest(double minPeriod, double maxPeriod)
+    {
+        MinPeriod = minPeriod;
+        MaxPeriod = maxPeriod;
+    }
+
+    public double MinPeriod { get; }
+
+    public double MaxPeriod { get; }
+
     public static PeriodSearchRequest Create(double minPeriod, double maxPeriod)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(minPeriod);

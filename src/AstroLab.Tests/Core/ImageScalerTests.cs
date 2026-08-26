@@ -11,7 +11,7 @@ public class ImageScalerTests
     [InlineData(StretchMode.Asinh)]
     public void Stretch_MapsBlackAndWhitePoints_ToZeroAndMax_RegardlessOfMode(StretchMode mode)
     {
-        var parameters = ScaleParametersFactory.Create(blackPoint: 0, whitePoint: 10, mode: mode, asinhSoftening: 0.1);
+        var parameters = ScaleParameters.Create(blackPoint: 0, whitePoint: 10, mode: mode, asinhSoftening: 0.1);
 
         ReadOnlySpan<float> source = [0f, 10f];
 
@@ -29,7 +29,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_Linear_IsProportional()
     {
-        var parameters = ScaleParametersFactory.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
+        var parameters = ScaleParameters.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
 
         ReadOnlySpan<float> source = [0f, 5f, 10f];
 
@@ -47,7 +47,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_SquareRoot_ExpandsFaintDetail()
     {
-        var parameters = ScaleParametersFactory.Create(blackPoint: 0, whitePoint: 4, mode: StretchMode.SquareRoot);
+        var parameters = ScaleParameters.Create(blackPoint: 0, whitePoint: 4, mode: StretchMode.SquareRoot);
 
         var normalized = ImageScaler.NormalizeAndStretch(1f, parameters);
 
@@ -57,7 +57,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_ClampsValuesOutsideBlackWhiteRange()
     {
-        var parameters = ScaleParametersFactory.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
+        var parameters = ScaleParameters.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
 
         ReadOnlySpan<float> source = [-100f, 1000f];
 
@@ -73,7 +73,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_NonFinitePixels_MapToZero()
     {
-        var parameters = ScaleParametersFactory.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
+        var parameters = ScaleParameters.Create(blackPoint: 0, whitePoint: 10, mode: StretchMode.Linear);
 
         ReadOnlySpan<float> source = [float.NaN, float.PositiveInfinity, float.NegativeInfinity];
 
@@ -91,7 +91,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_RejectsMismatchedBufferLengths()
     {
-        var parameters = ScaleParametersFactory.Create(0, 10);
+        var parameters = ScaleParameters.Create(0, 10);
 
         ReadOnlySpan<float> source = [1f, 2f, 3f];
 
@@ -107,7 +107,7 @@ public class ImageScalerTests
     [Fact]
     public void Stretch_RejectsNonPositiveRange()
     {
-        var parameters = ScaleParametersFactory.Create(10, 10);
+        var parameters = ScaleParameters.Create(10, 10);
 
         ReadOnlySpan<float> source = [5f];
 

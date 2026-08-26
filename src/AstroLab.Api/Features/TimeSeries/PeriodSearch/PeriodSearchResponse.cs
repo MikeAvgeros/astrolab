@@ -1,10 +1,20 @@
 namespace AstroLab.Api.Features.TimeSeries.PeriodSearch;
 
-public sealed record PeriodSearchResponse(string FileId, double BestPeriod, double Power);
-
-/// <summary>Static factory accompanying <see cref="PeriodSearchResponse"/>. Validates arguments before constructing.</summary>
-public static class PeriodSearchResponseFactory
+public sealed record PeriodSearchResponse
 {
+    private PeriodSearchResponse(string fileId, double bestPeriod, double power)
+    {
+        FileId = fileId;
+        BestPeriod = bestPeriod;
+        Power = power;
+    }
+
+    public string FileId { get; }
+
+    public double BestPeriod { get; }
+
+    public double Power { get; }
+
     public static PeriodSearchResponse Create(string fileId, double bestPeriod, double power)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

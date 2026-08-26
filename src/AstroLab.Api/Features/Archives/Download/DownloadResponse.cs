@@ -2,11 +2,21 @@ using AstroLab.Infrastructure.Archives;
 
 namespace AstroLab.Api.Features.Archives.Download;
 
-public sealed record DownloadResponse(string FileId, ArchiveSource Archive, long SizeBytes);
-
-/// <summary>Static factory accompanying <see cref="DownloadResponse"/>. Validates arguments before constructing.</summary>
-public static class DownloadResponseFactory
+public sealed record DownloadResponse
 {
+    private DownloadResponse(string fileId, ArchiveSource archive, long sizeBytes)
+    {
+        FileId = fileId;
+        Archive = archive;
+        SizeBytes = sizeBytes;
+    }
+
+    public string FileId { get; }
+
+    public ArchiveSource Archive { get; }
+
+    public long SizeBytes { get; }
+
     public static DownloadResponse Create(string fileId, ArchiveSource archive, long sizeBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

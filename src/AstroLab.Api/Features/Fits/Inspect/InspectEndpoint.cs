@@ -18,6 +18,6 @@ public static class InspectEndpoint
     {
         var hdusResult = await datasetReader.ReadAllHdusAsync(fileId, cancellationToken);
 
-        return hdusResult.ToApiResult(hdus => Results.Ok(FitsHeaderResponseFactory.Create(fileId, hdus)));
+        return hdusResult.ToApiResult(hdus => Results.Ok(FitsHeaderResponse.Create(fileId, hdus)));
     }
 }

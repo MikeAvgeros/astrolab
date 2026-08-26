@@ -27,12 +27,15 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     private async Task<string> UploadAsync(byte[] fitsBytes)
     {
         using var content = new ByteArrayContent(fitsBytes);
+        
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _client.PostAsync("/api/fits/upload", content);
+        
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         return body.GetProperty("fileId").GetString()!;
     }
 
@@ -40,13 +43,17 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task Upload_ReturnsCreatedWithFileIdAndSize()
     {
         using var content = new ByteArrayContent(SyntheticFits.SmallGradientImage());
+        
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
         var response = await _client.PostAsync("/api/fits/upload", content);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("fileId").GetString()));
+        
         Assert.True(body.GetProperty("sizeBytes").GetInt64() > 0);
     }
 
@@ -58,12 +65,16 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         var keywords = body.GetProperty("keywords").EnumerateArray()
             .ToDictionary(k => k.GetProperty("name").GetString()!, k => k.GetProperty("value").GetString());
 
         Assert.Equal("8", keywords["BITPIX"]);
+        
         Assert.Equal("4", keywords["NAXIS1"]);
+        
         Assert.Equal("2", keywords["NAXIS2"]);
     }
 
@@ -83,7 +94,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("fits.header.empty_file", body.GetProperty("title").GetString());
     }
 
@@ -93,10 +106,13 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var fileId = await UploadAsync(SyntheticFits.MultiHduImageWithUnrelatedSpectralMarker());
 
         var headerResponse = await _client.GetAsync($"/api/fits/{fileId}/header");
+        
         var headerBody = await headerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("Image", headerBody.GetProperty("datasetKind").GetString());
 
         var statisticsResponse = await _client.GetAsync($"/api/images/{fileId}/statistics");
+        
         Assert.Equal(HttpStatusCode.OK, statisticsResponse.StatusCode);
     }
 
@@ -108,7 +124,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("Image", body.GetProperty("datasetKind").GetString());
+        
         Assert.Equal(1, body.GetProperty("hdus").GetArrayLength());
     }
 
@@ -120,6 +138,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("Spectrum", body.GetProperty("datasetKind").GetString());
     }
 
@@ -134,11 +153,17 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(10.0, body.GetProperty("min").GetDouble(), precision: 6);
+        
         Assert.Equal(80.0, body.GetProperty("max").GetDouble(), precision: 6);
+        
         Assert.Equal(45.0, body.GetProperty("mean").GetDouble(), precision: 6);
+        
         Assert.Equal(8, body.GetProperty("validPixelCount").GetInt64());
+        
         Assert.Equal(0, body.GetProperty("invalidPixelCount").GetInt64());
+        
         Assert.Equal(0.0, body.GetProperty("deadPixelPercentage").GetDouble(), precision: 6);
+        
         Assert.True(body.GetProperty("skySigma").GetDouble() > 0);
     }
 
@@ -150,9 +175,11 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/images/{fileId}/render?stretch=Linear&blackPoint=0&whitePoint=80");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
 
         var bytes = await response.Content.ReadAsByteArrayAsync();
+        
         Assert.Equal([137, 80, 78, 71, 13, 10, 26, 10], bytes[..8]);
     }
 
@@ -160,6 +187,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task MeasureAperture_ReturnsPositiveFiniteFlux()
     {
         var fileId = await UploadGradientImageAsync();
+        
         var request = new
         {
             CenterX = 0.5,
@@ -172,8 +200,11 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         var rawFlux = body.GetProperty("rawFlux").GetDouble();
+        
         Assert.True(rawFlux > 0 && double.IsFinite(rawFlux));
     }
 
@@ -181,6 +212,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task MeasureAperture_OnSpectrumFrame_ReturnsBadRequest()
     {
         var fileId = await UploadGradientSpectrumFrameAsync();
+        
         var request = new
         {
             CenterX = 0.5,
@@ -193,7 +225,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
     }
 
@@ -201,6 +235,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task ExtractSpectrum_SumsRowsPerColumnExactly()
     {
         var fileId = await UploadGradientSpectrumFrameAsync();
+        
         var request = new
         {
             Axis = "Horizontal",
@@ -211,7 +246,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/extract", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         var flux = body.GetProperty("flux").EnumerateArray().Select(e => e.GetDouble()).ToArray();
 
         Assert.Equal([60.0, 80.0, 100.0, 120.0], flux);
@@ -221,6 +258,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task ExtractSpectrum_OnPlainImage_ReturnsBadRequest()
     {
         var fileId = await UploadGradientImageAsync();
+        
         var request = new
         {
             Axis = "Horizontal",
@@ -231,7 +269,9 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/extract", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        
         Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
     }
 

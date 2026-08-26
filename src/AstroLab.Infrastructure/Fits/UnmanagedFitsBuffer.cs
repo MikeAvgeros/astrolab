@@ -21,7 +21,6 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
     private UnmanagedFitsBuffer(byte* pointer, nuint lengthBytes)
     {
         _pointer = pointer;
-
         LengthBytes = lengthBytes;
     }
 

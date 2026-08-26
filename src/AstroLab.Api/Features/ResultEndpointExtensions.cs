@@ -2,11 +2,6 @@ using AstroLab.Core.Result;
 
 namespace AstroLab.Api.Features;
 
-/// <summary>
-/// Translates <see cref="Result{TValue}"/> outcomes from Core/Infrastructure into HTTP responses
-/// using C# pattern matching, so individual endpoints never need to know how an <see cref="ErrorCategory"/>
-/// maps onto a status code.
-/// </summary>
 public static class ResultEndpointExtensions
 {
     extension(Error error)

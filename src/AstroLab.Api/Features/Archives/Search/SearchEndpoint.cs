@@ -20,12 +20,12 @@ public static class SearchEndpoint
         IMastArchiveClient mastClient,
         CancellationToken cancellationToken)
     {
-        var query = ArchiveSearchQueryFactory.Create(request.Target, request.Instrument, maxResults: request.MaxResults);
+        var query = ArchiveSearchQuery.Create(request.Target, request.Instrument, maxResults: request.MaxResults);
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 
         var result = await client.SearchAsync(query, cancellationToken);
 
-        return result.ToApiResult(observations => Results.Ok(ObservationSearchResponseFactory.Create(observations)));
+        return result.ToApiResult(observations => Results.Ok(ObservationSearchResponse.Create(observations)));
     }
 }

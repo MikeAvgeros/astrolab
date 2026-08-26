@@ -70,6 +70,6 @@ public static class ExtractEndpoint
             wavelengths = [.. wavelengthBuffer];
         }
 
-        return Results.Ok(SpectrumExtractionResponseFactory.Create(fileId, wavelengths, [.. spectrum]));
+        return Results.Ok(SpectrumExtractionResponse.Create(fileId, wavelengths, [.. spectrum]));
     }
 }

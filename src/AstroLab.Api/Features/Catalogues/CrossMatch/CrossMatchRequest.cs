@@ -1,10 +1,20 @@
+using System.Text.Json.Serialization;
+
 namespace AstroLab.Api.Features.Catalogues.CrossMatch;
 
-public sealed record CrossMatchRequest(string FileId, double RadiusArcsec);
-
-/// <summary>Static factory accompanying <see cref="CrossMatchRequest"/>. Validates arguments before constructing.</summary>
-public static class CrossMatchRequestFactory
+public sealed record CrossMatchRequest
 {
+    [JsonConstructor]
+    private CrossMatchRequest(string fileId, double radiusArcsec)
+    {
+        FileId = fileId;
+        RadiusArcsec = radiusArcsec;
+    }
+
+    public string FileId { get; }
+
+    public double RadiusArcsec { get; }
+
     public static CrossMatchRequest Create(string fileId, double radiusArcsec)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

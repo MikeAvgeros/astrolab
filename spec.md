@@ -117,8 +117,8 @@ describe **what the system must do**; §4 describes **how code is written**.
 - **MUST:** Never create a domain object with invalid properties. A domain object MUST be valid
   immediately after construction.
 - **MUST:** For validated domain records that require invariant checking, put argument validation
-  in the type's `<Name>Factory.Create(...)` method (§4). Once construction succeeds, callers
-  MUST be able to rely on the object's invariants.
+  in the type's own `Create(...)` method (§4.4). Once construction succeeds, callers MUST be able
+  to rely on the object's invariants.
 - **MUST:** Return `Result<T>` for operations that can fail for a reason a caller should handle,
   including validation failures, missing data, unsupported FITS kinds, and capabilities that
   are intentionally not implemented (§6.1).
@@ -161,13 +161,15 @@ while §3 defines the higher-level engineering requirements.
 
   `namespace AstroLab.Api.Features.Fits.Upload;`
 
-- **MUST:** Keep one primary type per file. Explicit companion types such as a type's factory or
-  extension container MAY share the file when this specification explicitly permits it.
+- **MUST:** Keep one primary type per file. An explicit companion extension container MAY share
+  the file when this specification explicitly permits it. A record's `Create(...)` factory method
+  lives on the record itself (§4.4), not in a companion type, so it never counts against this
+  rule.
 - **MUST:** Use C# 14 `extension(...)` member syntax for new extension members rather than the
   classic `this`-parameter extension-method form.
-- **MUST NOT:** Use primary constructors on classes or structs. Classes and structs MUST use an
-  explicit constructor. Positional records remain permitted and are the standard pattern for
-  DTOs and value types.
+- **MUST NOT:** Use primary constructors on classes, structs, or records. All three use an
+  explicit constructor body. Records follow the private-constructor-plus-`Create(...)` pattern in
+  §4.4, which is the standard pattern for DTOs and value types.
 
 ### 4.2 Comments and Literals
 
@@ -207,28 +209,78 @@ while §3 defines the higher-level engineering requirements.
   remain classes rather than records.
 - **MUST:** Use records for immutable data-only types such as DTOs, request/response models,
   value objects, and measurement results. Small value types MAY use `readonly record struct`.
-- **SHOULD:** Keep positional record parameter lists on one line where they remain readable.
-  If a declaration becomes difficult to read, normal formatting takes precedence.
+- **MUST:** A concrete record type defaults to `sealed`. Leave a record unsealed only when
+  inheritance/polymorphism is an explicit, documented part of its design. `readonly record struct`
+  types are implicitly sealed and MUST NOT carry the modifier.
+- **MUST:** Declare a record's properties explicitly with `{ get; }` accessors, never
+  `{ get; init; }`, and set them only from the record's own constructor. Because properties are
+  get-only, records do not support `with`-expression mutation; construct a new instance through
+  `Create(...)` instead.
+- **MUST:** A record is constructed through a private constructor plus a public static
+  `Create(...)` method declared on the record type itself — not a companion `<Name>Factory`
+  class. `Create(...)` validates its arguments and returns `new(...)`; the constructor performs no
+  validation and MUST NOT be called from outside the record's own file. This makes the record
+  impossible to construct in an invalid state.
+
+  Example:
+
+  ```csharp
+  public sealed record ApertureMeasurement
+  {
+      private ApertureMeasurement(double flux, double area, int sampledPixelCount)
+      {
+          Flux = flux;
+          Area = area;
+          SampledPixelCount = sampledPixelCount;
+      }
+
+      public double Flux { get; }
+      public double Area { get; }
+      public int SampledPixelCount { get; }
+
+      public static ApertureMeasurement Create(double flux, double area, int sampledPixelCount)
+      {
+          ArgumentOutOfRangeException.ThrowIfNegative(area);
+          ArgumentOutOfRangeException.ThrowIfNegative(sampledPixelCount);
+
+          return new ApertureMeasurement(flux, area, sampledPixelCount);
+      }
+  }
+  ```
+
+  This is an explicit (not primary) constructor, so it does not fall under §4.1's primary
+  constructor ban — that ban targets classes and structs; records are not mentioned there because
+  a record never needs the primary-constructor shorthand once it follows this pattern.
+
 - **MUST:** Use `ImmutableList<T>` for collection-shaped properties on API-boundary records.
   `AstroLab.Core` hot-path types are exempt and MUST use span/array-based representations
   appropriate to their allocation constraints.
-- **MUST:** Records requiring invariant validation MUST be constructed through their accompanying
-  `<Name>Factory.Create(...)` method. The factory and record MAY share a file.
 - **MAY:** Types with established semantic smart constructors, such as `Error.Validation(...)`
-  and `Result<T>.Success(...)`, expose those constructors on the type itself. They MUST funnel
-  through the type's factory where the factory convention applies.
-- **EXCEPTION:** Request DTO records bound from HTTP request bodies are constructed directly by
-  ASP.NET Core model binding during JSON deserialization. No custom `JsonConverter` is required
-  solely to route framework construction through a factory. Hand-written construction of such
-  DTOs SHOULD still use the factory when validation is required.
+  and `Result<T>.Success(...)`, expose those constructors directly on the type instead of a
+  generic `Create(...)`, as long as they still funnel through the same private constructor.
+- **EXCEPTION:** A request DTO record bound directly from an HTTP request body (no
+  `[AsParameters]`) keeps a **private** constructor but marks it `[JsonConstructor]`
+  (`System.Text.Json.Serialization`) so `System.Text.Json` can still use it during model binding.
+  Construction via the framework bypasses `Create`'s validation exactly as it did under the old
+  factory convention. Hand-written construction of such a DTO SHOULD still go through `Create`
+  when validation is required.
+- **EXCEPTION:** A request DTO record bound via `[AsParameters]` (query/route parameter binding)
+  MUST keep a **public** constructor. ASP.NET Core's parameter-binding metadata cache requires a
+  public constructor for `[AsParameters]` complex-type binding and does not honor
+  `[JsonConstructor]`-style overrides the way `System.Text.Json` body binding does — a private
+  constructor throws `InvalidOperationException: No public parameterless constructor found`
+  at endpoint-mapping time (verified empirically; there is no supported workaround short of
+  switching the endpoint off `[AsParameters]`). The constructor still performs no validation,
+  properties remain `{ get; }`-only, and `Create(...)` remains the validated entry point for
+  hand-written construction.
 
 ### 4.5 Line Endings and Formatting
 
 - **MUST:** Repository files use CRLF line endings, enforced by `.gitattributes`
   (`* text eol=crlf`).
 - **SHOULD:** Separate consecutive executable statements with a single blank line when doing so
-  improves readability. Do not insert unnecessary blank lines immediately inside or before a
-  closing brace.
+  improves readability, except between variable assignments in constructors.
+  Do not insert unnecessary blank lines immediately inside or before a closing brace.
 
 ---
 
@@ -502,9 +554,8 @@ These operations allow Core and Infrastructure outcomes to be composed and mappe
 responses without exceptions.
 
 `Result<TValue>` has a private constructor so the success/failure invariant is protected.
-`Success` and `Failure` are its semantic smart constructors. `ResultFactory.Create<TValue>`
-overloads may provide generic, type-inference-friendly entry points and MUST delegate to those
-constructors rather than duplicate construction logic.
+`Success` and `Failure` are its semantic smart constructors (§4.4) and are the only way to obtain
+an instance.
 
 `Error` is a lightweight `readonly record struct` containing:
 
@@ -517,8 +568,8 @@ Named constructors include:
 `Validation`, `NotFound`, `Conflict`, `Unauthorized`, `Infrastructure`,
 `NotImplemented`, `Cancelled`, and `Unexpected`.
 
-These constructors delegate to `ErrorFactory.Create(code, message, category)`, which validates
-that `code` and `message` are non-empty.
+These constructors delegate to `Error`'s private constructor, which validates that `code` and
+`message` are non-empty.
 
 `ErrorCategory.NotImplemented` represents a named capability whose implementation does not yet
 exist. `ResultEndpointExtensions` maps it to HTTP 501.

@@ -2,11 +2,21 @@ using System.Collections.Immutable;
 
 namespace AstroLab.Api.Features.Spectroscopy.Calibrate;
 
-public sealed record WavelengthCalibrationResponse(string FileId, ImmutableList<double> DispersionCoefficients, double ResidualRms);
-
-/// <summary>Static factory accompanying <see cref="WavelengthCalibrationResponse"/>. Validates arguments before constructing.</summary>
-public static class WavelengthCalibrationResponseFactory
+public sealed record WavelengthCalibrationResponse
 {
+    private WavelengthCalibrationResponse(string fileId, ImmutableList<double> dispersionCoefficients, double residualRms)
+    {
+        FileId = fileId;
+        DispersionCoefficients = dispersionCoefficients;
+        ResidualRms = residualRms;
+    }
+
+    public string FileId { get; }
+
+    public ImmutableList<double> DispersionCoefficients { get; }
+
+    public double ResidualRms { get; }
+
     public static WavelengthCalibrationResponse Create(string fileId, ImmutableList<double> dispersionCoefficients, double residualRms)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

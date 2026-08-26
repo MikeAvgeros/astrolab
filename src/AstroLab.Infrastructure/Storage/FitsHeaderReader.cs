@@ -70,7 +70,7 @@ public static class FitsHeaderReader
 
             var dataOffset = stream.Position;
 
-            locations.Add(HduLocationFactory.Create(descriptor, dataOffset));
+            locations.Add(HduLocation.Create(descriptor, dataOffset));
 
             var skipBytes = RoundUpToBlockSize(descriptor.DataSizeBytes);
 

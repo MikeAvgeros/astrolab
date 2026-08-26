@@ -1,10 +1,17 @@
 namespace AstroLab.Api.Features.Fits.Upload;
 
-public sealed record FitsUploadResponse(string FileId, long SizeBytes);
-
-/// <summary>Static factory accompanying <see cref="FitsUploadResponse"/>. Validates arguments before constructing.</summary>
-public static class FitsUploadResponseFactory
+public sealed record FitsUploadResponse
 {
+    private FitsUploadResponse(string fileId, long sizeBytes)
+    {
+        FileId = fileId;
+        SizeBytes = sizeBytes;
+    }
+
+    public string FileId { get; }
+
+    public long SizeBytes { get; }
+
     public static FitsUploadResponse Create(string fileId, long sizeBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

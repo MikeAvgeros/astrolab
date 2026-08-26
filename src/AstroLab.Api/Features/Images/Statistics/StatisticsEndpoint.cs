@@ -40,7 +40,7 @@ public static class StatisticsEndpoint
 
         var skyBackground = ImageStatistics.ComputeSkyBackground(pixels, stats);
 
-        return Results.Ok(ImageStatisticsResponseFactory.Create(
+        return Results.Ok(ImageStatisticsResponse.Create(
             fileId, stats.Min, stats.Max, stats.Mean, stats.StdDev, stats.ValidPixelCount, stats.TotalPixelCount,
             stats.InvalidPixelCount, stats.DeadPixelPercentage, skyBackground.SkySigma));
     }

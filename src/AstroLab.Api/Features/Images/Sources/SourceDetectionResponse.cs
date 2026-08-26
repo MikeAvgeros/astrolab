@@ -2,11 +2,18 @@ using System.Collections.Immutable;
 
 namespace AstroLab.Api.Features.Images.Sources;
 
-public sealed record SourceDetectionResponse(string FileId, ImmutableList<DetectedSourceDto> Sources);
-
-/// <summary>Static factory accompanying <see cref="SourceDetectionResponse"/>. Validates arguments before constructing.</summary>
-public static class SourceDetectionResponseFactory
+public sealed record SourceDetectionResponse
 {
+    private SourceDetectionResponse(string fileId, ImmutableList<DetectedSourceDto> sources)
+    {
+        FileId = fileId;
+        Sources = sources;
+    }
+
+    public string FileId { get; }
+
+    public ImmutableList<DetectedSourceDto> Sources { get; }
+
     public static SourceDetectionResponse Create(string fileId, ImmutableList<DetectedSourceDto> sources)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

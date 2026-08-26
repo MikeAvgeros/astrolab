@@ -25,7 +25,6 @@ public sealed class MastArchiveClient : IMastArchiveClient
     public MastArchiveClient(HttpClient httpClient, ILogger<MastArchiveClient> logger)
     {
         _httpClient = httpClient;
-
         _logger = logger;
     }
 

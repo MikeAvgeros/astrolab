@@ -1,10 +1,20 @@
 namespace AstroLab.Core.Imaging;
 
-public readonly record struct SkyBackgroundStatistics(double Q1, double Q3, double SkySigma);
-
-/// <summary>Static factory accompanying <see cref="SkyBackgroundStatistics"/>. Validates arguments before constructing.</summary>
-public static class SkyBackgroundStatisticsFactory
+public readonly record struct SkyBackgroundStatistics
 {
+    private SkyBackgroundStatistics(double q1, double q3, double skySigma)
+    {
+        Q1 = q1;
+        Q3 = q3;
+        SkySigma = skySigma;
+    }
+
+    public double Q1 { get; }
+
+    public double Q3 { get; }
+
+    public double SkySigma { get; }
+
     public static SkyBackgroundStatistics Create(double q1, double q3, double skySigma)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(skySigma);

@@ -8,9 +8,7 @@ public readonly record struct Result<TValue>
     private Result(bool isSuccess, TValue? value, Error error)
     {
         IsSuccess = isSuccess;
-
         _value = value;
-
         _error = error;
     }
 
@@ -37,9 +35,7 @@ public readonly record struct Result<TValue>
     public void Deconstruct(out bool isSuccess, out TValue? value, out Error error)
     {
         isSuccess = IsSuccess;
-
         value = _value;
-
         error = _error;
     }
     
@@ -73,11 +69,4 @@ public readonly record struct Result<TValue>
     public TValue GetValueOrDefault(TValue fallback) => IsSuccess ? _value! : fallback;
 
     public override string ToString() => IsSuccess ? $"Success({_value})" : $"Failure({_error})";
-}
-
-public static class ResultFactory
-{
-    public static Result<TValue> Create<TValue>(TValue value) => Result<TValue>.Success(value);
-
-    public static Result<TValue> Create<TValue>(Error error) => Result<TValue>.Failure(error);
 }

@@ -1,10 +1,17 @@
+using System.Text.Json.Serialization;
+
 namespace AstroLab.Api.Features.TimeSeries.Detrend;
 
-public sealed record DetrendRequest(string Method);
-
-/// <summary>Static factory accompanying <see cref="DetrendRequest"/>. Validates arguments before constructing.</summary>
-public static class DetrendRequestFactory
+public sealed record DetrendRequest
 {
+    [JsonConstructor]
+    private DetrendRequest(string method)
+    {
+        Method = method;
+    }
+
+    public string Method { get; }
+
     public static DetrendRequest Create(string method)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);

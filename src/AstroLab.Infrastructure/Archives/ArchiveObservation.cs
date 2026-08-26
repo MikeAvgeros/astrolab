@@ -1,11 +1,27 @@
 namespace AstroLab.Infrastructure.Archives;
 
 /// <summary>A single observation record returned by an archive metadata search.</summary>
-public readonly record struct ArchiveObservation(string DatasetId, string Target, string Instrument, DateTimeOffset ObservationDate, ArchiveSource Source);
-
-/// <summary>Static factory accompanying <see cref="ArchiveObservation"/>. Validates arguments before constructing.</summary>
-public static class ArchiveObservationFactory
+public readonly record struct ArchiveObservation
 {
+    private ArchiveObservation(string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source)
+    {
+        DatasetId = datasetId;
+        Target = target;
+        Instrument = instrument;
+        ObservationDate = observationDate;
+        Source = source;
+    }
+
+    public string DatasetId { get; }
+
+    public string Target { get; }
+
+    public string Instrument { get; }
+
+    public DateTimeOffset ObservationDate { get; }
+
+    public ArchiveSource Source { get; }
+
     public static ArchiveObservation Create(string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(datasetId);

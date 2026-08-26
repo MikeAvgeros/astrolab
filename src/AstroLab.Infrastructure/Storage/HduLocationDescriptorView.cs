@@ -17,7 +17,6 @@ public readonly struct HduLocationDescriptorView : IReadOnlyList<HduDescriptor>
     public HduLocationDescriptorView(ImmutableArray<HduLocation> locations)
     {
         _locations = locations;
-
     }
 
     public int Count => _locations.Length;

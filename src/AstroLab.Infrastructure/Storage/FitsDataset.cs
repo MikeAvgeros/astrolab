@@ -15,11 +15,8 @@ public sealed class FitsDataset : IDisposable
     public FitsDataset(HduDescriptor hdu, FitsImageDescriptor image, UnmanagedFitsBuffer pixelBuffer)
     {
         ArgumentNullException.ThrowIfNull(pixelBuffer);
-
         Hdu = hdu;
-
         Image = image;
-
         _pixelBuffer = pixelBuffer;
     }
 

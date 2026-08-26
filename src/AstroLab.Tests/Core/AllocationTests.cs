@@ -36,7 +36,7 @@ public class AllocationTests
 
         var destination = new byte[source.Length];
 
-        var parameters = ScaleParametersFactory.Create(0, 999, StretchMode.Asinh, 0.1);
+        var parameters = ScaleParameters.Create(0, 999, StretchMode.Asinh, 0.1);
 
         var allocated = MeasureAllocatedBytes(() => ImageScaler.Stretch(source, destination, parameters));
 

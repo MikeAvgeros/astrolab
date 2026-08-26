@@ -42,7 +42,7 @@ public static class PhotometryEndpoint
             request.AnnulusOuterRadius,
             request.BackgroundMethod);
 
-        return measurementResult.ToApiResult(measurement => Results.Ok(AperturePhotometryResponseFactory.Create(
+        return measurementResult.ToApiResult(measurement => Results.Ok(AperturePhotometryResponse.Create(
             fileId,
             measurement.RawFlux,
             measurement.ApertureArea,

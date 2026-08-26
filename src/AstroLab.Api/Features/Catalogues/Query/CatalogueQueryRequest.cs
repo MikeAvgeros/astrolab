@@ -1,10 +1,20 @@
 namespace AstroLab.Api.Features.Catalogues.Query;
 
-public sealed record CatalogueQueryRequest(double RightAscension, double Declination, double RadiusArcsec);
-
-/// <summary>Static factory accompanying <see cref="CatalogueQueryRequest"/>. Validates arguments before constructing.</summary>
-public static class CatalogueQueryRequestFactory
+public sealed record CatalogueQueryRequest
 {
+    public CatalogueQueryRequest(double rightAscension, double declination, double radiusArcsec)
+    {
+        RightAscension = rightAscension;
+        Declination = declination;
+        RadiusArcsec = radiusArcsec;
+    }
+
+    public double RightAscension { get; }
+
+    public double Declination { get; }
+
+    public double RadiusArcsec { get; }
+
     public static CatalogueQueryRequest Create(double rightAscension, double declination, double radiusArcsec)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radiusArcsec);

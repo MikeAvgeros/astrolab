@@ -5,37 +5,58 @@ namespace AstroLab.Infrastructure.ImageRendering;
 /// <summary>
 /// Options controlling how a raw FITS pixel array is turned into a displayable image.
 /// </summary>
-/// <param name="Stretch">The non-linear intensity transform applied within the black/white points.</param>
-/// <param name="AsinhSoftening">Softening parameter used only when <paramref name="Stretch"/> is <see cref="StretchMode.Asinh"/>.</param>
-/// <param name="ColorMap">The palette applied to the stretched grayscale intensity.</param>
-/// <param name="BlackPoint">
-/// The physical pixel value mapped to black. When <see langword="null"/>, it is computed
-/// automatically from <paramref name="AutoLowerPercentile"/>.
-/// </param>
-/// <param name="WhitePoint">
-/// The physical pixel value mapped to white. When <see langword="null"/>, it is computed
-/// automatically from <paramref name="AutoUpperPercentile"/>.
-/// </param>
-/// <param name="AutoLowerPercentile">Lower percentile used to derive <paramref name="BlackPoint"/> when it is not supplied.</param>
-/// <param name="AutoUpperPercentile">Upper percentile used to derive <paramref name="WhitePoint"/> when it is not supplied.</param>
-public readonly record struct RenderOptions(
-    StretchMode Stretch = StretchMode.Asinh,
-    double AsinhSoftening = RenderOptionsFactory.DefaultAsinhSoftening,
-    ColorMap ColorMap = ColorMap.Grayscale,
-    double? BlackPoint = null,
-    double? WhitePoint = null,
-    double AutoLowerPercentile = RenderOptionsFactory.DefaultAutoLowerPercentile,
-    double AutoUpperPercentile = RenderOptionsFactory.DefaultAutoUpperPercentile)
+public readonly record struct RenderOptions
 {
-    public bool RequiresAutoScale => BlackPoint is null || WhitePoint is null;
-}
+    private const double DefaultAsinhSoftening = 0.1;
+    private const double DefaultAutoLowerPercentile = 1.0;
+    private const double DefaultAutoUpperPercentile = 99.0;
 
-/// <summary>Static factory accompanying <see cref="RenderOptions"/>.</summary>
-public static class RenderOptionsFactory
-{
-    public const double DefaultAsinhSoftening = 0.1;
-    public const double DefaultAutoLowerPercentile = 1.0;
-    public const double DefaultAutoUpperPercentile = 99.0;
+    private RenderOptions(
+        StretchMode stretch,
+        double asinhSoftening,
+        ColorMap colorMap,
+        double? blackPoint,
+        double? whitePoint,
+        double autoLowerPercentile,
+        double autoUpperPercentile)
+    {
+        Stretch = stretch;
+        AsinhSoftening = asinhSoftening;
+        ColorMap = colorMap;
+        BlackPoint = blackPoint;
+        WhitePoint = whitePoint;
+        AutoLowerPercentile = autoLowerPercentile;
+        AutoUpperPercentile = autoUpperPercentile;
+    }
+
+    /// <summary>The non-linear intensity transform applied within the black/white points.</summary>
+    public StretchMode Stretch { get; }
+
+    /// <summary>Softening parameter used only when <see cref="Stretch"/> is <see cref="StretchMode.Asinh"/>.</summary>
+    public double AsinhSoftening { get; }
+
+    /// <summary>The palette applied to the stretched grayscale intensity.</summary>
+    public ColorMap ColorMap { get; }
+
+    /// <summary>
+    /// The physical pixel value mapped to black. When <see langword="null"/>, it is computed
+    /// automatically from <see cref="AutoLowerPercentile"/>.
+    /// </summary>
+    public double? BlackPoint { get; }
+
+    /// <summary>
+    /// The physical pixel value mapped to white. When <see langword="null"/>, it is computed
+    /// automatically from <see cref="AutoUpperPercentile"/>.
+    /// </summary>
+    public double? WhitePoint { get; }
+
+    /// <summary>Lower percentile used to derive <see cref="BlackPoint"/> when it is not supplied.</summary>
+    public double AutoLowerPercentile { get; }
+
+    /// <summary>Upper percentile used to derive <see cref="WhitePoint"/> when it is not supplied.</summary>
+    public double AutoUpperPercentile { get; }
+
+    public bool RequiresAutoScale => BlackPoint is null || WhitePoint is null;
 
     public static RenderOptions Create(
         StretchMode stretch = StretchMode.Asinh,

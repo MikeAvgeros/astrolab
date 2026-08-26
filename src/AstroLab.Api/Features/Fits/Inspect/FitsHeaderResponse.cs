@@ -3,11 +3,24 @@ using AstroLab.Core.Fits;
 
 namespace AstroLab.Api.Features.Fits.Inspect;
 
-public sealed record FitsHeaderResponse(string FileId, FitsDatasetKind DatasetKind, ImmutableList<FitsHduSummaryDto> Hdus, ImmutableList<FitsKeywordDto> Keywords);
-
-/// <summary>Static factory accompanying <see cref="FitsHeaderResponse"/>. Validates arguments before constructing.</summary>
-public static class FitsHeaderResponseFactory
+public sealed record FitsHeaderResponse
 {
+    private FitsHeaderResponse(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords)
+    {
+        FileId = fileId;
+        DatasetKind = datasetKind;
+        Hdus = hdus;
+        Keywords = keywords;
+    }
+
+    public string FileId { get; }
+
+    public FitsDatasetKind DatasetKind { get; }
+
+    public ImmutableList<FitsHduSummaryDto> Hdus { get; }
+
+    public ImmutableList<FitsKeywordDto> Keywords { get; }
+
     public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
@@ -20,13 +33,13 @@ public static class FitsHeaderResponseFactory
         var datasetKind = FitsDatasetClassifier.Classify(hdus);
 
         var hduSummaries = hdus
-            .Select(hdu => FitsHduSummaryDtoFactory.Create(hdu.Index, hdu.Type, hdu.Image?.NAxes ?? ImmutableArray<int>.Empty))
+            .Select(hdu => FitsHduSummaryDto.Create(hdu.Index, hdu.Type, hdu.Image?.NAxes ?? ImmutableArray<int>.Empty))
             .ToImmutableList();
 
         var primaryHeader = hdus[0].Header;
 
         var keywords = primaryHeader
-            .Select(keyword => FitsKeywordDtoFactory.Create(keyword.Name, keyword.Value.ToString(), keyword.Comment))
+            .Select(keyword => FitsKeywordDto.Create(keyword.Name, keyword.Value.ToString(), keyword.Comment))
             .ToImmutableList();
 
         return Create(fileId, datasetKind, hduSummaries, keywords);

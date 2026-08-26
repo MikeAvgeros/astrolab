@@ -4,7 +4,7 @@ using AstroLab.Core.Result;
 namespace AstroLab.Core.Imaging;
 
 /// <summary>Summary statistics for a pixel array, computed while ignoring non-finite (NaN/Infinity) pixels.</summary>
-public readonly record struct ImageStatistics(double Min, double Max, double Mean, double StdDev, long ValidPixelCount, long TotalPixelCount)
+public readonly record struct ImageStatistics
 {
     private const int DefaultHistogramBins = 65536;
     private const int MaxStackallocHistogramBins = 1024;
@@ -15,6 +15,28 @@ public readonly record struct ImageStatistics(double Min, double Max, double Mea
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;
     private const double PercentageScale = 100.0;
+
+    private ImageStatistics(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
+    {
+        Min = min;
+        Max = max;
+        Mean = mean;
+        StdDev = stdDev;
+        ValidPixelCount = validPixelCount;
+        TotalPixelCount = totalPixelCount;
+    }
+
+    public double Min { get; }
+
+    public double Max { get; }
+
+    public double Mean { get; }
+
+    public double StdDev { get; }
+
+    public long ValidPixelCount { get; }
+
+    public long TotalPixelCount { get; }
 
     public long InvalidPixelCount => TotalPixelCount - ValidPixelCount;
 
@@ -84,7 +106,7 @@ public readonly record struct ImageStatistics(double Min, double Max, double Mea
 
         var stdDev = Math.Sqrt(sumSquaredDeviation / validCount);
 
-        return ImageStatisticsFactory.Create(min, max, mean, stdDev, validCount, pixels.Length);
+        return Create(min, max, mean, stdDev, validCount, pixels.Length);
     }
 
     /// <summary>
@@ -182,7 +204,7 @@ public readonly record struct ImageStatistics(double Min, double Max, double Mea
     {
         if (stats.Max == stats.Min)
         {
-            return SkyBackgroundStatisticsFactory.Create(stats.Min, stats.Max, 0.0);
+            return SkyBackgroundStatistics.Create(stats.Min, stats.Max, 0.0);
         }
 
         var histogram = ArrayPool<long>.Shared.Rent(SkyBackgroundHistogramBins);
@@ -240,18 +262,14 @@ public readonly record struct ImageStatistics(double Min, double Max, double Mea
                 }
             }
 
-            return SkyBackgroundStatisticsFactory.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
+            return SkyBackgroundStatistics.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
         }
         finally
         {
             ArrayPool<long>.Shared.Return(histogram);
         }
     }
-}
 
-/// <summary>Static factory accompanying <see cref="ImageStatistics"/>. Validates arguments before constructing.</summary>
-public static class ImageStatisticsFactory
-{
     public static ImageStatistics Create(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(validPixelCount);

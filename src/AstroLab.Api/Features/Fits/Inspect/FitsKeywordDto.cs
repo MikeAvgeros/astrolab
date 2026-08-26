@@ -1,10 +1,20 @@
 namespace AstroLab.Api.Features.Fits.Inspect;
 
-public sealed record FitsKeywordDto(string Name, string Value, string? Comment);
-
-/// <summary>Static factory accompanying <see cref="FitsKeywordDto"/>. Validates arguments before constructing.</summary>
-public static class FitsKeywordDtoFactory
+public sealed record FitsKeywordDto
 {
+    private FitsKeywordDto(string name, string value, string? comment)
+    {
+        Name = name;
+        Value = value;
+        Comment = comment;
+    }
+
+    public string Name { get; }
+
+    public string Value { get; }
+
+    public string? Comment { get; }
+
     public static FitsKeywordDto Create(string name, string value, string? comment)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

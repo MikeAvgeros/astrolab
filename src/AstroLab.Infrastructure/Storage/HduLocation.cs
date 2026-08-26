@@ -7,13 +7,20 @@ namespace AstroLab.Infrastructure.Storage;
 /// HDU's data segment begins. File-layout detail owned by the imperative shell — <c>AstroLab.Core</c>
 /// has no notion of "where in a stream" a HDU lives.
 /// </summary>
-/// <param name="Descriptor">The parsed HDU metadata.</param>
-/// <param name="DataOffset">The byte offset, from the start of the stream, of this HDU's data segment.</param>
-public readonly record struct HduLocation(HduDescriptor Descriptor, long DataOffset);
-
-/// <summary>Static factory accompanying <see cref="HduLocation"/>. Validates arguments before constructing.</summary>
-public static class HduLocationFactory
+public readonly record struct HduLocation
 {
+    private HduLocation(HduDescriptor descriptor, long dataOffset)
+    {
+        Descriptor = descriptor;
+        DataOffset = dataOffset;
+    }
+
+    /// <summary>The parsed HDU metadata.</summary>
+    public HduDescriptor Descriptor { get; }
+
+    /// <summary>The byte offset, from the start of the stream, of this HDU's data segment.</summary>
+    public long DataOffset { get; }
+
     public static HduLocation Create(HduDescriptor descriptor, long dataOffset)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(dataOffset);

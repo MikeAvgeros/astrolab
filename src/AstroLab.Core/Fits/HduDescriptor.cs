@@ -5,13 +5,29 @@ namespace AstroLab.Core.Fits;
 /// and — for image HDUs — pixel-array shape. Does not carry pixel data itself; large pixel
 /// buffers are owned by <c>AstroLab.Infrastructure</c>'s <c>UnmanagedFitsBuffer</c>.
 /// </summary>
-/// <param name="Index">Zero-based position of this HDU within the file (0 = primary HDU).</param>
-/// <param name="Type">The kind of HDU, derived from <c>SIMPLE</c> / <c>XTENSION</c>.</param>
-/// <param name="Header">The fully parsed header for this HDU.</param>
-/// <param name="Image">Pixel-array shape and scaling metadata, present only for image HDUs with data.</param>
-public readonly record struct HduDescriptor(int Index, HduType Type, FitsHeader Header, FitsImageDescriptor? Image)
+public readonly record struct HduDescriptor
 {
     private const long NoDataBytes = 0;
+
+    private HduDescriptor(int index, HduType type, FitsHeader header, FitsImageDescriptor? image)
+    {
+        Index = index;
+        Type = type;
+        Header = header;
+        Image = image;
+    }
+
+    /// <summary>Zero-based position of this HDU within the file (0 = primary HDU).</summary>
+    public int Index { get; }
+
+    /// <summary>The kind of HDU, derived from <c>SIMPLE</c> / <c>XTENSION</c>.</summary>
+    public HduType Type { get; }
+
+    /// <summary>The fully parsed header for this HDU.</summary>
+    public FitsHeader Header { get; }
+
+    /// <summary>Pixel-array shape and scaling metadata, present only for image HDUs with data.</summary>
+    public FitsImageDescriptor? Image { get; }
 
     /// <summary>
     /// The size, in bytes, of this HDU's data segment as stored on disk — the primary/image
@@ -52,7 +68,7 @@ public readonly record struct HduDescriptor(int Index, HduType Type, FitsHeader 
 
         var image = hasPixelData && descriptor.IsSuccess ? descriptor.Value : (FitsImageDescriptor?)null;
 
-        return HduDescriptorFactory.Create(index, type, header, image);
+        return HduDescriptor.Create(index, type, header, image);
     }
 
     private static HduType ClassifyHduType(int index, FitsHeader header)
@@ -77,11 +93,7 @@ public readonly record struct HduDescriptor(int Index, HduType Type, FitsHeader 
             _ => HduType.Unknown,
         };
     }
-}
 
-/// <summary>Static factory accompanying <see cref="HduDescriptor"/>. Validates arguments before constructing.</summary>
-public static class HduDescriptorFactory
-{
     public static HduDescriptor Create(int index, HduType type, FitsHeader header, FitsImageDescriptor? image)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(index);

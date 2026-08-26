@@ -31,6 +31,6 @@ public static class UploadEndpoint
         var writeResult = await fileStore.WriteAsync(fileId, request.BodyReader, cancellationToken);
 
         return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", FitsUploadResponseFactory.Create(fileId, stored.SizeBytes)));
+            Results.Created($"/api/fits/{fileId}/header", FitsUploadResponse.Create(fileId, stored.SizeBytes)));
     }
 }

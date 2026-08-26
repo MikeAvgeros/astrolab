@@ -18,7 +18,6 @@ public sealed class LocalFileStore : ILocalFileStore
     public LocalFileStore(IOptions<LocalFileStoreOptions> options)
     {
         _rootPath = Path.GetFullPath(options.Value.RootPath);
-
         Directory.CreateDirectory(_rootPath);
     }
 
@@ -107,7 +106,7 @@ public sealed class LocalFileStore : ILocalFileStore
 
             succeeded = true;
 
-            return StoredFileFactory.Create(relativeKey, path, totalBytesWritten);
+            return StoredFile.Create(relativeKey, path, totalBytesWritten);
         }
         catch (OperationCanceledException ex)
         {

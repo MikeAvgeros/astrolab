@@ -32,7 +32,7 @@ public static class RenderEndpoint
 
         var (width, height) = dataset.Image.Resolve2DDimensions();
 
-        var options = RenderOptionsFactory.Create(
+        var options = RenderOptions.Create(
             request.Stretch, request.AsinhSoftening, request.ColorMap, request.BlackPoint, request.WhitePoint, request.LowerPercentile, request.UpperPercentile);
 
         var pngResult = FitsImageRenderer.RenderToPng(dataset.Pixels, width, height, options);

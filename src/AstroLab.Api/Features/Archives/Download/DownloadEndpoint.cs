@@ -38,6 +38,6 @@ public static class DownloadEndpoint
         var writeResult = await fileStore.WriteAsync(fileId, download.Content, cancellationToken);
 
         return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", DownloadResponseFactory.Create(fileId, request.Archive, stored.SizeBytes)));
+            Results.Created($"/api/fits/{fileId}/header", DownloadResponse.Create(fileId, request.Archive, stored.SizeBytes)));
     }
 }

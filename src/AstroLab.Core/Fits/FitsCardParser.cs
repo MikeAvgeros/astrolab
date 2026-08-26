@@ -33,12 +33,12 @@ public static class FitsCardParser
         {
             var text = rest.ToString().TrimEnd();
 
-            return FitsKeywordFactory.Create(name, FitsValue.None, text.Length == 0 ? null : text);
+            return FitsKeyword.Create(name, FitsValue.None, text.Length == 0 ? null : text);
         }
 
         if (name == "END")
         {
-            return FitsKeywordFactory.Create(name, FitsValue.None, null);
+            return FitsKeyword.Create(name, FitsValue.None, null);
         }
 
         var hasValueIndicator = card[ValueIndicatorColumn] == '=' && card[ValueIndicatorColumn + 1] == ' ';
@@ -47,14 +47,14 @@ public static class FitsCardParser
         {
             var text = rest.ToString().TrimEnd();
 
-            return FitsKeywordFactory.Create(name, FitsValue.None, text.Length == 0 ? null : text);
+            return FitsKeyword.Create(name, FitsValue.None, text.Length == 0 ? null : text);
         }
 
         var valueField = card[(ValueIndicatorColumn + 2)..];
 
         var (value, comment) = ParseValueAndComment(valueField);
 
-        return FitsKeywordFactory.Create(name, value, comment);
+        return FitsKeyword.Create(name, value, comment);
     }
 
     private static (FitsValue Value, string? Comment) ParseValueAndComment(ReadOnlySpan<char> field)

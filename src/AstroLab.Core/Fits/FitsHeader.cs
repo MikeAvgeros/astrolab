@@ -15,15 +15,12 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
     private FitsHeader(FitsKeyword[] keywords)
     {
         _keywords = keywords;
-
         _index = new Dictionary<string, int>(keywords.Length, StringComparer.Ordinal);
 
         for (var i = 0; i < keywords.Length; i++)
         {
             _index.TryAdd(keywords[i].Name, i);
-
         }
-
     }
 
     public int Count => _keywords.Length;

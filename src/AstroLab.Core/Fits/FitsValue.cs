@@ -15,15 +15,10 @@ public readonly struct FitsValue
     private FitsValue(FitsValueKind kind, string? text, long integer, double real, bool logical)
     {
         Kind = kind;
-
         _text = text;
-
         _integer = integer;
-
         _real = real;
-
         _logical = logical;
-
     }
 
     public FitsValueKind Kind { get; }

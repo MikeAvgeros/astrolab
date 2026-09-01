@@ -1,5 +1,4 @@
 using System.IO.Pipelines;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -67,9 +66,13 @@ public sealed class MastArchiveClient : IMastArchiveClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("MAST search API request failed with HTTP status {StatusCode}", response.StatusCode);
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                _logger.LogWarning("MAST search API request failed with HTTP status {StatusCode}: {Error}",
+                    response.StatusCode, errorContent);
+                
                 return Result<IReadOnlyList<ArchiveObservation>>.Failure(
-                    Error.Unexpected("mast.search_http_error", $"MAST API returned HTTP status {(int)response.StatusCode}."));
+                    Error.NotFound("mast.search_http_error", $"MAST API returned HTTP status {(int)response.StatusCode}."));
             }
 
             var mashupResponse =
@@ -141,20 +144,17 @@ public sealed class MastArchiveClient : IMastArchiveClient
 
             var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                _logger.LogWarning("Dataset {DatasetId} was not found on MAST", datasetId);
-                response.Dispose();
-                return Result<ArchiveDownload>.Failure(
-                    Error.NotFound("mast.dataset_not_found", $"Dataset '{datasetId}' was not found in MAST archive."));
-            }
-
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Download failed for dataset {DatasetId} with HTTP status {StatusCode}", datasetId, response.StatusCode);
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                _logger.LogWarning("Download failed for dataset {DatasetId} with HTTP status {StatusCode}: {Error}",
+                    datasetId, response.StatusCode, errorContent);
+                
                 response.Dispose();
+                
                 return Result<ArchiveDownload>.Failure(
-                    Error.Unexpected("mast.download_http_error", $"MAST download service returned HTTP {(int)response.StatusCode}."));
+                    Error.NotFound("mast.dataset_not_found", $"Dataset '{datasetId}' was not found in MAST archive."));
             }
 
             var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);

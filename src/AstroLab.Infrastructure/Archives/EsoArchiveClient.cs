@@ -45,10 +45,13 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError("ESO TAP search failed with status {StatusCode}: {Error}", response.StatusCode, errorContent);
+
+                _logger.LogWarning("ESO TAP search failed with status {StatusCode}: {Error}", response.StatusCode,
+                    errorContent);
 
                 return Result<IReadOnlyList<ArchiveObservation>>.Failure(
-                    Error.Unexpected("eso.search_failed", $"ESO archive API returned HTTP {(int)response.StatusCode}."));
+                    Error.NotFound("eso.search_not_found",
+                        $"ESO archive API returned HTTP status {(int)response.StatusCode}."));
             }
 
             var tapResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
@@ -90,7 +93,11 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("ESO download failed for dataset {DatasetId} with status {StatusCode}", datasetId, response.StatusCode);
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                _logger.LogWarning("ESO download failed for dataset {DatasetId} with status {StatusCode}: {Error}",
+                    datasetId, response.StatusCode, errorContent);
+                
                 response.Dispose();
 
                 return Result<ArchiveDownload>.Failure(
@@ -98,8 +105,11 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
             }
 
             var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            
             var pipeReader = PipeReader.Create(responseStream);
+            
             var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? $"{datasetId}.fits";
+            
             var contentLength = response.Content.Headers.ContentLength;
 
             return Result<ArchiveDownload>.Success(new ArchiveDownload(fileName, contentLength, pipeReader, response));

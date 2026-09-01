@@ -1,6 +1,5 @@
 namespace AstroLab.Infrastructure.Archives;
 
-/// <summary>A single observation record returned by an archive metadata search.</summary>
 public readonly record struct ArchiveObservation
 {
     private ArchiveObservation(string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source)

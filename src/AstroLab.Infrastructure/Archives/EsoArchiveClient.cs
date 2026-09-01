@@ -1,25 +1,20 @@
+using System.Globalization;
+using System.IO.Pipelines;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Web;
 using AstroLab.Core.Result;
 using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
-/// <summary>
-/// Initial integration with the ESO Science Archive Facility. The archive's real query/download
-/// surface (a TAP/VO ADQL interface for metadata, and per-dataset download endpoints) is not yet
-/// wired up. This stub establishes the resilient <see cref="HttpClient"/> plumbing (resolved via
-/// <see cref="IHttpClientFactory"/>, retried/circuit-broken centrally in DI — see
-/// <c>InfrastructureServiceCollectionExtensions</c>) so the real request/response contracts can be
-/// filled in later without touching callers, <c>AstroLab.Core</c>, or the API feature slices.
-/// </summary>
-/// <remarks>
-/// Deliberately never issues a request against a guessed URL on the real archive host: doing so
-/// risks a coincidental 2xx response (e.g. a redirect or landing page) being silently reported as
-/// "search succeeded, zero results" instead of the honest <see cref="ErrorCategory.NotImplemented"/>
-/// this returns today. Once ESO's real endpoints are known, replace the bodies below with the
-/// actual <see cref="_httpClient"/> request/response mapping.
-/// </remarks>
 public sealed class EsoArchiveClient : IEsoArchiveClient
 {
+    private const string TapEndpoint = "tap_obs/sync";
+    private const string DataLinkEndpoint = "datalink/links";
+    private const string DatasetIdIvoPrefix = "ivo://eso.org/csp#";
+    private const string UnknownInstrument = "UNKNOWN";
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<EsoArchiveClient> _logger;
 
@@ -31,28 +26,184 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
 
     public ArchiveSource Source => ArchiveSource.Eso;
 
-    public Task<Result<IReadOnlyList<ArchiveObservation>>> SearchAsync(
+    public async Task<Result<IReadOnlyList<ArchiveObservation>>> SearchAsync(
         ArchiveSearchQuery query, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(
-            "ESO archive search requested for target {Target}, but ESO search is not implemented yet.", query.Target);
+        try
+        {
+            var adqlQuery = BuildAdqlQuery(query);
 
-        return Task.FromResult(Result<IReadOnlyList<ArchiveObservation>>.Failure(
-            Error.NotImplemented("eso.search_not_implemented", "ESO archive search is not yet implemented.")));
+            var formContent = new FormUrlEncodedContent([
+                new KeyValuePair<string, string>("REQUEST", "doQuery"),
+                new KeyValuePair<string, string>("LANG", "ADQL"),
+                new KeyValuePair<string, string>("FORMAT", "json"),
+                new KeyValuePair<string, string>("QUERY", adqlQuery)
+            ]);
+
+            using var response = await _httpClient.PostAsync(TapEndpoint, formContent, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("ESO TAP search failed with status {StatusCode}: {Error}", response.StatusCode, errorContent);
+
+                return Result<IReadOnlyList<ArchiveObservation>>.Failure(
+                    Error.Unexpected("eso.search_failed", $"ESO archive API returned HTTP {(int)response.StatusCode}."));
+            }
+
+            var tapResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
+
+            if (tapResponse?.Data is null || tapResponse.Data.Count == 0)
+            {
+                return Result<IReadOnlyList<ArchiveObservation>>.Success(Array.Empty<ArchiveObservation>());
+            }
+
+            var observations = MapResponseToObservations(tapResponse);
+
+            return Result<IReadOnlyList<ArchiveObservation>>.Success(observations);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("ESO search query was canceled for target '{Target}'", query.Target);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception occurred during ESO archive search for target {Target}", query.Target);
+            return Result<IReadOnlyList<ArchiveObservation>>.Failure(Error.Unexpected("eso.search_exception", ex.Message));
+        }
     }
 
-    public Task<Result<ArchiveDownload>> DownloadAsync(string datasetId, CancellationToken cancellationToken = default)
+    public async Task<Result<ArchiveDownload>> DownloadAsync(string datasetId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(datasetId))
         {
-            return Task.FromResult(Result<ArchiveDownload>.Failure(
-                Error.Validation("eso.invalid_dataset_id", "datasetId must not be empty.")));
+            return Result<ArchiveDownload>.Failure(
+                Error.Validation("eso.invalid_dataset_id", "datasetId must not be empty."));
         }
 
-        _logger.LogInformation(
-            "ESO archive download requested for dataset {DatasetId}, but ESO download is not implemented yet.", datasetId);
+        var downloadUrl = $"{DataLinkEndpoint}?ID={DatasetIdIvoPrefix}{HttpUtility.UrlEncode(datasetId)}";
 
-        return Task.FromResult(Result<ArchiveDownload>.Failure(
-            Error.NotImplemented("eso.download_not_implemented", "ESO archive download is not yet implemented.")));
+        try
+        {
+            var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("ESO download failed for dataset {DatasetId} with status {StatusCode}", datasetId, response.StatusCode);
+                response.Dispose();
+
+                return Result<ArchiveDownload>.Failure(
+                    Error.NotFound("eso.dataset_not_found", $"Dataset '{datasetId}' could not be retrieved from ESO."));
+            }
+
+            var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var pipeReader = PipeReader.Create(responseStream);
+            var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? $"{datasetId}.fits";
+            var contentLength = response.Content.Headers.ContentLength;
+
+            return Result<ArchiveDownload>.Success(new ArchiveDownload(fileName, contentLength, pipeReader, response));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("ESO download was canceled for dataset {DatasetId}", datasetId);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception occurred while downloading ESO dataset {DatasetId}", datasetId);
+            return Result<ArchiveDownload>.Failure(
+                Error.Unexpected("eso.download_exception", ex.Message));
+        }
+    }
+
+    private static string BuildAdqlQuery(ArchiveSearchQuery query)
+    {
+        var conditions = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(query.Target))
+        {
+            conditions.Add($"target_name LIKE '%{EscapeAdqlLiteral(query.Target)}%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Instrument))
+        {
+            conditions.Add($"instrument_name = '{EscapeAdqlLiteral(query.Instrument)}'");
+        }
+
+        if (query.From is { } from)
+        {
+            conditions.Add($"t_min >= {ModifiedJulianDate.FromDateTimeOffset(from).ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (query.To is { } to)
+        {
+            conditions.Add($"t_min <= {ModifiedJulianDate.FromDateTimeOffset(to).ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        var whereClause = conditions.Count > 0
+            ? "WHERE " + string.Join(" AND ", conditions)
+            : string.Empty;
+
+        return $"SELECT TOP {query.MaxResults} dp_id, target_name, obs_id, instrument_name, t_min, t_exptime " +
+               $"FROM ivoa.ObsCore {whereClause}";
+    }
+
+    private static string EscapeAdqlLiteral(string value) => value.Replace("'", "''");
+
+    private static List<ArchiveObservation> MapResponseToObservations(EsoTapResponse response)
+    {
+        var observations = new List<ArchiveObservation>();
+        if (response.Metadata is null || response.Data is null) return observations;
+
+        var columns = response.Metadata
+            .Select((col, idx) => (col.Name.ToLowerInvariant(), idx))
+            .ToDictionary(x => x.Item1, x => x.idx);
+
+        foreach (var row in response.Data)
+        {
+            string GetValue(string colName)
+            {
+                if (!columns.TryGetValue(colName, out var idx) || idx >= row.Count) return string.Empty;
+
+                return row[idx] switch
+                {
+                    JsonElement { ValueKind: JsonValueKind.String } elem => elem.GetString() ?? string.Empty,
+                    JsonElement elem => elem.ToString(),
+                    _ => row[idx].ToString() ?? string.Empty
+                };
+            }
+
+            var datasetId = GetValue("dp_id");
+            if (string.IsNullOrWhiteSpace(datasetId))
+            {
+                continue;
+            }
+
+            var target = GetValue("target_name");
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            var instrument = GetValue("instrument_name");
+            if (string.IsNullOrWhiteSpace(instrument))
+            {
+                instrument = UnknownInstrument;
+            }
+
+            var mjd = double.TryParse(GetValue("t_min"), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedMjd)
+                ? parsedMjd
+                : (double?)null;
+
+            observations.Add(ArchiveObservation.Create(
+                datasetId,
+                target,
+                instrument,
+                ModifiedJulianDate.ToDateTimeOffset(mjd),
+                ArchiveSource.Eso));
+        }
+
+        return observations;
     }
 }

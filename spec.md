@@ -697,11 +697,13 @@ Request → Infrastructure → Core → `Result<T>` → Response flow.
 
 **Location:** `AstroLab.Infrastructure/Archives`
 
-ESO and MAST clients are HTTP client abstractions. Their real query/download surfaces may not
-yet be fully implemented, but their HTTP plumbing is established using resilient
-`HttpClient` instances resolved through `IHttpClientFactory`.
+ESO and MAST clients are HTTP client abstractions over each archive's real, documented query/
+download surface: ESO's IVOA TAP service (ADQL over `ivoa.ObsCore`, via `tap_obs/sync` and
+`datalink/links`) and MAST's Mashup API (`Mast.Caom.Filtered` via `api/v0/invoke`, and
+`api/v0/download/file`). They use resilient `HttpClient` instances resolved through
+`IHttpClientFactory`.
 
-Clients SHOULD be registered with:
+Clients MUST be registered with:
 
 `AddHttpClient<TInterface, TImpl>()`
 
@@ -709,13 +711,28 @@ and:
 
 `AddStandardResilienceHandler()`
 
-Each client MUST be designed so its concrete request/response contracts can be implemented later
-without changing callers, Core, or API feature slices.
+Each client MUST be designed so refinements to its request/response contracts (additional
+filters, additional response fields) can land without changing callers, Core, or API feature
+slices.
 
-Until the real archive query/download contract is known, `SearchAsync` and `DownloadAsync` MUST
-return `Error.NotImplemented(...)` rather than sending requests to guessed URLs. A coincidental
-2xx response from an unrelated page on the real host MUST NOT be interpreted as a successful
-search with zero results.
+`SearchAsync` MUST honour every filter carried by `ArchiveSearchQuery` (`Target`, `Instrument`,
+`From`, `To`, `MaxResults`) that the upstream archive's query surface supports, translating them
+into that archive's native query shape (ADQL `WHERE`/`TOP` clauses for ESO; Mashup `filters`/
+`pagesize` for MAST) rather than silently dropping them. A coincidental 2xx response from an
+unrelated page on the real host MUST NOT be interpreted as a successful search with zero
+results — response parsing MUST fail closed (return an `Error`) when the payload does not match
+the expected contract shape.
+
+Response and request payload shapes specific to one archive (e.g. `EsoTapResponse`,
+`MastMashupRequest`) are private wire-format DTOs, not domain models — map them into the shared
+`ArchiveObservation` / `ArchiveDownload` records (via `ArchiveObservation.Create(...)`) before
+returning from the client. Both MJD-based archives' `t_min` fields share the same Modified
+Julian Date epoch conversion (`ModifiedJulianDate` in this namespace) — reuse it rather than
+duplicating the conversion per client.
+
+If an archive's real query/download contract is genuinely not yet known for some capability,
+`SearchAsync`/`DownloadAsync` MUST return `Error.NotImplemented(...)` for that capability rather
+than sending requests to a guessed URL.
 
 ### 6.7 Visualisation as a Separate Capability
 

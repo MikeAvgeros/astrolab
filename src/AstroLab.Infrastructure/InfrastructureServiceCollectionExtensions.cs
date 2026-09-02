@@ -11,16 +11,15 @@ namespace AstroLab.Infrastructure;
 
 public static class InfrastructureServiceCollectionExtensions
 {
-    private const int ArchiveRetryMaxAttempts = 3;
-    private const int ArchiveRetryDelaySeconds = 2;
-    private const int ArchiveAttemptTimeoutMinutes = 30;
-    private const int ArchiveTotalRequestTimeoutMinutes = 60;
-    private const int ArchiveCircuitBreakerSamplingDurationMinutes = ArchiveAttemptTimeoutMinutes * 2 + 1;
-    private const int ArchiveClientTimeoutMinutes = ArchiveTotalRequestTimeoutMinutes + 5;
+    private const int ArchiveApiRetryMaxAttempts = 3;
+    private const int ArchiveApiRetryDelaySeconds = 2;
+    private const int ArchiveApiAttemptTimeoutSeconds = 30;
+    private const int ArchiveApiTotalRequestTimeoutSeconds = 60;
+    private const int ArchiveApiCircuitBreakerSamplingDurationSeconds = ArchiveApiAttemptTimeoutSeconds * 2;
 
     extension(IServiceCollection services)
     {
-        public IServiceCollection AddAstroLabInfrastructure(IConfiguration configuration)
+        public void AddAstroLabInfrastructure(IConfiguration configuration)
         {
             services.Configure<LocalFileStoreOptions>(configuration.GetSection(LocalFileStoreOptions.SectionName));
 
@@ -32,44 +31,64 @@ public static class InfrastructureServiceCollectionExtensions
 
             services.TryAddSingleton<FitsDatasetReader>();
 
-            var esoBaseAddress = new Uri(configuration[$"{EsoArchiveOptions.SectionName}:{nameof(EsoArchiveOptions.BaseAddress)}"]
-                ?? new EsoArchiveOptions().BaseAddress);
+            AddEsoArchiveClients(services, configuration);
 
-            services.AddHttpClient<IEsoArchiveClient, EsoArchiveClient>(client =>
-                {
-                    client.BaseAddress = esoBaseAddress;
-                    client.Timeout = TimeSpan.FromMinutes(ArchiveClientTimeoutMinutes);
-                })
-                .AddStandardResilienceHandler(ConfigureArchiveResilience);
-
-            var mastBaseAddress = new Uri(configuration[$"{MastArchiveOptions.SectionName}:{nameof(MastArchiveOptions.BaseAddress)}"]
-                ?? new MastArchiveOptions().BaseAddress);
-
-            services.AddHttpClient<IMastArchiveClient, MastArchiveClient>(client =>
-                {
-                    client.BaseAddress = mastBaseAddress;
-                    client.Timeout = TimeSpan.FromMinutes(ArchiveClientTimeoutMinutes);
-                })
-                .AddStandardResilienceHandler(ConfigureArchiveResilience);
-
-            return services;
+            AddMastArchiveClients(services, configuration);
         }
     }
 
-    private static void ConfigureArchiveResilience(HttpStandardResilienceOptions options)
+    private static void AddEsoArchiveClients(IServiceCollection services, IConfiguration configuration)
     {
-        options.Retry.MaxRetryAttempts = ArchiveRetryMaxAttempts;
+        var options = configuration.GetSection(EsoArchiveOptions.SectionName).Get<EsoArchiveOptions>() ?? new EsoArchiveOptions();
 
-        options.Retry.Delay = TimeSpan.FromSeconds(ArchiveRetryDelaySeconds);
+        var baseAddress = new Uri(options.BaseAddress);
+
+        services
+            .AddHttpClient<IEsoArchiveApiClient, EsoArchiveApiClient>(client => client.BaseAddress = baseAddress)
+            .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
+
+        services.AddHttpClient<IEsoArchiveDownloadClient, EsoArchiveDownloadClient>(client =>
+        {
+            client.BaseAddress = baseAddress;
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        });
+
+        services.TryAddTransient<IEsoArchiveClient, EsoArchiveClient>();
+    }
+
+    private static void AddMastArchiveClients(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = configuration.GetSection(MastArchiveOptions.SectionName).Get<MastArchiveOptions>() ?? new MastArchiveOptions();
+
+        var baseAddress = new Uri(options.BaseAddress);
+
+        services
+            .AddHttpClient<IMastArchiveApiClient, MastArchiveApiClient>(client => client.BaseAddress = baseAddress)
+            .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
+
+        services.AddHttpClient<IMastArchiveDownloadClient, MastArchiveDownloadClient>(client =>
+        {
+            client.BaseAddress = baseAddress;
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        });
+
+        services.TryAddTransient<IMastArchiveClient, MastArchiveClient>();
+    }
+
+    private static void ConfigureArchiveApiResilience(HttpStandardResilienceOptions options)
+    {
+        options.Retry.MaxRetryAttempts = ArchiveApiRetryMaxAttempts;
+
+        options.Retry.Delay = TimeSpan.FromSeconds(ArchiveApiRetryDelaySeconds);
 
         options.Retry.ShouldHandle = args => ValueTask.FromResult(
             args.Outcome.Exception is HttpRequestException or TimeoutRejectedException
             || args.Outcome.Result?.StatusCode is >= HttpStatusCode.InternalServerError);
 
-        options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(ArchiveAttemptTimeoutMinutes);
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(ArchiveApiAttemptTimeoutSeconds);
 
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(ArchiveTotalRequestTimeoutMinutes);
+        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(ArchiveApiTotalRequestTimeoutSeconds);
 
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(ArchiveCircuitBreakerSamplingDurationMinutes);
+        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(ArchiveApiCircuitBreakerSamplingDurationSeconds);
     }
 }

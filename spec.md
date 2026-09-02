@@ -726,13 +726,43 @@ the expected contract shape.
 Response and request payload shapes specific to one archive (e.g. `EsoTapResponse`,
 `MastMashupRequest`) are private wire-format DTOs, not domain models — map them into the shared
 `ArchiveObservation` / `ArchiveDownload` records (via `ArchiveObservation.Create(...)`) before
-returning from the client. Both MJD-based archives' `t_min` fields share the same Modified
-Julian Date epoch conversion (`ModifiedJulianDate` in this namespace) — reuse it rather than
-duplicating the conversion per client.
+returning from the client. `ArchiveObservation` carries a set of optional fields (`Collection`,
+`DataProductType`, `CalibrationLevel`, `RightAscension`, `Declination`, `ExposureTimeSeconds`,
+wavelength range, proposal info, `DataRights`) that not every archive populates — leave them
+`null` rather than inventing a value. Both MJD-based archives' `t_min` fields share the same
+Modified Julian Date epoch conversion (`ModifiedJulianDate` in this namespace) — reuse it rather
+than duplicating the conversion per client.
 
 If an archive's real query/download contract is genuinely not yet known for some capability,
 `SearchAsync`/`DownloadAsync` MUST return `Error.NotImplemented(...)` for that capability rather
 than sending requests to a guessed URL.
+
+**MAST specifics.** `IMastArchiveClient` extends `IArchiveClient` with three MAST-only members —
+`ResolveTargetAsync`, `GetProductsAsync`, and a `DownloadAsync(MastProduct, ct)` overload — kept
+off the shared `IArchiveClient` interface so ESO is unaffected and callers using the generic
+interface (`ArchiveClientResolver`, the `/search` and `/download` endpoints) need no changes.
+`SearchAsync` resolves `ArchiveSearchQuery.Target` to sky coordinates via MAST's
+`Mast.Name.Lookup` service first, then runs a positional `Mast.Caom.Filtered` search
+(`position`/`radius`, radius from `ArchiveSearchQuery.SearchRadiusDegrees`) rather than relying on
+`target_name` text matching, since archive target designations don't reliably match user-supplied
+names. `DownloadAsync(string)` MUST NOT construct a product URI from assumptions about filename or
+collection layout (e.g. `mast:HST/product/{id}/{id}_raw.fits`) — it calls `GetProductsAsync` to
+discover the observation's real products, then `MastProductSelectionPolicy.SelectBest(...)` to
+prefer a public, science-grade, calibrated FITS product over a raw one, and downloads that
+product's actual `DataUri`.
+
+**ESO specifics.** `IEsoArchiveClient` extends `IArchiveClient` the same way, with ESO-only
+`GetProductsAsync` and a `DownloadAsync(EsoProduct, ct)` overload. An ESO ObsCore dataset
+identifier (`dp_id`) is not itself a downloadable file — `DownloadAsync(string)` MUST NOT
+construct a FITS filename/path from it (e.g. `"{datasetId}.fits"`); it calls `GetProductsAsync`
+(ESO DataLink, `datalink/links`) to discover the dataset's real products, then
+`EsoProductSelectionPolicy.SelectBest(...)`, and downloads the selected product's actual
+`DataUri`. `EsoTapRow` (also reused for parsing the DataLink response, since both are the same
+ESO tabular `{metadata, data}` JSON shape) resolves ObsCore/DataLink columns by name and handles
+missing columns, nulls, and JSON-primitive/string numeric conversion in one place, rather than
+duplicating column-index lookups per mapping method. ESO's date filter uses observation-overlap
+semantics (`t_max >= From` / `t_min <= To`, not "does `t_min` fall inside the window") — see the
+`EsoArchiveClient.BuildAdqlQuery` predicates for each of the from-only/to-only/both/neither cases.
 
 ### 6.7 Visualisation as a Separate Capability
 

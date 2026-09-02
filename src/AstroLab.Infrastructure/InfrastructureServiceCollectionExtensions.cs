@@ -9,14 +9,13 @@ using Polly.Timeout;
 
 namespace AstroLab.Infrastructure;
 
-/// <summary>Registers every Infrastructure-layer service: local storage and archive clients. Image rendering (<see cref="AstroLab.Infrastructure.ImageRendering.FitsImageRenderer"/>) is fully static and needs no registration.</summary>
 public static class InfrastructureServiceCollectionExtensions
 {
     private const int ArchiveRetryMaxAttempts = 3;
     private const int ArchiveRetryDelaySeconds = 2;
     private const int ArchiveAttemptTimeoutMinutes = 30;
     private const int ArchiveTotalRequestTimeoutMinutes = 60;
-    private const int ArchiveCircuitBreakerSamplingDurationMinutes = (ArchiveAttemptTimeoutMinutes * 2) + 1;
+    private const int ArchiveCircuitBreakerSamplingDurationMinutes = ArchiveAttemptTimeoutMinutes * 2 + 1;
     private const int ArchiveClientTimeoutMinutes = ArchiveTotalRequestTimeoutMinutes + 5;
 
     extension(IServiceCollection services)

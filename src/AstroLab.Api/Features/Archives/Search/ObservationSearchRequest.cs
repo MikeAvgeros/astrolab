@@ -6,11 +6,15 @@ public sealed record ObservationSearchRequest
 {
     private const int DefaultMaxResults = 50;
 
-    public ObservationSearchRequest(ArchiveSource archive, string? target = null, string? instrument = null, int maxResults = DefaultMaxResults)
+    public ObservationSearchRequest(
+        ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,
+        double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
         Archive = archive;
         Target = target;
+        Mission = mission;
         Instrument = instrument;
+        SearchRadiusDegrees = searchRadiusDegrees;
         MaxResults = maxResults;
     }
 
@@ -18,14 +22,20 @@ public sealed record ObservationSearchRequest
 
     public string? Target { get; }
 
+    public string? Mission { get; }
+
     public string? Instrument { get; }
+
+    public double? SearchRadiusDegrees { get; }
 
     public int MaxResults { get; }
 
-    public static ObservationSearchRequest Create(ArchiveSource archive, string? target = null, string? instrument = null, int maxResults = DefaultMaxResults)
+    public static ObservationSearchRequest Create(
+        ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,
+        double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
 
-        return new ObservationSearchRequest(archive, target, instrument, maxResults);
+        return new ObservationSearchRequest(archive, target, mission, instrument, searchRadiusDegrees, maxResults);
     }
 }

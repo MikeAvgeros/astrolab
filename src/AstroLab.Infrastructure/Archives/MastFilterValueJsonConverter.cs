@@ -17,8 +17,17 @@ internal sealed class MastFilterValueJsonConverter : JsonConverter<MastFilterVal
         }
 
         writer.WriteStartObject();
-        writer.WriteNumber("min", value.Min!.Value);
-        writer.WriteNumber("max", value.Max!.Value);
+
+        if (value.Min is { } min)
+        {
+            writer.WriteNumber("min", min);
+        }
+
+        if (value.Max is { } max)
+        {
+            writer.WriteNumber("max", max);
+        }
+
         writer.WriteEndObject();
     }
 }

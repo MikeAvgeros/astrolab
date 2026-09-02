@@ -20,7 +20,9 @@ public static class SearchEndpoint
         IMastArchiveClient mastClient,
         CancellationToken cancellationToken)
     {
-        var query = ArchiveSearchQuery.Create(request.Target, request.Instrument, maxResults: request.MaxResults);
+        var query = request.SearchRadiusDegrees is { } searchRadiusDegrees
+            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, searchRadiusDegrees: searchRadiusDegrees, maxResults: request.MaxResults)
+            : ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, maxResults: request.MaxResults);
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 

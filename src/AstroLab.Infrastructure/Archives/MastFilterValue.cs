@@ -20,5 +20,17 @@ internal readonly struct MastFilterValue
 
     public static MastFilterValue FromText(string text) => new(text, null, null);
 
-    public static MastFilterValue FromRange(double min, double max) => new(null, min, max);
+    public static MastFilterValue FromRange(double min, double max)
+    {
+        if (min > max)
+        {
+            throw new ArgumentException($"Range minimum ({min}) must not exceed maximum ({max}).", nameof(min));
+        }
+
+        return new MastFilterValue(null, min, max);
+    }
+
+    public static MastFilterValue FromMinBound(double min) => new(null, min, null);
+
+    public static MastFilterValue FromMaxBound(double max) => new(null, null, max);
 }

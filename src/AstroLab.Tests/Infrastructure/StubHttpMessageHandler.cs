@@ -9,9 +9,13 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
         _responder = responder;
     }
 
+    private readonly List<HttpRequestMessage> _requests = [];
+
     public HttpRequestMessage? LastRequest { get; private set; }
 
     public string? LastRequestBody { get; private set; }
+
+    public IReadOnlyList<HttpRequestMessage> Requests => _requests;
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
@@ -20,6 +24,8 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
         LastRequestBody = request.Content is null
             ? null
             : await request.Content.ReadAsStringAsync(cancellationToken);
+
+        _requests.Add(request);
 
         return await _responder(request);
     }

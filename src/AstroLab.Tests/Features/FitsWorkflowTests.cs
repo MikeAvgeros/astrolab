@@ -24,6 +24,10 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
     private async Task<string> UploadGradientImageWithWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithWcs());
 
+    private async Task<string> UploadImageWithSourceAsync() => await UploadAsync(SyntheticFits.SmallImageWithSource());
+
+    private async Task<string> UploadImageWithSourceAndWcsAsync() => await UploadAsync(SyntheticFits.SmallImageWithSourceAndWcs());
+
     private async Task<string> UploadGradientSpectrumFrameAsync() => await UploadAsync(SyntheticFits.SmallGradientSpectrumFrame());
 
     private async Task<string> UploadAsync(byte[] fitsBytes)
@@ -475,6 +479,98 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var fileId = await UploadGradientImageWithWcsAsync();
 
         var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/world-to-pixel?rightAscension=180&declination=120");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetectSources_FindsOneSourceAtExpectedCentroidAndPixelCount_WithNullCoordinatesWithoutWcs()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var sources = body.GetProperty("sources").EnumerateArray().ToArray();
+
+        Assert.Single(sources);
+
+        var source = sources[0];
+
+        Assert.Equal(1, source.GetProperty("id").GetInt32());
+
+        Assert.Equal(9, source.GetProperty("pixelCount").GetInt32());
+
+        Assert.Equal(200.0, source.GetProperty("peakValue").GetDouble(), precision: 6);
+
+        Assert.Equal(5.5, source.GetProperty("pixelX").GetDouble(), precision: 6);
+
+        Assert.Equal(5.5, source.GetProperty("pixelY").GetDouble(), precision: 6);
+
+        Assert.Equal(JsonValueKind.Null, source.GetProperty("rightAscension").ValueKind);
+
+        Assert.Equal(JsonValueKind.Null, source.GetProperty("declination").ValueKind);
+    }
+
+    [Fact]
+    public async Task DetectSources_WithWcs_ResolvesRightAscensionAndDeclination()
+    {
+        var fileId = await UploadImageWithSourceAndWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var source = body.GetProperty("sources").EnumerateArray().Single();
+
+        Assert.NotEqual(JsonValueKind.Null, source.GetProperty("rightAscension").ValueKind);
+
+        Assert.NotEqual(JsonValueKind.Null, source.GetProperty("declination").ValueKind);
+
+        var ra = source.GetProperty("rightAscension").GetDouble();
+
+        var dec = source.GetProperty("declination").GetDouble();
+
+        Assert.True(ra is > 179.0 and < 181.0);
+
+        Assert.True(dec is > -1.0 and < 1.0);
+    }
+
+    [Fact]
+    public async Task DetectSources_WithMinimumAreaAboveBlockSize_ReturnsNoSources()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources?minimumArea=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Empty(body.GetProperty("sources").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DetectSources_RejectsNonPositiveThreshold()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources?thresholdSigma=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetectSources_OnSpectrumFrame_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

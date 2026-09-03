@@ -1,20 +1,80 @@
+using AstroLab.Core.Astrometry;
+using AstroLab.Core.Sources;
+
 namespace AstroLab.Api.Features.Images.Sources;
 
 public sealed record DetectedSourceDto
 {
-    private DetectedSourceDto(double x, double y, double flux)
+    private DetectedSourceDto(
+        int id, double pixelX, double pixelY, double? rightAscension, double? declination,
+        int pixelCount, double peakValue, double totalFlux, double background, double signalToNoiseRatio)
     {
-        X = x;
-        Y = y;
-        Flux = flux;
+        Id = id;
+        PixelX = pixelX;
+        PixelY = pixelY;
+        RightAscension = rightAscension;
+        Declination = declination;
+        PixelCount = pixelCount;
+        PeakValue = peakValue;
+        TotalFlux = totalFlux;
+        Background = background;
+        SignalToNoiseRatio = signalToNoiseRatio;
     }
 
-    public double X { get; }
+    public int Id { get; }
 
-    public double Y { get; }
+    public double PixelX { get; }
 
-    public double Flux { get; }
+    public double PixelY { get; }
 
-    public static DetectedSourceDto Create(double x, double y, double flux) =>
-        new(x, y, flux);
+    /// <summary>Right ascension in degrees, or <see langword="null"/> when the file carries no usable WCS.</summary>
+    public double? RightAscension { get; }
+
+    /// <summary>Declination in degrees, or <see langword="null"/> when the file carries no usable WCS.</summary>
+    public double? Declination { get; }
+
+    public int PixelCount { get; }
+
+    public double PeakValue { get; }
+
+    public double TotalFlux { get; }
+
+    public double Background { get; }
+
+    public double SignalToNoiseRatio { get; }
+
+    public static DetectedSourceDto Create(
+        int id, double pixelX, double pixelY, double? rightAscension, double? declination,
+        int pixelCount, double peakValue, double totalFlux, double background, double signalToNoiseRatio)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelCount);
+
+        return new DetectedSourceDto(id, pixelX, pixelY, rightAscension, declination, pixelCount, peakValue, totalFlux, background, signalToNoiseRatio);
+    }
+
+    /// <summary>Maps a Core detection result, adding RA/Dec (where <paramref name="wcs"/> is available and the source's pixel position converts successfully).</summary>
+    public static DetectedSourceDto FromDetectedSource(DetectedSource source, Wcs? wcs)
+    {
+        double? rightAscension = null;
+
+        double? declination = null;
+
+        if (wcs is { } resolvedWcs)
+        {
+            var worldResult = resolvedWcs.PixelToWorld(source.PixelX, source.PixelY);
+
+            if (worldResult.IsSuccess)
+            {
+                rightAscension = worldResult.Value.RightAscension;
+
+                declination = worldResult.Value.Declination;
+            }
+        }
+
+        return Create(
+            source.Id, source.PixelX, source.PixelY, rightAscension, declination,
+            source.PixelCount, source.PeakValue, source.TotalFlux, source.Background, source.SignalToNoiseRatio);
+    }
 }

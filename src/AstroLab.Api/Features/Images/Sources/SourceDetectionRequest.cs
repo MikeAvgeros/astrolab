@@ -1,17 +1,31 @@
+using AstroLab.Core.Sources;
+
 namespace AstroLab.Api.Features.Images.Sources;
 
 public sealed record SourceDetectionRequest
 {
-    public SourceDetectionRequest(double? detectionThreshold = null, double? minSeparation = null)
+    public SourceDetectionRequest(
+        double thresholdSigma = SourceDetector.DefaultThresholdSigma,
+        int minimumArea = SourceDetector.DefaultMinimumArea,
+        int maxSources = SourceDetector.DefaultMaxSources)
     {
-        DetectionThreshold = detectionThreshold;
-        MinSeparation = minSeparation;
+        ThresholdSigma = thresholdSigma;
+        MinimumArea = minimumArea;
+        MaxSources = maxSources;
     }
 
-    public double? DetectionThreshold { get; }
+    /// <summary>Detection threshold, in multiples of the estimated background noise (sigma) above the estimated background.</summary>
+    public double ThresholdSigma { get; }
 
-    public double? MinSeparation { get; }
+    /// <summary>The minimum number of connected pixels a region must have to be reported as a source.</summary>
+    public int MinimumArea { get; }
 
-    public static SourceDetectionRequest Create(double? detectionThreshold = null, double? minSeparation = null) =>
-        new(detectionThreshold, minSeparation);
+    /// <summary>The maximum number of sources returned, ranked by integrated flux (descending).</summary>
+    public int MaxSources { get; }
+
+    public static SourceDetectionRequest Create(
+        double thresholdSigma = SourceDetector.DefaultThresholdSigma,
+        int minimumArea = SourceDetector.DefaultMinimumArea,
+        int maxSources = SourceDetector.DefaultMaxSources) =>
+        new(thresholdSigma, minimumArea, maxSources);
 }

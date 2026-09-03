@@ -111,6 +111,73 @@ internal static class SyntheticFits
         return BuildMultiHdu([primary, imageExtension, strayMarkerExtension]);
     }
 
+    /// <summary>
+    /// A 12x12, 8-bit image with a low-contrast cyclic background (values 5..15) and a single
+    /// 3x3, constant-value-200 block at rows/columns 4-6 — orders of magnitude above the
+    /// background's robust noise estimate, so the default detection threshold finds exactly one
+    /// source at a hand-checkable centroid/pixel count.
+    /// </summary>
+    public static byte[] SmallImageWithSource() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                   12",
+                "NAXIS2  =                   12",
+                "END",
+            ],
+            BuildSourcePixelData())
+    ]);
+
+    /// <summary>The same source field as <see cref="SmallImageWithSource"/>, but with a TAN WCS solution so detected sources can be resolved to RA/Dec.</summary>
+    public static byte[] SmallImageWithSourceAndWcs() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                   12",
+                "NAXIS2  =                   12",
+                "CTYPE1  = 'RA---TAN'",
+                "CTYPE2  = 'DEC--TAN'",
+                "CRPIX1  =                  1.0",
+                "CRPIX2  =                  1.0",
+                "CRVAL1  =                180.0",
+                "CRVAL2  =                  0.0",
+                "CDELT1  =            -0.0002778",
+                "CDELT2  =             0.0002778",
+                "RADESYS = 'ICRS    '",
+                "END",
+            ],
+            BuildSourcePixelData())
+    ]);
+
+    private static byte[] BuildSourcePixelData()
+    {
+        const int width = 12;
+        const int height = 12;
+
+        var pixels = new byte[width * height];
+
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = (byte)(5 + (i % 11));
+        }
+
+        for (var y = 4; y <= 6; y++)
+        {
+            for (var x = 4; x <= 6; x++)
+            {
+                pixels[(y * width) + x] = 200;
+            }
+        }
+
+        return pixels;
+    }
+
     private static byte[] BuildSingleHdu(string[] cards)
     {
         byte[] pixels = [10, 20, 30, 40, 50, 60, 70, 80];

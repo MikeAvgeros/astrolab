@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.TimeSeries.PeriodSearch;
 
 public sealed record PeriodSearchRequest
 {
-    public PeriodSearchRequest(double minPeriod, double maxPeriod)
+    private PeriodSearchRequest(double minPeriod, double maxPeriod)
     {
         MinPeriod = minPeriod;
         MaxPeriod = maxPeriod;

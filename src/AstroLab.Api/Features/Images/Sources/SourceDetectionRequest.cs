@@ -4,7 +4,7 @@ namespace AstroLab.Api.Features.Images.Sources;
 
 public sealed record SourceDetectionRequest
 {
-    public SourceDetectionRequest(
+    private SourceDetectionRequest(
         double thresholdSigma = SourceDetector.DefaultThresholdSigma,
         int minimumArea = SourceDetector.DefaultMinimumArea,
         int maxSources = SourceDetector.DefaultMaxSources)

@@ -9,7 +9,10 @@ public sealed record RenderImageRequest
     private const double DefaultUpperPercentile = 99.0;
     private const double DefaultAsinhSoftening = 0.1;
 
-    public RenderImageRequest(StretchMode stretch = StretchMode.Asinh, ColorMap colorMap = ColorMap.Grayscale, double? blackPoint = null, double? whitePoint = null, double lowerPercentile = DefaultLowerPercentile, double upperPercentile = DefaultUpperPercentile, double asinhSoftening = DefaultAsinhSoftening, int? maxDimension = RenderOptions.DefaultMaxDimension)
+    private RenderImageRequest(StretchMode stretch = StretchMode.Asinh, ColorMap colorMap = ColorMap.Grayscale, 
+        double? blackPoint = null, double? whitePoint = null, double lowerPercentile = DefaultLowerPercentile, 
+        double upperPercentile = DefaultUpperPercentile, double asinhSoftening = DefaultAsinhSoftening, 
+        int? maxDimension = RenderOptions.DefaultMaxDimension)
     {
         Stretch = stretch;
         ColorMap = colorMap;
@@ -37,6 +40,9 @@ public sealed record RenderImageRequest
     
     public int? MaxDimension { get; }
 
-    public static RenderImageRequest Create(StretchMode stretch = StretchMode.Asinh, ColorMap colorMap = ColorMap.Grayscale, double? blackPoint = null, double? whitePoint = null, double lowerPercentile = DefaultLowerPercentile, double upperPercentile = DefaultUpperPercentile, double asinhSoftening = DefaultAsinhSoftening, int? maxDimension = RenderOptions.DefaultMaxDimension) =>
+    public static RenderImageRequest Create(StretchMode stretch = StretchMode.Asinh, ColorMap colorMap = ColorMap.Grayscale, 
+        double? blackPoint = null, double? whitePoint = null, double lowerPercentile = DefaultLowerPercentile, 
+        double upperPercentile = DefaultUpperPercentile, double asinhSoftening = DefaultAsinhSoftening, 
+        int? maxDimension = RenderOptions.DefaultMaxDimension) =>
         new(stretch, colorMap, blackPoint, whitePoint, lowerPercentile, upperPercentile, asinhSoftening, maxDimension);
 }

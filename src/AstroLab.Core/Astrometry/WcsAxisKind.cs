@@ -4,5 +4,5 @@ internal enum WcsAxisKind
 {
     Longitude,
     Latitude,
-    Other,
+    Other
 }

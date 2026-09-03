@@ -6,7 +6,7 @@ public sealed record ObservationSearchRequest
 {
     private const int DefaultMaxResults = 50;
 
-    public ObservationSearchRequest(
+    private ObservationSearchRequest(
         ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,
         double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {

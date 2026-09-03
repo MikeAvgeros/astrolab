@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Spectroscopy.Lines;
 
 public sealed record LineDetectionRequest
 {
-    public LineDetectionRequest(double? significanceThreshold = null)
+    private LineDetectionRequest(double? significanceThreshold = null)
     {
         SignificanceThreshold = significanceThreshold;
     }

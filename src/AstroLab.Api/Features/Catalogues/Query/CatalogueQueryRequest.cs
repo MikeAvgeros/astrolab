@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Catalogues.Query;
 
 public sealed record CatalogueQueryRequest
 {
-    public CatalogueQueryRequest(double rightAscension, double declination, double radiusArcsec)
+    private CatalogueQueryRequest(double rightAscension, double declination, double radiusArcsec)
     {
         RightAscension = rightAscension;
         Declination = declination;

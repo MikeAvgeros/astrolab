@@ -16,5 +16,5 @@ public enum CfitsIoDataType
     LongLong = 81,
     Double = 82,
     Complex = 83,
-    DoubleComplex = 163,
+    DoubleComplex = 163
 }

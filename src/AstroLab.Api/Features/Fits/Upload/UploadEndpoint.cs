@@ -21,6 +21,7 @@ public static class UploadEndpoint
         HttpRequest request, ILocalFileStore fileStore, IOptions<LocalFileStoreOptions> storageOptions, CancellationToken cancellationToken)
     {
         var maxRequestBodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        
         if (maxRequestBodySizeFeature is { IsReadOnly: false })
         {
             maxRequestBodySizeFeature.MaxRequestBodySize = storageOptions.Value.MaxUploadSizeBytes;

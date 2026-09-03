@@ -7,5 +7,5 @@ public enum BitPixType
     Int32 = 32,
     Int64 = 64,
     Float32 = -32,
-    Float64 = -64,
+    Float64 = -64
 }

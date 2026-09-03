@@ -103,7 +103,7 @@ public readonly record struct Wcs
 
         var yDegrees = LatitudeAxisIndex == 0 ? iwc1 : iwc2;
 
-        var radiusDegrees = Math.Sqrt((xDegrees * xDegrees) + (yDegrees * yDegrees));
+        var radiusDegrees = Math.Sqrt(xDegrees * xDegrees + yDegrees * yDegrees);
 
         var radiusCheck = ValidateProjectionRadius(radiusDegrees);
 
@@ -132,9 +132,9 @@ public readonly record struct Wcs
 
         var cosPhi = Math.Cos(phi);
 
-        var declination = Math.Asin(Math.Clamp((sinTheta * sinDelta0) - (cosTheta * cosDelta0 * cosPhi), -1.0, 1.0));
+        var declination = Math.Asin(Math.Clamp(sinTheta * sinDelta0 - cosTheta * cosDelta0 * cosPhi, -1.0, 1.0));
 
-        var rightAscension = alpha0 + Math.Atan2(cosTheta * sinPhi, (sinTheta * cosDelta0) + (cosTheta * sinDelta0 * cosPhi));
+        var rightAscension = alpha0 + Math.Atan2(cosTheta * sinPhi, sinTheta * cosDelta0 + cosTheta * sinDelta0 * cosPhi);
 
         return (NormalizeDegrees(rightAscension * RadiansToDegrees), declination * RadiansToDegrees);
     }
@@ -168,11 +168,11 @@ public readonly record struct Wcs
 
         var cosDeltaAlpha = Math.Cos(deltaAlpha);
 
-        var theta = Math.Asin(Math.Clamp((sinDelta * sinDelta0) + (cosDelta * cosDelta0 * cosDeltaAlpha), -1.0, 1.0));
+        var theta = Math.Asin(Math.Clamp(sinDelta * sinDelta0 + cosDelta * cosDelta0 * cosDeltaAlpha, -1.0, 1.0));
 
         var phi = Math.PI + Math.Atan2(
             -cosDelta * sinDeltaAlpha,
-            (sinDelta * cosDelta0) - (cosDelta * sinDelta0 * cosDeltaAlpha));
+            sinDelta * cosDelta0 - cosDelta * sinDelta0 * cosDeltaAlpha);
 
         var latitudeCheck = ValidateNativeLatitude(theta);
 
@@ -191,16 +191,16 @@ public readonly record struct Wcs
 
         var iwc2 = LatitudeAxisIndex == 0 ? xDegrees : yDegrees;
 
-        var determinant = (Cd11 * Cd22) - (Cd12 * Cd21);
+        var determinant = Cd11 * Cd22 - Cd12 * Cd21;
 
         if (determinant == 0.0)
         {
             return Error.Validation("astrometry.singular_transform", "The WCS linear transform matrix is singular and cannot be inverted.");
         }
 
-        var p1 = ((Cd22 * iwc1) - (Cd12 * iwc2)) / determinant;
+        var p1 = (Cd22 * iwc1 - Cd12 * iwc2) / determinant;
 
-        var p2 = ((Cd11 * iwc2) - (Cd21 * iwc1)) / determinant;
+        var p2 = (Cd11 * iwc2 - Cd21 * iwc1) / determinant;
 
         return (CrPix1 + p1 - PixelCenterOffset, CrPix2 + p2 - PixelCenterOffset);
     }
@@ -333,17 +333,12 @@ public readonly record struct Wcs
 
     private static (int LongitudeAxisIndex, int LatitudeAxisIndex)? ResolveCelestialAxes(WcsAxisKind axis1Kind, WcsAxisKind axis2Kind)
     {
-        if (axis1Kind == WcsAxisKind.Longitude && axis2Kind == WcsAxisKind.Latitude)
+        return axis1Kind switch
         {
-            return (0, 1);
-        }
-
-        if (axis1Kind == WcsAxisKind.Latitude && axis2Kind == WcsAxisKind.Longitude)
-        {
-            return (1, 0);
-        }
-
-        return null;
+            WcsAxisKind.Longitude when axis2Kind == WcsAxisKind.Latitude => (0, 1),
+            WcsAxisKind.Latitude when axis2Kind == WcsAxisKind.Longitude => (1, 0),
+            _ => null
+        };
     }
 
     private static Result<(double Cd11, double Cd12, double Cd21, double Cd22)> ReadLinearTransform(FitsHeader header)

@@ -336,7 +336,7 @@ public static class ApertureEngine
 
         var dy = Math.Max(Math.Abs(py - centerY), Math.Abs(py + 1 - centerY));
 
-        return Math.Sqrt((dx * dx) + (dy * dy));
+        return Math.Sqrt(dx * dx + dy * dy);
     }
 
     private static (int XMin, int XMax, int YMin, int YMax) BoundingBox(int width, int height, double centerX, double centerY, double radius)

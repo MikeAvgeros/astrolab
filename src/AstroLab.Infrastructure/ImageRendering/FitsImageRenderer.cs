@@ -31,9 +31,7 @@ public static class FitsImageRenderer
 
         var workingHeight = height;
 
-        float[]? downsampleBuffer = null;
-
-        if (options.MaxDimension is int maxDimension)
+        if (options.MaxDimension is { } maxDimension)
         {
             var factorResult = ImageDownsampler.ComputeFactor(width, height, maxDimension);
 
@@ -48,7 +46,7 @@ public static class FitsImageRenderer
             {
                 var (downsampledWidth, downsampledHeight) = ImageDownsampler.ComputeDownsampledDimensions(width, height, factor);
 
-                downsampleBuffer = new float[downsampledWidth * downsampledHeight];
+                var downsampleBuffer = new float[downsampledWidth * downsampledHeight];
 
                 var downsampleResult = ImageDownsampler.Downsample(pixels, width, height, factor, downsampleBuffer);
 

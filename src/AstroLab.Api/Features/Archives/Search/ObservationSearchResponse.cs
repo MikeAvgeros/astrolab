@@ -16,5 +16,5 @@ public sealed record ObservationSearchResponse
         new(observations);
 
     public static ObservationSearchResponse Create(IReadOnlyList<ArchiveObservation> observations) =>
-        Create(observations.Select(ArchiveObservationDto.Create).ToImmutableList());
+        Create([.. observations.Select(ArchiveObservationDto.Create)]);
 }

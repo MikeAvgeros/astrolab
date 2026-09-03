@@ -50,7 +50,7 @@ public readonly record struct HduDescriptor
 
         var image = hasPixelData && descriptor.IsSuccess ? descriptor.Value : (FitsImageDescriptor?)null;
 
-        return HduDescriptor.Create(index, type, header, image);
+        return Create(index, type, header, image);
     }
 
     private static HduType ClassifyHduType(int index, FitsHeader header)

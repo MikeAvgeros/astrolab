@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.TimeSeries.Transit;
 
 public sealed record TransitRequest
 {
-    public TransitRequest(double minPeriod, double maxPeriod, double minTransitDepth)
+    private TransitRequest(double minPeriod, double maxPeriod, double minTransitDepth)
     {
         MinPeriod = minPeriod;
         MaxPeriod = maxPeriod;

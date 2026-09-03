@@ -16,6 +16,7 @@ public readonly record struct ImageStatistics
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;
     private const double PercentageScale = 100.0;
+    private const double Epsilon = 1e-9;
 
     public const int DefaultDisplayHistogramBinCount = 256;
 
@@ -128,7 +129,7 @@ public readonly record struct ImageStatistics
 
         var stats = statsResult.Value;
 
-        if (stats.Max == stats.Min)
+        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
         {
             return (stats.Min, stats.Max);
         }
@@ -160,13 +161,13 @@ public readonly record struct ImageStatistics
 
         foreach (var percentile in percentiles)
         {
-            if (percentile < MinPercentile || percentile > MaxPercentile)
+            if (percentile is < MinPercentile or > MaxPercentile)
             {
                 return Error.Validation("imaging.invalid_percentile_range", "Each percentile must be between 0 and 100 inclusive.");
             }
         }
 
-        if (stats.Max == stats.Min)
+        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
         {
             results.Fill(stats.Min);
 
@@ -201,7 +202,7 @@ public readonly record struct ImageStatistics
 
         var counts = new long[binCount];
 
-        if (stats.Max == stats.Min)
+        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
         {
             Array.Fill(binEdges, stats.Min);
 
@@ -218,10 +219,10 @@ public readonly record struct ImageStatistics
 
         for (var i = 0; i <= binCount; i++)
         {
-            binEdges[i] = stats.Min + (i / scale);
+            binEdges[i] = stats.Min + i / scale;
         }
 
-        return ImageHistogram.Create(ImmutableArray.Create(binEdges), ImmutableArray.Create(counts), stats.ValidPixelCount);
+        return ImageHistogram.Create([.. binEdges], [.. counts], stats.ValidPixelCount);
     }
 
     private static void PopulateHistogram(ReadOnlySpan<float> pixels, double min, double scale, Span<long> histogram)
@@ -253,16 +254,16 @@ public readonly record struct ImageStatistics
 
             if (cumulative >= target)
             {
-                return min + ((bin + 1) / scale);
+                return min + (bin + 1) / scale;
             }
         }
 
-        return min + (histogram.Length / scale);
+        return min + histogram.Length / scale;
     }
 
     public static SkyBackgroundStatistics ComputeSkyBackground(ReadOnlySpan<float> pixels, ImageStatistics stats)
     {
-        if (stats.Max == stats.Min)
+        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
         {
             return SkyBackgroundStatistics.Create(stats.Min, stats.Max, 0.0);
         }

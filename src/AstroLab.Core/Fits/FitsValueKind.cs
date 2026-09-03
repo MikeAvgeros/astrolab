@@ -7,5 +7,5 @@ public enum FitsValueKind
     Integer,
     Real,
     Logical,
-    Undefined,
+    Undefined
 }

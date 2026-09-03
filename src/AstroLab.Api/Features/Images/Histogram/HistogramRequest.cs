@@ -4,7 +4,7 @@ namespace AstroLab.Api.Features.Images.Histogram;
 
 public sealed record HistogramRequest
 {
-    public HistogramRequest(int binCount = ImageStatistics.DefaultDisplayHistogramBinCount)
+    private HistogramRequest(int binCount = ImageStatistics.DefaultDisplayHistogramBinCount)
     {
         BinCount = binCount;
     }

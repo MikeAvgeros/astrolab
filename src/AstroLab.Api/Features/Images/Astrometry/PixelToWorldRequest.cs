@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Images.Astrometry;
 
 public sealed record PixelToWorldRequest
 {
-    public PixelToWorldRequest(double pixelX, double pixelY)
+    private PixelToWorldRequest(double pixelX, double pixelY)
     {
         PixelX = pixelX;
         PixelY = pixelY;

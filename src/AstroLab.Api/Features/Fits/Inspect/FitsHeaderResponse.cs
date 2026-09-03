@@ -5,7 +5,8 @@ namespace AstroLab.Api.Features.Fits.Inspect;
 
 public sealed record FitsHeaderResponse
 {
-    private FitsHeaderResponse(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords, FitsCommonMetadataDto commonMetadata)
+    private FitsHeaderResponse(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, 
+        ImmutableList<FitsKeywordDto> keywords, FitsCommonMetadataDto commonMetadata)
     {
         FileId = fileId;
         DatasetKind = datasetKind;
@@ -24,7 +25,9 @@ public sealed record FitsHeaderResponse
 
     public FitsCommonMetadataDto CommonMetadata { get; }
 
-    public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords, FitsCommonMetadataDto commonMetadata)
+    public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, 
+        ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords, 
+        FitsCommonMetadataDto commonMetadata)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 

@@ -54,9 +54,9 @@ public static class ColorMapper
 
         var r = Clamp01(HotChannelSlope * t);
 
-        var g = Clamp01((HotChannelSlope * t) - HotGreenChannelOffset);
+        var g = Clamp01(HotChannelSlope * t - HotGreenChannelOffset);
 
-        var b = Clamp01((HotChannelSlope * t) - HotBlueChannelOffset);
+        var b = Clamp01(HotChannelSlope * t - HotBlueChannelOffset);
 
         return (ToByte(r), ToByte(g), ToByte(b));
     }

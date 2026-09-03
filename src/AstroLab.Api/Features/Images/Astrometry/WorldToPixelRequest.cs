@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Images.Astrometry;
 
 public sealed record WorldToPixelRequest
 {
-    public WorldToPixelRequest(double rightAscension, double declination)
+    private WorldToPixelRequest(double rightAscension, double declination)
     {
         RightAscension = rightAscension;
         Declination = declination;

@@ -18,7 +18,7 @@ public readonly record struct NetFluxMeasurement
 
     public double NetFlux { get; }
 
-    public double BackgroundSubtracted => RawFlux - (BackgroundPerPixel * ApertureArea);
+    public double BackgroundSubtracted => RawFlux - BackgroundPerPixel * ApertureArea;
 
     public static NetFluxMeasurement Create(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
     {

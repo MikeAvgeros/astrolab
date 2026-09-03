@@ -189,6 +189,12 @@ while §3 defines the higher-level engineering requirements.
 - **MUST:** Enable nullable reference types in every project with
   `<Nullable>enable</Nullable>`. Use `T?` for legitimately absent references and perform a real
   null check rather than using `!` to suppress the compiler.
+- **MUST NOT:** Add redundant parentheses to a mathematical expression — parentheses that
+  restate C#'s existing operator precedence rather than changing evaluation order. Use
+  parentheses only where they are required to produce the correct result, or where a mixed
+  chain of different operator kinds (e.g. bitwise alongside arithmetic) would otherwise be
+  genuinely ambiguous to a reader.
+- **MUST NOT:** Add a trailing comma after the last member of an `enum` declaration.
 
 ### 4.3 Control Flow and LINQ
 

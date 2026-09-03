@@ -102,12 +102,9 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
             if (parsed.Value.Name == "END")
             {
                 return new FitsHeader(keywords.ToArray());
-
             }
-
         }
 
         return Error.Validation("fits.header.missing_end", "Header block did not contain a terminating END card.");
-
     }
 }

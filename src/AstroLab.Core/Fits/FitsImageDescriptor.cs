@@ -55,7 +55,7 @@ public readonly record struct FitsImageDescriptor
 
                     var blank = blankResult.IsSuccess ? blankResult.Value : (long?)null;
 
-                    return FitsImageDescriptor.Create(bitpix, axes, bzero, bscale, blank);
+                    return Create(bitpix, axes, bzero, bscale, blank);
 
                 }));
 
@@ -69,13 +69,11 @@ public readonly record struct FitsImageDescriptor
         if (naxis < 0)
         {
             return Error.Validation("fits.header.invalid_naxis", $"NAXIS must be non-negative, was {naxis}.");
-
         }
 
         if (naxis == 0)
         {
             return Result<ImmutableArray<int>>.Success(ImmutableArray<int>.Empty);
-
         }
 
         var builder = ImmutableArray.CreateBuilder<int>(naxis);
@@ -87,15 +85,12 @@ public readonly record struct FitsImageDescriptor
             if (axisResult.IsFailure)
             {
                 return Result<ImmutableArray<int>>.Failure(axisResult.Error);
-
             }
 
             builder.Add((int)axisResult.Value);
-
         }
 
         return builder.MoveToImmutable();
-
     }
 
     public static FitsImageDescriptor Create(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank) =>

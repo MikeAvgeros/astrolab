@@ -17,8 +17,10 @@ These apply across all four projects (see `spec.md` §3–§4 for the source of 
 - File-scoped namespaces everywhere (`namespace X.Y;`).
 - Extension members (C# 14 `extension(...)` blocks) instead of classic `this`-parameter extension methods.
 - No primary constructors on classes/structs — use an explicit constructor body assigning `private readonly` fields. Positional records are exempt and remain the norm for DTOs/value types.
-- Construct validated domain records via `<Name>Factory.Create(...)` (except HTTP request DTOs deserialized by model binding).
+- A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself (not a companion `<Name>Factory` class) — `Create(...)` validates its arguments and returns `new(...)`, and the constructor performs no validation and is never called from outside the record's own file (except HTTP request DTOs deserialized by model binding).
 - Use `ImmutableList<T>` for collection properties on API-boundary DTO records (Core hot-path types are exempt and use span/array-based representations).
+- Never add redundant parentheses to a mathematical expression — only parenthesize where it changes evaluation order or resolves genuine ambiguity between mixed operator kinds.
+- No trailing comma after the last member of an `enum` declaration.
 - No `//` line comments explaining code. No `///` XML doc comments on models, DTOs, or records (or their properties) — name types and properties so they are self-sufficient. `///` XML doc comments are required on top of endpoint classes (describing what the endpoint does) and on top of `Core`/`Infrastructure` classes (describing what the class does); methods on those classes must be named so their behaviour is self-evident without their own doc comment.
 - One type per file, no matter how small (including private/internal nested types) — a file may still hold multiple `extension` blocks for the same static class.
 - Never add `<LangVersion>` to a `.csproj`.

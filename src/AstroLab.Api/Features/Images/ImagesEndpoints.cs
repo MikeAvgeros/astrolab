@@ -1,4 +1,5 @@
 using AstroLab.Api.Features.Images.Astrometry;
+using AstroLab.Api.Features.Images.Histogram;
 using AstroLab.Api.Features.Images.Photometry;
 using AstroLab.Api.Features.Images.Render;
 using AstroLab.Api.Features.Images.Sources;
@@ -17,6 +18,8 @@ public static class ImagesEndpoints
             group.MapRenderEndpoint();
 
             group.MapStatisticsEndpoint();
+
+            group.MapHistogramEndpoint();
 
             group.MapPhotometryEndpoint();
 

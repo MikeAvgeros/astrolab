@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Immutable;
 using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Imaging;
@@ -15,6 +16,9 @@ public readonly record struct ImageStatistics
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;
     private const double PercentageScale = 100.0;
+
+    /// <summary>Default bin count for <see cref="ComputeHistogram"/> — coarse enough for direct client-side rendering.</summary>
+    public const int DefaultDisplayHistogramBinCount = 256;
 
     private ImageStatistics(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
     {
@@ -145,6 +149,105 @@ public readonly record struct ImageStatistics
 
         var scale = histogramBins / range;
 
+        PopulateHistogram(pixels, stats.Min, scale, histogram);
+
+        var lowerBound = FindPercentileValue(histogram, stats.ValidPixelCount, stats.Min, scale, lowerPercentile);
+
+        var upperBound = FindPercentileValue(histogram, stats.ValidPixelCount, stats.Min, scale, upperPercentile);
+
+        return (lowerBound, upperBound);
+    }
+
+    /// <summary>
+    /// Computes the value at each of <paramref name="percentiles"/> via the same fixed-size-histogram
+    /// approach as <see cref="ComputePercentileBounds"/>, in a single pass over <paramref name="pixels"/>
+    /// regardless of how many percentiles are requested. <paramref name="stats"/> must be the result of
+    /// a prior successful <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
+    /// </summary>
+    public static Result<Unit> ComputePercentiles(
+        ReadOnlySpan<float> pixels, ImageStatistics stats, ReadOnlySpan<double> percentiles, Span<double> results, int histogramBins = DefaultHistogramBins)
+    {
+        if (percentiles.Length != results.Length)
+        {
+            return Error.Validation(
+                "imaging.percentile_result_length_mismatch",
+                $"results length ({results.Length}) must match percentiles length ({percentiles.Length}).");
+        }
+
+        foreach (var percentile in percentiles)
+        {
+            if (percentile < MinPercentile || percentile > MaxPercentile)
+            {
+                return Error.Validation("imaging.invalid_percentile_range", "Each percentile must be between 0 and 100 inclusive.");
+            }
+        }
+
+        if (stats.Max == stats.Min)
+        {
+            results.Fill(stats.Min);
+
+            return Result<Unit>.Success(Unit.Value);
+        }
+
+        Span<long> histogram = histogramBins <= MaxStackallocHistogramBins ? stackalloc long[histogramBins] : new long[histogramBins];
+
+        var range = stats.Max - stats.Min;
+
+        var scale = histogramBins / range;
+
+        PopulateHistogram(pixels, stats.Min, scale, histogram);
+
+        for (var i = 0; i < percentiles.Length; i++)
+        {
+            results[i] = FindPercentileValue(histogram, stats.ValidPixelCount, stats.Min, scale, percentiles[i]);
+        }
+
+        return Result<Unit>.Success(Unit.Value);
+    }
+
+    /// <summary>
+    /// Bins <paramref name="pixels"/> into <paramref name="binCount"/> equal-width buckets between
+    /// <c>stats.Min</c> and <c>stats.Max</c>, producing bin edges and counts suitable for client-side
+    /// histogram rendering. <paramref name="stats"/> must be the result of a prior successful
+    /// <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
+    /// </summary>
+    public static Result<ImageHistogram> ComputeHistogram(
+        ReadOnlySpan<float> pixels, ImageStatistics stats, int binCount = DefaultDisplayHistogramBinCount)
+    {
+        if (binCount <= 0)
+        {
+            return Error.Validation("imaging.invalid_histogram_bin_count", "binCount must be positive.");
+        }
+
+        var binEdges = new double[binCount + 1];
+
+        var counts = new long[binCount];
+
+        if (stats.Max == stats.Min)
+        {
+            Array.Fill(binEdges, stats.Min);
+
+            counts[0] = stats.ValidPixelCount;
+
+            return ImageHistogram.Create(ImmutableArray.Create(binEdges), ImmutableArray.Create(counts), stats.ValidPixelCount);
+        }
+
+        var range = stats.Max - stats.Min;
+
+        var scale = binCount / range;
+
+        PopulateHistogram(pixels, stats.Min, scale, counts);
+
+        for (var i = 0; i <= binCount; i++)
+        {
+            binEdges[i] = stats.Min + (i / scale);
+        }
+
+        return ImageHistogram.Create(ImmutableArray.Create(binEdges), ImmutableArray.Create(counts), stats.ValidPixelCount);
+    }
+
+    private static void PopulateHistogram(ReadOnlySpan<float> pixels, double min, double scale, Span<long> histogram)
+    {
         foreach (var value in pixels)
         {
             if (!float.IsFinite(value))
@@ -152,45 +255,31 @@ public readonly record struct ImageStatistics
                 continue;
             }
 
-            var bin = (int)((value - stats.Min) * scale);
+            var bin = (int)((value - min) * scale);
 
-            bin = Math.Clamp(bin, 0, histogramBins - 1);
+            bin = Math.Clamp(bin, 0, histogram.Length - 1);
 
             histogram[bin]++;
         }
+    }
 
-        var lowerTarget = (long)(stats.ValidPixelCount * (lowerPercentile / MaxPercentile));
-
-        var upperTarget = (long)(stats.ValidPixelCount * (upperPercentile / MaxPercentile));
-
-        var lowerBound = stats.Min;
-
-        var upperBound = stats.Max;
+    private static double FindPercentileValue(ReadOnlySpan<long> histogram, long validPixelCount, double min, double scale, double percentile)
+    {
+        var target = (long)(validPixelCount * (percentile / MaxPercentile));
 
         long cumulative = 0;
 
-        var lowerFound = false;
-
-        for (var bin = 0; bin < histogramBins; bin++)
+        for (var bin = 0; bin < histogram.Length; bin++)
         {
             cumulative += histogram[bin];
 
-            if (!lowerFound && cumulative >= lowerTarget)
+            if (cumulative >= target)
             {
-                lowerBound = stats.Min + ((bin + 1) / scale);
-
-                lowerFound = true;
-            }
-
-            if (cumulative >= upperTarget)
-            {
-                upperBound = stats.Min + ((bin + 1) / scale);
-
-                break;
+                return min + ((bin + 1) / scale);
             }
         }
 
-        return (lowerBound, upperBound);
+        return min + (histogram.Length / scale);
     }
 
     /// <summary>
@@ -211,56 +300,19 @@ public readonly record struct ImageStatistics
 
         try
         {
-            histogram.AsSpan(0, SkyBackgroundHistogramBins).Clear();
+            var histogramSpan = histogram.AsSpan(0, SkyBackgroundHistogramBins);
+
+            histogramSpan.Clear();
 
             var range = stats.Max - stats.Min;
 
             var scale = SkyBackgroundHistogramBins / range;
 
-            foreach (var value in pixels)
-            {
-                if (!float.IsFinite(value))
-                {
-                    continue;
-                }
+            PopulateHistogram(pixels, stats.Min, scale, histogramSpan);
 
-                var bin = (int)((value - stats.Min) * scale);
+            var q1 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundLowerPercentile);
 
-                bin = Math.Clamp(bin, 0, SkyBackgroundHistogramBins - 1);
-
-                histogram[bin]++;
-            }
-
-            var lowerTarget = (long)(stats.ValidPixelCount * (SkyBackgroundLowerPercentile / MaxPercentile));
-
-            var upperTarget = (long)(stats.ValidPixelCount * (SkyBackgroundUpperPercentile / MaxPercentile));
-
-            var q1 = stats.Min;
-
-            var q3 = stats.Max;
-
-            long cumulative = 0;
-
-            var lowerFound = false;
-
-            for (var bin = 0; bin < SkyBackgroundHistogramBins; bin++)
-            {
-                cumulative += histogram[bin];
-
-                if (!lowerFound && cumulative >= lowerTarget)
-                {
-                    q1 = stats.Min + ((bin + 1) / scale);
-
-                    lowerFound = true;
-                }
-
-                if (cumulative >= upperTarget)
-                {
-                    q3 = stats.Min + ((bin + 1) / scale);
-
-                    break;
-                }
-            }
+            var q3 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundUpperPercentile);
 
             return SkyBackgroundStatistics.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
         }

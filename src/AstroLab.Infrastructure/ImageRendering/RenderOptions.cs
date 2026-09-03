@@ -11,6 +11,13 @@ public readonly record struct RenderOptions
     private const double DefaultAutoLowerPercentile = 1.0;
     private const double DefaultAutoUpperPercentile = 99.0;
 
+    /// <summary>
+    /// Default cap on the longer image dimension before rendering. Images larger than this are
+    /// box-downsampled first (see <see cref="MaxDimension"/>), matching the default-automatic
+    /// treatment already applied to percentile scaling.
+    /// </summary>
+    public const int DefaultMaxDimension = 4096;
+
     private RenderOptions(
         StretchMode stretch,
         double asinhSoftening,
@@ -18,7 +25,8 @@ public readonly record struct RenderOptions
         double? blackPoint,
         double? whitePoint,
         double autoLowerPercentile,
-        double autoUpperPercentile)
+        double autoUpperPercentile,
+        int? maxDimension)
     {
         Stretch = stretch;
         AsinhSoftening = asinhSoftening;
@@ -27,6 +35,7 @@ public readonly record struct RenderOptions
         WhitePoint = whitePoint;
         AutoLowerPercentile = autoLowerPercentile;
         AutoUpperPercentile = autoUpperPercentile;
+        MaxDimension = maxDimension;
     }
 
     /// <summary>The non-linear intensity transform applied within the black/white points.</summary>
@@ -56,6 +65,12 @@ public readonly record struct RenderOptions
     /// <summary>Upper percentile used to derive <see cref="WhitePoint"/> when it is not supplied.</summary>
     public double AutoUpperPercentile { get; }
 
+    /// <summary>
+    /// The longer image dimension is downsampled (box-averaged) to this size before stretching, when
+    /// it would otherwise exceed it. <see langword="null"/> disables downsampling entirely.
+    /// </summary>
+    public int? MaxDimension { get; }
+
     public bool RequiresAutoScale => BlackPoint is null || WhitePoint is null;
 
     public static RenderOptions Create(
@@ -65,6 +80,7 @@ public readonly record struct RenderOptions
         double? blackPoint = null,
         double? whitePoint = null,
         double autoLowerPercentile = DefaultAutoLowerPercentile,
-        double autoUpperPercentile = DefaultAutoUpperPercentile) =>
-        new(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, autoLowerPercentile, autoUpperPercentile);
+        double autoUpperPercentile = DefaultAutoUpperPercentile,
+        int? maxDimension = DefaultMaxDimension) =>
+        new(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, autoLowerPercentile, autoUpperPercentile, maxDimension);
 }

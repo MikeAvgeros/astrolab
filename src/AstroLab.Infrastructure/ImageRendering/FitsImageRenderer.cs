@@ -26,13 +26,53 @@ public static class FitsImageRenderer
                 $"Pixel span length ({pixels.Length}) does not match width x height ({width}x{height}).");
         }
 
+        var workingPixels = pixels;
+
+        var workingWidth = width;
+
+        var workingHeight = height;
+
+        float[]? downsampleBuffer = null;
+
+        if (options.MaxDimension is int maxDimension)
+        {
+            var factorResult = ImageDownsampler.ComputeFactor(width, height, maxDimension);
+
+            if (factorResult.IsFailure)
+            {
+                return Result<RenderedImage>.Failure(factorResult.Error);
+            }
+
+            var factor = factorResult.Value;
+
+            if (factor > 1)
+            {
+                var (downsampledWidth, downsampledHeight) = ImageDownsampler.ComputeDownsampledDimensions(width, height, factor);
+
+                downsampleBuffer = new float[downsampledWidth * downsampledHeight];
+
+                var downsampleResult = ImageDownsampler.Downsample(pixels, width, height, factor, downsampleBuffer);
+
+                if (downsampleResult.IsFailure)
+                {
+                    return Result<RenderedImage>.Failure(downsampleResult.Error);
+                }
+
+                workingPixels = downsampleBuffer;
+
+                workingWidth = downsampledWidth;
+
+                workingHeight = downsampledHeight;
+            }
+        }
+
         var blackPoint = options.BlackPoint ?? DefaultBlackPoint;
-        
+
         var whitePoint = options.WhitePoint ?? DefaultWhitePoint;
 
         if (options.RequiresAutoScale)
         {
-            var boundsResult = ImageStatistics.ComputePercentileBounds(pixels, options.AutoLowerPercentile, options.AutoUpperPercentile);
+            var boundsResult = ImageStatistics.ComputePercentileBounds(workingPixels, options.AutoLowerPercentile, options.AutoUpperPercentile);
 
             if (boundsResult.IsFailure)
             {
@@ -40,22 +80,22 @@ public static class FitsImageRenderer
             }
 
             blackPoint = options.BlackPoint ?? boundsResult.Value.Lower;
-            
+
             whitePoint = options.WhitePoint ?? boundsResult.Value.Upper;
         }
 
         var scaleParameters = ScaleParameters.Create(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);
 
-        var grayscale = new byte[pixels.Length];
+        var grayscale = new byte[workingPixels.Length];
 
-        var stretchResult = ImageScaler.Stretch(pixels, grayscale, scaleParameters);
+        var stretchResult = ImageScaler.Stretch(workingPixels, grayscale, scaleParameters);
 
         if (stretchResult.IsFailure)
         {
             return Result<RenderedImage>.Failure(stretchResult.Error);
         }
 
-        var rgb = new byte[pixels.Length * RgbChannelCount];
+        var rgb = new byte[workingPixels.Length * RgbChannelCount];
 
         var colorResult = ColorMapper.Apply(grayscale, rgb, options.ColorMap);
 
@@ -64,7 +104,7 @@ public static class FitsImageRenderer
             return Result<RenderedImage>.Failure(colorResult.Error);
         }
 
-        return RenderedImage.Create(width, height, rgb);
+        return RenderedImage.Create(workingWidth, workingHeight, rgb);
     }
 
     /// <summary>Renders and PNG-encodes a pixel array in one step.</summary>

@@ -124,10 +124,54 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        
+
         Assert.Equal("Image", body.GetProperty("datasetKind").GetString());
-        
+
         Assert.Equal(1, body.GetProperty("hdus").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetHeader_ReportsPerHduDataTypeAndAxesAndOwnHeader()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var hdu = body.GetProperty("hdus")[0];
+
+        Assert.Equal(0, hdu.GetProperty("index").GetInt32());
+
+        Assert.Equal("Primary", hdu.GetProperty("type").GetString());
+
+        Assert.Equal("Byte", hdu.GetProperty("dataType").GetString());
+
+        Assert.Equal(2, hdu.GetProperty("numberOfAxes").GetInt32());
+
+        Assert.Equal([4, 2], hdu.GetProperty("axisDimensions").EnumerateArray().Select(e => e.GetInt32()));
+
+        var ownKeywords = hdu.GetProperty("header").EnumerateArray()
+            .Select(k => k.GetProperty("name").GetString()!)
+            .ToArray();
+
+        Assert.Contains("NAXIS1", ownKeywords);
+    }
+
+    [Fact]
+    public async Task GetHeader_ExposesCommonMetadataAsNullWhenAbsent()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var commonMetadata = body.GetProperty("commonMetadata");
+
+        Assert.Equal(JsonValueKind.Null, commonMetadata.GetProperty("object").ValueKind);
+
+        Assert.Equal(JsonValueKind.Null, commonMetadata.GetProperty("telescope").ValueKind);
     }
 
     [Fact]
@@ -165,6 +209,63 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal(0.0, body.GetProperty("deadPixelPercentage").GetDouble(), precision: 6);
         
         Assert.True(body.GetProperty("skySigma").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task GetStatistics_ReportsMedianAndPercentileSuite()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/statistics");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var median = body.GetProperty("median").GetDouble();
+
+        Assert.True(median is >= 10.0 and <= 80.0);
+
+        var percentiles = body.GetProperty("percentiles").EnumerateArray()
+            .Select(p => (Percentile: p.GetProperty("percentile").GetDouble(), Value: p.GetProperty("value").GetDouble()))
+            .ToArray();
+
+        Assert.Equal([1.0, 5.0, 25.0, 50.0, 75.0, 95.0, 99.0], percentiles.Select(p => p.Percentile));
+
+        for (var i = 1; i < percentiles.Length; i++)
+        {
+            Assert.True(percentiles[i].Value >= percentiles[i - 1].Value);
+        }
+
+        Assert.True(percentiles[0].Value >= 10.0 && percentiles[^1].Value <= 80.0);
+    }
+
+    [Fact]
+    public async Task GetHistogram_ReturnsBinsCoveringTheFullPixelRange()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/histogram?binCount=4");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(4, body.GetProperty("binCount").GetInt32());
+
+        var binEdges = body.GetProperty("binEdges").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal(5, binEdges.Length);
+
+        Assert.Equal(10.0, binEdges[0], precision: 6);
+
+        Assert.Equal(80.0, binEdges[^1], precision: 6);
+
+        var counts = body.GetProperty("counts").EnumerateArray().Select(c => c.GetInt64()).ToArray();
+
+        Assert.Equal(8, counts.Sum());
+
+        Assert.Equal(8, body.GetProperty("validPixelCount").GetInt64());
     }
 
     [Fact]

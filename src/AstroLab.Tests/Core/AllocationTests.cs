@@ -11,9 +11,20 @@ namespace AstroLab.Tests.Core;
 /// </summary>
 public class AllocationTests
 {
+    /// <summary>
+    /// Number of untimed calls before measuring. A single warm-up call only guarantees the method
+    /// is Tier0-JITted; under parallel test-run load a Tier0-to-Tier1 re-JIT can still land inside
+    /// the measured call and get misattributed as algorithm allocation. This exceeds .NET's default
+    /// tiered-compilation call-count promotion threshold so the measured call always runs Tier1 code.
+    /// </summary>
+    private const int WarmupIterations = 64;
+
     private static long MeasureAllocatedBytes(Action action)
     {
-        action();
+        for (var i = 0; i < WarmupIterations; i++)
+        {
+            action();
+        }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
 

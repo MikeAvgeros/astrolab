@@ -22,6 +22,8 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
     private async Task<string> UploadGradientImageAsync() => await UploadAsync(SyntheticFits.SmallGradientImage());
 
+    private async Task<string> UploadGradientImageWithWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithWcs());
+
     private async Task<string> UploadGradientSpectrumFrameAsync() => await UploadAsync(SyntheticFits.SmallGradientSpectrumFrame());
 
     private async Task<string> UploadAsync(byte[] fitsBytes)
@@ -380,6 +382,99 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     public async Task SearchObservations_MissingRequiredArchiveParameter_ReturnsBadRequest()
     {
         var response = await _client.GetAsync("/api/archives/search?target=M31");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetWcs_ReturnsProjectionAndReferenceMetadata()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/wcs");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("Tan", body.GetProperty("projection").GetString());
+
+        Assert.Equal("ICRS", body.GetProperty("coordinateSystem").GetString());
+
+        Assert.Equal(180.0, body.GetProperty("referenceRightAscension").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("referenceDeclination").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task GetWcs_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/wcs");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PixelToWorld_AtReferencePixel_ReturnsReferenceCoordinates()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=0.5&pixelY=0.5");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(180.0, body.GetProperty("rightAscension").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("declination").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task PixelToWorld_ThenWorldToPixel_RoundTripsThroughTheApi()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var toWorldResponse = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=2.5&pixelY=1.5");
+
+        Assert.Equal(HttpStatusCode.OK, toWorldResponse.StatusCode);
+
+        var world = await toWorldResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        var ra = world.GetProperty("rightAscension").GetDouble();
+
+        var dec = world.GetProperty("declination").GetDouble();
+
+        var toPixelResponse = await _client.GetAsync(
+            $"/api/images/{fileId}/astrometry/world-to-pixel?rightAscension={ra:R}&declination={dec:R}");
+
+        Assert.Equal(HttpStatusCode.OK, toPixelResponse.StatusCode);
+
+        var pixel = await toPixelResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(2.5, pixel.GetProperty("pixelX").GetDouble(), precision: 4);
+
+        Assert.Equal(1.5, pixel.GetProperty("pixelY").GetDouble(), precision: 4);
+    }
+
+    [Fact]
+    public async Task PixelToWorld_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=0&pixelY=0");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WorldToPixel_RejectsOutOfRangeDeclination()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/world-to-pixel?rightAscension=180&declination=120");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

@@ -25,6 +25,30 @@ internal static class SyntheticFits
 
     /// <summary>
     /// The same 4x2 gradient pixel data as <see cref="SmallGradientImage"/>, but carrying a
+    /// standard TAN-projection WCS solution (no rotation, 1 arcsec/pixel), so astrometry endpoints
+    /// have a usable pixel/sky mapping to exercise.
+    /// </summary>
+    public static byte[] SmallGradientImageWithWcs() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    4",
+        "NAXIS2  =                    2",
+        "CTYPE1  = 'RA---TAN'",
+        "CTYPE2  = 'DEC--TAN'",
+        "CRPIX1  =                  1.0",
+        "CRPIX2  =                  1.0",
+        "CRVAL1  =                180.0",
+        "CRVAL2  =                  0.0",
+        "CDELT1  =            -0.0002778",
+        "CDELT2  =             0.0002778",
+        "RADESYS = 'ICRS    '",
+        "END",
+    ]);
+
+    /// <summary>
+    /// The same 4x2 gradient pixel data as <see cref="SmallGradientImage"/>, but carrying a
     /// <c>DISPAXIS</c> keyword — the standard FITS marker for a 2D spectroscopic frame (a
     /// long-slit spectrogram with a spatial axis and a dispersion axis) — so
     /// <c>FitsDatasetClassifier</c> identifies it as <c>Spectrum</c> rather than <c>Image</c>.

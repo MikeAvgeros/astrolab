@@ -27,10 +27,8 @@ public sealed record DetectedSourceDto
 
     public double PixelY { get; }
 
-    /// <summary>Right ascension in degrees, or <see langword="null"/> when the file carries no usable WCS.</summary>
     public double? RightAscension { get; }
 
-    /// <summary>Declination in degrees, or <see langword="null"/> when the file carries no usable WCS.</summary>
     public double? Declination { get; }
 
     public int PixelCount { get; }
@@ -54,7 +52,6 @@ public sealed record DetectedSourceDto
         return new DetectedSourceDto(id, pixelX, pixelY, rightAscension, declination, pixelCount, peakValue, totalFlux, background, signalToNoiseRatio);
     }
 
-    /// <summary>Maps a Core detection result, adding RA/Dec (where <paramref name="wcs"/> is available and the source's pixel position converts successfully).</summary>
     public static DetectedSourceDto FromDetectedSource(DetectedSource source, Wcs? wcs)
     {
         double? rightAscension = null;

@@ -13,14 +13,11 @@ public sealed record SourceDetectionRequest
         MinimumArea = minimumArea;
         MaxSources = maxSources;
     }
-
-    /// <summary>Detection threshold, in multiples of the estimated background noise (sigma) above the estimated background.</summary>
+    
     public double ThresholdSigma { get; }
-
-    /// <summary>The minimum number of connected pixels a region must have to be reported as a source.</summary>
+    
     public int MinimumArea { get; }
-
-    /// <summary>The maximum number of sources returned, ranked by integrated flux (descending).</summary>
+    
     public int MaxSources { get; }
 
     public static SourceDetectionRequest Create(

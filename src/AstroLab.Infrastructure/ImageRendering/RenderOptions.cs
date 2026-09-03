@@ -2,20 +2,12 @@ using AstroLab.Core.Imaging;
 
 namespace AstroLab.Infrastructure.ImageRendering;
 
-/// <summary>
-/// Options controlling how a raw FITS pixel array is turned into a displayable image.
-/// </summary>
 public readonly record struct RenderOptions
 {
     private const double DefaultAsinhSoftening = 0.1;
     private const double DefaultAutoLowerPercentile = 1.0;
     private const double DefaultAutoUpperPercentile = 99.0;
 
-    /// <summary>
-    /// Default cap on the longer image dimension before rendering. Images larger than this are
-    /// box-downsampled first (see <see cref="MaxDimension"/>), matching the default-automatic
-    /// treatment already applied to percentile scaling.
-    /// </summary>
     public const int DefaultMaxDimension = 4096;
 
     private RenderOptions(
@@ -38,37 +30,20 @@ public readonly record struct RenderOptions
         MaxDimension = maxDimension;
     }
 
-    /// <summary>The non-linear intensity transform applied within the black/white points.</summary>
     public StretchMode Stretch { get; }
 
-    /// <summary>Softening parameter used only when <see cref="Stretch"/> is <see cref="StretchMode.Asinh"/>.</summary>
     public double AsinhSoftening { get; }
 
-    /// <summary>The palette applied to the stretched grayscale intensity.</summary>
     public ColorMap ColorMap { get; }
 
-    /// <summary>
-    /// The physical pixel value mapped to black. When <see langword="null"/>, it is computed
-    /// automatically from <see cref="AutoLowerPercentile"/>.
-    /// </summary>
     public double? BlackPoint { get; }
 
-    /// <summary>
-    /// The physical pixel value mapped to white. When <see langword="null"/>, it is computed
-    /// automatically from <see cref="AutoUpperPercentile"/>.
-    /// </summary>
     public double? WhitePoint { get; }
 
-    /// <summary>Lower percentile used to derive <see cref="BlackPoint"/> when it is not supplied.</summary>
     public double AutoLowerPercentile { get; }
 
-    /// <summary>Upper percentile used to derive <see cref="WhitePoint"/> when it is not supplied.</summary>
     public double AutoUpperPercentile { get; }
 
-    /// <summary>
-    /// The longer image dimension is downsampled (box-averaged) to this size before stretching, when
-    /// it would otherwise exceed it. <see langword="null"/> disables downsampling entirely.
-    /// </summary>
     public int? MaxDimension { get; }
 
     public bool RequiresAutoScale => BlackPoint is null || WhitePoint is null;

@@ -15,10 +15,6 @@ public static class ColorMapper
     private const double HotGreenChannelOffset = 1.0;
     private const double HotBlueChannelOffset = 2.0;
 
-    /// <summary>
-    /// Maps each normalized grayscale byte in <paramref name="intensities"/> onto an RGB triple
-    /// written contiguously into <paramref name="rgb"/> (which must be exactly three times as long).
-    /// </summary>
     public static Result<Unit> Apply(ReadOnlySpan<byte> intensities, Span<byte> rgb, ColorMap colorMap)
     {
         if (rgb.Length != intensities.Length * RgbChannelCount)
@@ -44,7 +40,6 @@ public static class ColorMapper
         return Result<Unit>.Success(Unit.Value);
     }
 
-    /// <summary>Maps a single normalized grayscale byte (0-255) onto an RGB color.</summary>
     public static (byte R, byte G, byte B) Map(byte intensity, ColorMap colorMap) => colorMap switch
     {
         ColorMap.Grayscale => (intensity, intensity, intensity),
@@ -66,7 +61,6 @@ public static class ColorMapper
         return (ToByte(r), ToByte(g), ToByte(b));
     }
 
-    /// <summary>8-stop approximation of matplotlib's "viridis" colormap, linearly interpolated between stops.</summary>
     private static readonly (float Position, byte R, byte G, byte B)[] ViridisStops =
     [
         (0.000f, 68, 1, 84),

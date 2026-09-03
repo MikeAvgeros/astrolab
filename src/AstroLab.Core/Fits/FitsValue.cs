@@ -1,10 +1,5 @@
 namespace AstroLab.Core.Fits;
 
-/// <summary>
-/// A parsed FITS header value. Exactly one of the typed accessors is meaningful, selected by
-/// <see cref="Kind"/> — a small hand-rolled union, following the same shape as
-/// <c>AstroLab.Core.Result.Result{TValue}</c>.
-/// </summary>
 public readonly struct FitsValue
 {
     private readonly string? _text;
@@ -35,7 +30,6 @@ public readonly struct FitsValue
 
     public static FitsValue OfUndefined(string rawText) => new(FitsValueKind.Undefined, rawText, 0, 0, false);
 
-    /// <summary>The literal string content when <see cref="Kind"/> is <see cref="FitsValueKind.String"/>.</summary>
     public string AsString => Kind == FitsValueKind.String
         ? _text!
         : throw new InvalidOperationException($"FitsValue is {Kind}, not String.");
@@ -44,7 +38,6 @@ public readonly struct FitsValue
         ? _integer
         : throw new InvalidOperationException($"FitsValue is {Kind}, not Integer.");
 
-    /// <summary>The numeric value, valid for both <see cref="FitsValueKind.Integer"/> and <see cref="FitsValueKind.Real"/>.</summary>
     public double AsReal => Kind is FitsValueKind.Real or FitsValueKind.Integer
         ? _real
         : throw new InvalidOperationException($"FitsValue is {Kind}, not Real or Integer.");

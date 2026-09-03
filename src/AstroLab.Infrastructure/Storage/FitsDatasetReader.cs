@@ -22,7 +22,6 @@ public sealed class FitsDatasetReader
         _fileStore = fileStore;
     }
 
-    /// <summary>Walks every HDU in a staged file, returning their parsed descriptors in file order.</summary>
     public async Task<Result<ImmutableArray<HduDescriptor>>> ReadAllHdusAsync(string relativeKey, CancellationToken cancellationToken = default)
     {
         var openResult = _fileStore.OpenRead(relativeKey);
@@ -39,11 +38,9 @@ public sealed class FitsDatasetReader
         return locationsResult.Map(ToDescriptors);
     }
 
-    /// <summary>Loads the first image-bearing HDU's pixel data, requiring the file to classify as <see cref="FitsDatasetKind.Image"/>.</summary>
     public Task<Result<FitsDataset>> LoadImageAsync(string relativeKey, CancellationToken cancellationToken = default) =>
         LoadPixelDataAsync(relativeKey, FitsDatasetKind.Image, cancellationToken);
-
-    /// <summary>Loads the first image-bearing HDU's pixel data, requiring the file to classify as <see cref="FitsDatasetKind.Spectrum"/>.</summary>
+    
     public Task<Result<FitsDataset>> LoadSpectrumImageAsync(string relativeKey, CancellationToken cancellationToken = default) =>
         LoadPixelDataAsync(relativeKey, FitsDatasetKind.Spectrum, cancellationToken);
 

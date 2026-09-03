@@ -17,7 +17,6 @@ public readonly record struct ImageStatistics
     private const double SkyBackgroundUpperPercentile = 75.0;
     private const double PercentageScale = 100.0;
 
-    /// <summary>Default bin count for <see cref="ComputeHistogram"/> — coarse enough for direct client-side rendering.</summary>
     public const int DefaultDisplayHistogramBinCount = 256;
 
     private ImageStatistics(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
@@ -46,10 +45,6 @@ public readonly record struct ImageStatistics
 
     public double DeadPixelPercentage => InvalidPixelCount / (double)TotalPixelCount * PercentageScale;
 
-    /// <summary>
-    /// Computes min/max/mean/standard-deviation over <paramref name="pixels"/> in two zero-allocation
-    /// passes (the second pass is required for a numerically stable variance computation).
-    /// </summary>
     public static Result<ImageStatistics> Compute(ReadOnlySpan<float> pixels)
     {
         if (pixels.Length == 0)
@@ -113,11 +108,6 @@ public readonly record struct ImageStatistics
         return Create(min, max, mean, stdDev, validCount, pixels.Length);
     }
 
-    /// <summary>
-    /// Estimates lower/upper percentile clipping bounds via a fixed-size histogram (bounded
-    /// allocation, independent of image size), suitable for choosing black/white points for
-    /// display without sorting the full — potentially gigapixel — pixel array.
-    /// </summary>
     public static Result<(double Lower, double Upper)> ComputePercentileBounds(
         ReadOnlySpan<float> pixels, double lowerPercentile, double upperPercentile, int histogramBins = DefaultHistogramBins)
     {
@@ -158,12 +148,6 @@ public readonly record struct ImageStatistics
         return (lowerBound, upperBound);
     }
 
-    /// <summary>
-    /// Computes the value at each of <paramref name="percentiles"/> via the same fixed-size-histogram
-    /// approach as <see cref="ComputePercentileBounds"/>, in a single pass over <paramref name="pixels"/>
-    /// regardless of how many percentiles are requested. <paramref name="stats"/> must be the result of
-    /// a prior successful <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
-    /// </summary>
     public static Result<Unit> ComputePercentiles(
         ReadOnlySpan<float> pixels, ImageStatistics stats, ReadOnlySpan<double> percentiles, Span<double> results, int histogramBins = DefaultHistogramBins)
     {
@@ -205,12 +189,6 @@ public readonly record struct ImageStatistics
         return Result<Unit>.Success(Unit.Value);
     }
 
-    /// <summary>
-    /// Bins <paramref name="pixels"/> into <paramref name="binCount"/> equal-width buckets between
-    /// <c>stats.Min</c> and <c>stats.Max</c>, producing bin edges and counts suitable for client-side
-    /// histogram rendering. <paramref name="stats"/> must be the result of a prior successful
-    /// <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
-    /// </summary>
     public static Result<ImageHistogram> ComputeHistogram(
         ReadOnlySpan<float> pixels, ImageStatistics stats, int binCount = DefaultDisplayHistogramBinCount)
     {
@@ -282,13 +260,6 @@ public readonly record struct ImageStatistics
         return min + (histogram.Length / scale);
     }
 
-    /// <summary>
-    /// Estimates a robust sky-background sigma via the interquartile range of <paramref name="pixels"/>
-    /// (<c>(Q3 - Q1) / 1.349</c>, the standard IQR-to-Gaussian-sigma conversion), using a fixed-size
-    /// pooled histogram so cost stays O(n) with zero managed-heap allocation regardless of image size —
-    /// no sorting of the full pixel array. <paramref name="stats"/> must be the result of a prior
-    /// successful <see cref="Compute"/> call over the same <paramref name="pixels"/> span.
-    /// </summary>
     public static SkyBackgroundStatistics ComputeSkyBackground(ReadOnlySpan<float> pixels, ImageStatistics stats)
     {
         if (stats.Max == stats.Min)

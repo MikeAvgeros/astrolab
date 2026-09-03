@@ -18,12 +18,6 @@ public readonly record struct Wcs
     private const double MinDeclinationDegrees = -90.0;
     private const double MaxDeclinationDegrees = 90.0;
 
-    /// <summary>
-    /// This API represents pixel positions 0-indexed with pixel centers at half-integer offsets
-    /// (pixel <c>0</c> spans <c>[0, 1)</c>, center <c>0.5</c>) — matching
-    /// <c>AstroLab.Core.Photometry.ApertureEngine</c> — whereas FITS <c>CRPIXn</c> is 1-indexed
-    /// with pixel centers at integer values. <c>FitsPixel = ApiPixel + PixelCenterOffset</c>.
-    /// </summary>
     private const double PixelCenterOffset = 0.5;
 
     private const double DefaultPcDiagonal = 1.0;
@@ -75,40 +69,26 @@ public readonly record struct Wcs
 
     public double Cd22 { get; }
 
-    /// <summary>0 when axis 1 is the longitude (RA-like) axis, 1 when axis 2 is.</summary>
     public int LongitudeAxisIndex { get; }
 
-    /// <summary>0 when axis 1 is the latitude (Dec-like) axis, 1 when axis 2 is.</summary>
     public int LatitudeAxisIndex { get; }
 
-    /// <summary>The <c>RADESYS</c> keyword value, or <see langword="null"/> when absent — never guessed.</summary>
     public string? RadeSys { get; }
 
-    /// <summary>Reference right ascension, in degrees (the <c>CRVAL</c> on the longitude axis).</summary>
     public double ReferenceRightAscension => LongitudeAxisIndex == 0 ? CrVal1 : CrVal2;
 
-    /// <summary>Reference declination, in degrees (the <c>CRVAL</c> on the latitude axis).</summary>
     public double ReferenceDeclination => LatitudeAxisIndex == 0 ? CrVal1 : CrVal2;
 
-    /// <summary>Reference pixel X, in this API's 0-indexed pixel-center coordinate convention (see <see cref="PixelToWorld"/>).</summary>
     public double ReferencePixelX => CrPix1 - PixelCenterOffset;
 
-    /// <summary>Reference pixel Y, in this API's 0-indexed pixel-center coordinate convention.</summary>
     public double ReferencePixelY => CrPix2 - PixelCenterOffset;
 
-    /// <summary>Pixel scale along axis 1, in degrees/pixel.</summary>
     public double PixelScaleXDegrees => Math.Sqrt((Cd11 * Cd11) + (Cd21 * Cd21));
 
-    /// <summary>Pixel scale along axis 2, in degrees/pixel.</summary>
     public double PixelScaleYDegrees => Math.Sqrt((Cd12 * Cd12) + (Cd22 * Cd22));
 
-    /// <summary>The rotation of axis 1 relative to celestial north, in degrees, derived from the linear transform matrix.</summary>
     public double RotationDegrees => Math.Atan2(Cd21, Cd11) * RadiansToDegrees;
 
-    /// <summary>
-    /// Converts a pixel position — in this API's 0-indexed pixel-center convention, where pixel
-    /// <c>(0, 0)</c>'s center is at <c>(0.5, 0.5)</c> — to celestial coordinates.
-    /// </summary>
     public Result<(double RightAscension, double Declination)> PixelToWorld(double pixelX, double pixelY)
     {
         var p1 = pixelX + PixelCenterOffset - CrPix1;
@@ -159,10 +139,6 @@ public readonly record struct Wcs
         return (NormalizeDegrees(rightAscension * RadiansToDegrees), declination * RadiansToDegrees);
     }
 
-    /// <summary>
-    /// Converts celestial coordinates to a pixel position, in this API's 0-indexed pixel-center
-    /// convention (see <see cref="PixelToWorld"/>).
-    /// </summary>
     public Result<(double PixelX, double PixelY)> WorldToPixel(double rightAscension, double declination)
     {
         if (declination is < MinDeclinationDegrees or > MaxDeclinationDegrees)
@@ -254,13 +230,6 @@ public readonly record struct Wcs
         return normalized < 0.0 ? normalized + FullCircleDegrees : normalized;
     }
 
-    /// <summary>
-    /// Parses a usable WCS solution from an HDU's header, where present. Returns
-    /// <see cref="ErrorCategory.NotFound"/> when the required keywords are absent (no WCS ever
-    /// attempted, never inferred), <see cref="ErrorCategory.Validation"/> when present keywords
-    /// are inconsistent/unusable, and <see cref="ErrorCategory.NotImplemented"/> for a
-    /// syntactically valid but unsupported projection code.
-    /// </summary>
     public static Result<Wcs> FromHeader(FitsHeader header)
     {
         var cType1Result = header.GetString("CTYPE1");
@@ -377,11 +346,6 @@ public readonly record struct Wcs
         return null;
     }
 
-    /// <summary>
-    /// Resolves the 2x2 linear pixel-to-intermediate-world-coordinate matrix (degrees/pixel), per
-    /// the FITS WCS convention priority: an explicit <c>CD</c> matrix; else <c>CDELT</c> scaled by
-    /// a <c>PC</c> matrix (default identity); else the legacy <c>CDELT</c> + <c>CROTA2</c> convention.
-    /// </summary>
     private static Result<(double Cd11, double Cd12, double Cd21, double Cd22)> ReadLinearTransform(FitsHeader header)
     {
         var cd11 = header.GetReal("CD1_1");

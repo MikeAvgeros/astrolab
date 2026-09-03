@@ -24,8 +24,7 @@ public sealed record WcsMetadataResponse
     }
 
     public string FileId { get; }
-
-    /// <summary>The <c>RADESYS</c> keyword value (e.g. <c>"ICRS"</c>), or <see langword="null"/> when the header does not declare one.</summary>
+    
     public string? CoordinateSystem { get; }
 
     public WcsProjection Projection { get; }
@@ -41,8 +40,7 @@ public sealed record WcsMetadataResponse
     public double PixelScaleXDegrees { get; }
 
     public double PixelScaleYDegrees { get; }
-
-    /// <summary>Rotation of the pixel X axis relative to celestial north, in degrees, derived from the WCS linear transform.</summary>
+    
     public double RotationDegrees { get; }
 
     public static WcsMetadataResponse Create(

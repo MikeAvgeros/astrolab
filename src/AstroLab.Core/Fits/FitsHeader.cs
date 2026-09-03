@@ -67,11 +67,6 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
         ? Result<bool>.Success(v.AsLogical)
         : Error.Validation("fits.header.keyword_wrong_type", $"Header keyword '{keyword}' is not logical."));
 
-    /// <summary>
-    /// Decodes a raw header data block (one or more 2880-byte FITS blocks, already read from
-    /// disk by the Infrastructure layer) into a <see cref="FitsHeader"/>, stopping at the
-    /// mandatory <c>END</c> card.
-    /// </summary>
     public static Result<FitsHeader> Parse(ReadOnlySpan<byte> headerBlock)
     {
         if (headerBlock.Length % FitsCardParser.CardLength != 0)

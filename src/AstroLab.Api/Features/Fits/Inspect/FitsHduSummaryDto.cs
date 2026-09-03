@@ -20,17 +20,14 @@ public sealed record FitsHduSummaryDto
 
     public HduType Type { get; }
 
-    /// <summary>The <c>EXTNAME</c> keyword value, or <see langword="null"/> when absent (e.g. the primary HDU).</summary>
     public string? ExtensionName { get; }
 
-    /// <summary>The <c>BITPIX</c> pixel representation, or <see langword="null"/> for HDUs with no pixel data.</summary>
     public BitPixType? DataType { get; }
 
     public int NumberOfAxes { get; }
 
     public ImmutableList<int> AxisDimensions { get; }
 
-    /// <summary>This HDU's own header cards — not the primary HDU's.</summary>
     public ImmutableList<FitsKeywordDto> Header { get; }
 
     public static FitsHduSummaryDto Create(int index, HduType type, string? extensionName, BitPixType? dataType, ImmutableList<int> axisDimensions, ImmutableList<FitsKeywordDto> header)

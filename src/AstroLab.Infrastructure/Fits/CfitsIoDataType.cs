@@ -1,9 +1,5 @@
 namespace AstroLab.Infrastructure.Fits;
 
-/// <summary>
-/// The <c>TXXXX</c> datatype codes defined by <c>fitsio.h</c>, used to tell cfitsio how to
-/// interpret/convert the buffer passed to functions such as <c>ffgpxv</c> (read pixels).
-/// </summary>
 public enum CfitsIoDataType
 {
     Byte = 11,

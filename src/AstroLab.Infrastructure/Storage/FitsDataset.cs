@@ -23,8 +23,7 @@ public sealed class FitsDataset : IDisposable
     public HduDescriptor Hdu { get; }
 
     public FitsImageDescriptor Image { get; }
-
-    /// <summary>The physical pixel values, viewed directly over native memory — never copied into a managed array.</summary>
+    
     public ReadOnlySpan<float> Pixels => _pixelBuffer.AsFloatSpan();
 
     public void Dispose() => _pixelBuffer.Dispose();

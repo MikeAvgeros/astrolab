@@ -10,18 +10,14 @@ namespace AstroLab.Infrastructure.Storage;
 /// of host architecture — into host-endian physical <see cref="float"/> values by applying the
 /// HDU's <c>BZERO</c>/<c>BSCALE</c> linear transform (via <see cref="FitsImageDescriptor.ToPhysical"/>,
 /// a pure Core computation). This is an encoding/format concern, not a scientific one, which is
-/// why the byte-order handling itself lives in Infrastructure rather than Core.
+/// why the byte-order handling itself lives in Infrastructure rather than Core. The result never
+/// touches the managed heap, so a multi-gigabyte image never doubles into a managed array
+/// alongside its native source buffer; the caller owns the returned buffer and must dispose it.
 /// </summary>
 public static class FitsPixelConverter
 {
     private const int BytesPerFloat = sizeof(float);
 
-    /// <summary>
-    /// Converts <paramref name="raw"/> into a newly allocated <see cref="UnmanagedFitsBuffer"/> of
-    /// physical <see cref="float"/> values. The result never touches the managed heap, so a
-    /// multi-gigabyte image never doubles into a managed array alongside its native source buffer.
-    /// The caller owns the returned buffer and must dispose it.
-    /// </summary>
     public static UnmanagedFitsBuffer ToFloatBuffer(ReadOnlySpan<byte> raw, FitsImageDescriptor descriptor)
     {
         var count = checked((int)descriptor.PixelCount);

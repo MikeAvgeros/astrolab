@@ -14,8 +14,7 @@ public static class FitsHeaderReader
 {
     private const int BlockSize = 2880;
     private const int MaxBlocks = 200;
-
-    /// <summary>Reads the single header beginning at the stream's current position.</summary>
+    
     public static async Task<Result<FitsHeader>> ReadHeaderAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         using var accumulated = new MemoryStream();
@@ -45,14 +44,7 @@ public static class FitsHeaderReader
         return Error.Validation(
             "fits.header.too_large", $"Header exceeded {MaxBlocks * BlockSize:N0} bytes without an END card.");
     }
-
-    /// <summary>
-    /// Walks every HDU in <paramref name="stream"/> from its current position to end-of-stream,
-    /// parsing each header and seeking over its data segment (sized via
-    /// <see cref="HduDescriptor.DataSizeBytes"/>, rounded up to the next 2880-byte block) to reach
-    /// the next one. Requires a seekable stream — true for every <c>FileStream</c> returned by
-    /// <see cref="ILocalFileStore.OpenRead"/>.
-    /// </summary>
+    
     public static async Task<Result<ImmutableArray<HduLocation>>> ReadAllHeadersAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         var locations = ImmutableArray.CreateBuilder<HduLocation>();

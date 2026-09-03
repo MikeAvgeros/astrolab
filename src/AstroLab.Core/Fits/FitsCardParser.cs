@@ -15,7 +15,6 @@ public static class FitsCardParser
     private const int KeywordLength = 8;
     private const int ValueIndicatorColumn = 8;
 
-    /// <summary>Parses a single 80-character FITS header card.</summary>
     public static Result<FitsKeyword> Parse(ReadOnlySpan<char> card)
     {
         if (card.Length != CardLength)

@@ -20,10 +20,8 @@ public sealed record FitsHeaderResponse
 
     public ImmutableList<FitsHduSummaryDto> Hdus { get; }
 
-    /// <summary>The primary HDU's header cards. Kept for backward compatibility — see each entry in <see cref="Hdus"/> for its own header.</summary>
     public ImmutableList<FitsKeywordDto> Keywords { get; }
 
-    /// <summary>Commonly useful astronomical keywords extracted from the primary HDU's header, where present.</summary>
     public FitsCommonMetadataDto CommonMetadata { get; }
 
     public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords, FitsCommonMetadataDto commonMetadata)

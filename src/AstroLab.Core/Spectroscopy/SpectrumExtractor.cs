@@ -10,19 +10,6 @@ namespace AstroLab.Core.Spectroscopy;
 /// </summary>
 public static class SpectrumExtractor
 {
-    /// <summary>
-    /// Collapses a 2D spectral image into a 1D flux spectrum by summing pixel values across a
-    /// fixed-width aperture centred on <paramref name="traceCenters"/> at each position along the
-    /// dispersion axis. Aperture edges are weighted by fractional pixel coverage; non-finite
-    /// pixels are excluded from the sum.
-    /// </summary>
-    /// <param name="image">Row-major pixel data, length must equal <paramref name="width"/> * <paramref name="height"/>.</param>
-    /// <param name="traceCenters">
-    /// The spatial-axis center of the aperture at each dispersion bin. Length must equal the
-    /// number of bins along <paramref name="axis"/> (width for Horizontal, height for Vertical).
-    /// </param>
-    /// <param name="apertureHalfWidth">Half-width, in pixels, of the extraction aperture around each trace center.</param>
-    /// <param name="spectrum">Destination buffer; length must equal <paramref name="traceCenters"/>'s length.</param>
     public static Result<Unit> ExtractBoxcar(
         ReadOnlySpan<float> image,
         int width,
@@ -102,7 +89,6 @@ public static class SpectrumExtractor
         return Result<Unit>.Success(Unit.Value);
     }
 
-    /// <summary>Subtracts <paramref name="background"/> from <paramref name="spectrum"/> in place, element-wise.</summary>
     public static Result<Unit> SubtractBackground(Span<double> spectrum, ReadOnlySpan<double> background)
     {
         if (spectrum.Length != background.Length)
@@ -120,10 +106,6 @@ public static class SpectrumExtractor
         return Result<Unit>.Success(Unit.Value);
     }
 
-    /// <summary>
-    /// Evaluates a polynomial dispersion solution (wavelength as a function of pixel index) via
-    /// Horner's method: <c>coefficients[0] + coefficients[1]*x + coefficients[2]*x^2 + ...</c>.
-    /// </summary>
     public static double EvaluateWavelength(double pixelIndex, ReadOnlySpan<double> dispersionCoefficients)
     {
         var result = 0.0;
@@ -136,7 +118,6 @@ public static class SpectrumExtractor
         return result;
     }
 
-    /// <summary>Applies <see cref="EvaluateWavelength"/> across every pixel index, writing the wavelength solution.</summary>
     public static Result<Unit> ComputeWavelengths(
         ReadOnlySpan<double> pixelIndices, ReadOnlySpan<double> dispersionCoefficients, Span<double> wavelengths)
     {

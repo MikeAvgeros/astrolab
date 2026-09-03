@@ -9,11 +9,6 @@ namespace AstroLab.Core.Imaging;
 /// </summary>
 public static class ImageDownsampler
 {
-    /// <summary>
-    /// The integer block-averaging factor required to bring the longer of <paramref name="width"/>/
-    /// <paramref name="height"/> at or below <paramref name="maxDimension"/>. Returns 1 (no-op) when
-    /// the image is already within bounds.
-    /// </summary>
     public static Result<int> ComputeFactor(int width, int height, int maxDimension)
     {
         if (width <= 0 || height <= 0)
@@ -32,16 +27,9 @@ public static class ImageDownsampler
         return longestSide <= maxDimension ? 1 : (int)Math.Ceiling(longestSide / (double)maxDimension);
     }
 
-    /// <summary>The output dimensions produced by downsampling a width x height image by an integer factor.</summary>
     public static (int Width, int Height) ComputeDownsampledDimensions(int width, int height, int factor) =>
         ((width + factor - 1) / factor, (height + factor - 1) / factor);
 
-    /// <summary>
-    /// Box-averages <paramref name="source"/> (row-major, <paramref name="width"/> x <paramref name="height"/>)
-    /// into <paramref name="destination"/> at 1/<paramref name="factor"/> resolution. A destination pixel is
-    /// the mean of the finite source pixels in its block; a block with no finite source pixels produces
-    /// <see cref="float.NaN"/>, matching how the renderer already treats invalid pixels.
-    /// </summary>
     public static Result<Unit> Downsample(ReadOnlySpan<float> source, int width, int height, int factor, Span<float> destination)
     {
         if (width <= 0 || height <= 0 || source.Length != width * height)

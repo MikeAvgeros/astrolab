@@ -1,9 +1,5 @@
 namespace AstroLab.Core.Fits;
 
-/// <summary>
-/// The FITS <c>BITPIX</c> keyword values, identifying the physical representation of pixel
-/// data on disk. Values match the FITS standard exactly (negative values denote IEEE floats).
-/// </summary>
 public enum BitPixType
 {
     Byte = 8,

@@ -21,15 +21,6 @@ public static class SourceDetector
     private const double PixelCenterOffset = 0.5;
     private const int Unassigned = -1;
 
-    /// <summary>
-    /// Detects candidate sources in <paramref name="pixels"/>. The background level (image median)
-    /// and noise (robust IQR-based sigma) are estimated globally from the whole image — see
-    /// <see cref="ImageStatistics.ComputeSkyBackground"/> — then every finite pixel more than
-    /// <paramref name="thresholdSigma"/> sigma above the background is flagged and grouped into
-    /// 8-connected regions. Regions smaller than <paramref name="minimumArea"/> pixels are
-    /// discarded; the remainder are ranked by integrated flux (descending) and truncated to
-    /// <paramref name="maxSources"/>. Deterministic for a given input and configuration.
-    /// </summary>
     public static Result<ImmutableArray<DetectedSource>> Detect(
         ReadOnlySpan<float> pixels,
         int width,
@@ -166,13 +157,6 @@ public static class SourceDetector
         }
     }
 
-    /// <summary>
-    /// Iteratively (not recursively, to avoid stack overflow on large blobs) flood-fills the
-    /// 8-connected region of above-threshold pixels reachable from <paramref name="startIndex"/>,
-    /// accumulating flux-weighted centroid, peak, and total-flux statistics as it visits each pixel
-    /// exactly once. <paramref name="stack"/> is a caller-owned, pixel-count-sized scratch buffer
-    /// reused across every region in the image, avoiding a per-region allocation.
-    /// </summary>
     private static SourceCandidate FloodFillRegion(
         ReadOnlySpan<float> pixels, int width, int height, int startIndex, double thresholdValue, double background,
         int[] regionId, int[] stack)

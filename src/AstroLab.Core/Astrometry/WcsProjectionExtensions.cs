@@ -1,5 +1,10 @@
 namespace AstroLab.Core.Astrometry;
 
+/// <summary>
+/// Per-projection math for <see cref="WcsProjection"/>: the FITS <c>CTYPE</c> projection code,
+/// and the conversions between a native latitude and a projection-plane radius that every
+/// zenithal projection needs but computes differently.
+/// </summary>
 public static class WcsProjectionExtensions
 {
     private const double DegreesPerRadian = 180.0 / Math.PI;
@@ -7,7 +12,6 @@ public static class WcsProjectionExtensions
 
     extension(WcsProjection projection)
     {
-        /// <summary>The 3-letter FITS <c>CTYPE</c> projection code (e.g. <c>"TAN"</c>).</summary>
         public string Code => projection switch
         {
             WcsProjection.Tan => "TAN",
@@ -16,7 +20,6 @@ public static class WcsProjectionExtensions
             _ => throw new ArgumentOutOfRangeException(nameof(projection)),
         };
 
-        /// <summary>The projection-plane radius (degrees) corresponding to a native latitude (radians).</summary>
         public double NativeLatitudeToRadiusDegrees(double nativeLatitudeRadians) => projection switch
         {
             WcsProjection.Tan => DegreesPerRadian / Math.Tan(nativeLatitudeRadians),
@@ -25,11 +28,6 @@ public static class WcsProjectionExtensions
             _ => throw new ArgumentOutOfRangeException(nameof(projection)),
         };
 
-        /// <summary>
-        /// The native latitude (radians) corresponding to a projection-plane radius (degrees).
-        /// Callers must independently validate the radius lies within the projection's domain —
-        /// see the per-projection domain checks in <see cref="Wcs"/>.
-        /// </summary>
         public double RadiusDegreesToNativeLatitude(double radiusDegrees) => projection switch
         {
             WcsProjection.Tan => Math.Atan2(DegreesPerRadian, radiusDegrees),
@@ -39,7 +37,6 @@ public static class WcsProjectionExtensions
         };
     }
 
-    /// <summary>Resolves a 3-letter FITS <c>CTYPE</c> projection code to a supported <see cref="WcsProjection"/>, or <see langword="null"/> when unrecognized/unsupported.</summary>
     public static WcsProjection? FromCode(string code) => code switch
     {
         "TAN" => WcsProjection.Tan,

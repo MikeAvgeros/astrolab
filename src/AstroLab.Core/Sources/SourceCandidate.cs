@@ -1,6 +1,5 @@
 namespace AstroLab.Core.Sources;
 
-/// <summary>Accumulated pixel statistics for one connected region discovered during flood-fill labeling, before the minimum-area and max-sources filters are applied.</summary>
 internal readonly record struct SourceCandidate
 {
     private SourceCandidate(int firstPixelIndex, int pixelCount, double peakValue, double totalFlux, double weightedXSum, double weightedYSum, double weightSum)
@@ -14,7 +13,6 @@ internal readonly record struct SourceCandidate
         WeightSum = weightSum;
     }
 
-    /// <summary>The raster-scan pixel index where this region's flood fill started — a fixed, deterministic tie-breaker for sorting equal-flux candidates.</summary>
     public int FirstPixelIndex { get; }
 
     public int PixelCount { get; }

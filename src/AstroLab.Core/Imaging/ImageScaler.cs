@@ -9,10 +9,6 @@ namespace AstroLab.Core.Imaging;
 /// </summary>
 public static class ImageScaler
 {
-    /// <summary>
-    /// Normalizes and stretches every pixel in <paramref name="source"/> into the corresponding
-    /// byte of <paramref name="destination"/>. Non-finite pixels (NaN/Infinity) map to 0.
-    /// </summary>
     public static Result<Unit> Stretch(ReadOnlySpan<float> source, Span<byte> destination, ScaleParameters parameters)
     {
         if (source.Length != destination.Length)
@@ -36,7 +32,6 @@ public static class ImageScaler
         return Result<Unit>.Success(Unit.Value);
     }
 
-    /// <summary>Normalizes and stretches a single pixel value into [0, 1]. Returns 0.0 for non-finite input.</summary>
     public static double NormalizeAndStretch(float value, ScaleParameters parameters)
     {
         if (!float.IsFinite(value))

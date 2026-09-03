@@ -2,12 +2,6 @@ using AstroLab.Core.Fits;
 
 namespace AstroLab.Api.Features.Fits.Inspect;
 
-/// <summary>
-/// Commonly useful astronomical keywords, extracted where present from a FITS header. Every field
-/// is independently nullable — missing metadata is represented as <see langword="null"/> rather
-/// than causing inspection to fail, and no field is assumed to be populated by any particular
-/// instrument or archive.
-/// </summary>
 public sealed record FitsCommonMetadataDto
 {
     private FitsCommonMetadataDto(
@@ -50,13 +44,8 @@ public sealed record FitsCommonMetadataDto
 
     public string? Filter { get; }
 
-    /// <summary>
-    /// The raw <c>RA</c> keyword value, rendered as text regardless of whether the header stores it
-    /// as sexagesimal string or decimal degrees — conventions vary by instrument.
-    /// </summary>
     public string? RightAscension { get; }
 
-    /// <summary>The raw <c>DEC</c> keyword value, rendered as text; see <see cref="RightAscension"/>.</summary>
     public string? Declination { get; }
 
     public double? Equinox { get; }

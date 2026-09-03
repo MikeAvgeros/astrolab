@@ -10,21 +10,10 @@ namespace AstroLab.Core.Photometry;
 /// </summary>
 public static class ApertureEngine
 {
-    /// <summary>
-    /// Default subpixel oversampling factor for fractional pixel-coverage integration. Each
-    /// boundary pixel is sampled on a <c>N x N</c> subgrid, matching the "subpixel" method
-    /// used by common photometry packages.
-    /// </summary>
     private const int DefaultSubpixelOversampling = 5;
 
     private const double PixelCenterOffset = 0.5;
 
-    /// <summary>
-    /// Integrates flux within a circular aperture centred at (<paramref name="centerX"/>,
-    /// <paramref name="centerY"/>), using exact inclusion/exclusion for pixels fully inside or
-    /// outside the aperture and subpixel-supersampled fractional coverage for boundary pixels.
-    /// Non-finite (NaN/Infinity) pixels are excluded from both the flux sum and the aperture area.
-    /// </summary>
     public static Result<ApertureMeasurement> MeasureCircularAperture(
         ReadOnlySpan<float> pixels,
         int width,
@@ -94,11 +83,6 @@ public static class ApertureEngine
         return ApertureMeasurement.Create(flux, area, sampledPixels);
     }
 
-    /// <summary>
-    /// Estimates the local sky background from an annulus between <paramref name="innerRadius"/>
-    /// and <paramref name="outerRadius"/>, using binary pixel-center inclusion (a pixel is a
-    /// sample if its center lies within the annulus). Non-finite pixels are excluded.
-    /// </summary>
     public static Result<AnnulusMeasurement> MeasureAnnulusBackground(
         ReadOnlySpan<float> pixels,
         int width,
@@ -146,11 +130,6 @@ public static class ApertureEngine
             : MeasureAnnulusMedian(pixels, width, xMin, xMax, yMin, yMax, centerX, centerY, innerRadiusSquared, outerRadiusSquared);
     }
 
-    /// <summary>
-    /// Performs a full photometric measurement: source flux within a circular aperture, local
-    /// background estimated from a concentric annulus, and the resulting background-subtracted
-    /// net flux.
-    /// </summary>
     public static Result<NetFluxMeasurement> MeasureNetFlux(
         ReadOnlySpan<float> pixels,
         int width,
@@ -298,12 +277,6 @@ public static class ApertureEngine
         }
     }
 
-    /// <summary>
-    /// The fraction (0..1) of pixel (<paramref name="px"/>, <paramref name="py"/>) that lies
-    /// within <paramref name="radius"/> of the aperture center. Pixels fully inside or fully
-    /// outside are resolved in O(1) via corner-distance checks; only boundary pixels pay the
-    /// cost of subpixel supersampling.
-    /// </summary>
     private static double PixelCoverageFraction(int px, int py, double centerX, double centerY, double radius, int oversampling)
     {
         var nearCornerDistance = NearestCornerDistance(px, py, centerX, centerY);

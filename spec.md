@@ -173,9 +173,15 @@ while §3 defines the higher-level engineering requirements.
 
 ### 4.2 Comments and Literals
 
-- **MUST NOT:** Add `//` comments merely to explain what obvious code does.
-- **MAY:** Use `///` XML documentation comments on public types and members where they improve
-  API documentation.
+- **MUST NOT:** add `//` comments to explain code whose purpose or behaviour is already clear from
+  its implementation.
+- **MUST NOT:** add `///` XML documentation comments to models, DTOs, records, or their properties,
+  including request/response DTOs, and other data-only types. Type and property names **MUST** be
+  sufficiently descriptive and self-documenting so that their purpose and meaning are clear without
+  additional documentation.
+- **MUST:** add a `///` XML documentation comment to:
+  - Every endpoint class (`{Leaf}Endpoint.cs`), describing the endpoint's purpose and behaviour.
+  - Every class in `AstroLab.Core` and `AstroLab.Infrastructure`, describing the class's responsibility.
 - **MUST:** Extract numeric literals that encode domain meaning — scaling factors, thresholds,
   buffer sizes, fallback values, algorithm coefficients, and similar values — into named
   `private const` fields. Structurally self-evident literals such as `0`, `1`, and `2` used as

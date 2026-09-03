@@ -25,7 +25,6 @@ public static class PngRenderer
     private const byte InterlaceMethod = 0;
     private const byte NoFilterScanlineTag = 0;
 
-    /// <summary>Encodes <paramref name="image"/> as a complete PNG file.</summary>
     public static byte[] Encode(RenderedImage image)
     {
         var raw = ToFilteredScanLines(image);
@@ -43,7 +42,6 @@ public static class PngRenderer
         return output.ToArray();
     }
 
-    /// <summary>Prefixes every scanline with a filter-type byte (always 0 / "None") as PNG's raw image data requires.</summary>
     private static byte[] ToFilteredScanLines(RenderedImage image)
     {
         var stride = image.Width * BytesPerPixel;

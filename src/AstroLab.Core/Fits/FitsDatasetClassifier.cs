@@ -21,7 +21,6 @@ public static class FitsDatasetClassifier
 
     private static readonly string[] SpectralCTypePrefixes = ["WAVE", "FREQ", "ENER", "AWAV", "VELO"];
 
-    /// <summary>Classifies a file from the full ordered list of its HDU descriptors.</summary>
     public static FitsDatasetKind Classify(IReadOnlyList<HduDescriptor> hdus)
     {
         if (HasTimeColumn(hdus))
@@ -39,19 +38,8 @@ public static class FitsDatasetClassifier
         return HasTable(hdus) ? FitsDatasetKind.Table : FitsDatasetKind.Unknown;
     }
 
-    /// <summary>
-    /// Whether <paramref name="hdu"/> carries non-empty pixel data — the same "is this a candidate
-    /// data HDU" predicate <see cref="Classify"/> uses internally, exposed so
-    /// <c>AstroLab.Infrastructure.Storage.FitsDatasetReader</c> can locate the exact same HDU it
-    /// classifies rather than re-deriving the rule independently (and risking the two diverging).
-    /// </summary>
     public static bool HasPixelData(HduDescriptor hdu) => hdu.Image is { PixelCount: > 0 };
 
-    /// <summary>
-    /// Classifies <paramref name="hdus"/> and succeeds only when the result matches
-    /// <paramref name="required"/>; otherwise fails with a validation <see cref="Error"/> naming
-    /// both the required and the actual kind.
-    /// </summary>
     public static Result<FitsDatasetKind> EnsureKind(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind required)
     {
         var actual = Classify(hdus);
@@ -88,13 +76,6 @@ public static class FitsDatasetClassifier
         return false;
     }
 
-    /// <summary>
-    /// Whether <paramref name="hdu"/> — the specific HDU a caller would actually load pixel data
-    /// from — is itself marked as spectral, either by dimensionality (a bare 1D array) or by its
-    /// own <c>DISPAXIS</c>/<c>CTYPEn</c> header cards. Deliberately scoped to this one HDU rather
-    /// than scanning every HDU in the file: an unrelated extension's spectral markers must never
-    /// reclassify a *different* HDU's plain image data as a spectrum (see spec.md §4.4).
-    /// </summary>
     private static bool IsSpectrum(HduDescriptor hdu)
     {
         if (hdu.Image!.Value.NAxes.Length == SingleAxisDimension)

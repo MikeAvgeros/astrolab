@@ -1,6 +1,5 @@
 namespace AstroLab.Core.Photometry;
 
-/// <summary>The result of a full aperture-photometry measurement: source flux net of local background.</summary>
 public readonly record struct NetFluxMeasurement
 {
     private NetFluxMeasurement(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)

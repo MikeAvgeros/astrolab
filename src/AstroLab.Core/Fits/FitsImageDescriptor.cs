@@ -3,10 +3,6 @@ using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Fits;
 
-/// <summary>
-/// The pixel-array shape and physical-scaling metadata for an HDU, derived purely from its
-/// <see cref="FitsHeader"/> (<c>BITPIX</c>, <c>NAXISn</c>, <c>BZERO</c>, <c>BSCALE</c>, <c>BLANK</c>).
-/// </summary>
 public readonly record struct FitsImageDescriptor
 {
     private const double DefaultBZero = 0.0;
@@ -31,20 +27,12 @@ public readonly record struct FitsImageDescriptor
 
     public long? Blank { get; }
 
-    /// <summary>The total number of pixels across all axes, or 0 when the HDU carries no data (<c>NAXIS</c> = 0).</summary>
     public long PixelCount => NAxes.IsDefaultOrEmpty ? 0 : NAxes.Aggregate(1L, (acc, n) => acc * n);
 
-    /// <summary>The size, in bytes, of the raw pixel array as stored on disk.</summary>
     public long DataSizeBytes => BitPix.BytesPerPixel() * PixelCount;
 
-    /// <summary>Applies the <c>BZERO</c>/<c>BSCALE</c> linear transform to convert a raw stored value to its physical value.</summary>
     public double ToPhysical(double rawValue) => rawValue * BScale + BZero;
 
-    /// <summary>
-    /// Interprets this descriptor's axes as a 2D raster (width, height) for algorithms that operate
-    /// on flattened row-major pixel arrays: a 1D array is treated as a single-row image, and only
-    /// the first two axes of a higher-dimensional cube are used.
-    /// </summary>
     public (int Width, int Height) Resolve2DDimensions() => NAxes.Length switch
     {
         >= 2 => (NAxes[0], NAxes[1]),

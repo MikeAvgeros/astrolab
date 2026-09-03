@@ -16,7 +16,6 @@ public static class FitsImageRenderer
     private const double DefaultWhitePoint = 1.0;
     private const int RgbChannelCount = 3;
 
-    /// <summary>Applies stretch and color mapping, producing an in-memory RGB image without modifying the source pixels.</summary>
     public static Result<RenderedImage> Render(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options)
     {
         if (width <= 0 || height <= 0 || pixels.Length != width * height)
@@ -107,7 +106,6 @@ public static class FitsImageRenderer
         return RenderedImage.Create(workingWidth, workingHeight, rgb);
     }
 
-    /// <summary>Renders and PNG-encodes a pixel array in one step.</summary>
     public static Result<byte[]> RenderToPng(ReadOnlySpan<float> pixels, int width, int height, RenderOptions options) =>
         Render(pixels, width, height, options).Map(PngRenderer.Encode);
 }

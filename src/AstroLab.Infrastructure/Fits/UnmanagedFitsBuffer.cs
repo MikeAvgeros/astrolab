@@ -24,10 +24,8 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         LengthBytes = lengthBytes;
     }
 
-    /// <summary>The size of the allocation, in bytes.</summary>
     public nuint LengthBytes { get; }
 
-    /// <summary>Allocates a new zero-initialized native buffer of the requested size.</summary>
     public static UnmanagedFitsBuffer Allocate(nuint lengthBytes)
     {
         if (lengthBytes == 0)
@@ -50,7 +48,6 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         return new UnmanagedFitsBuffer(pointer, lengthBytes);
     }
 
-    /// <summary>Copies <paramref name="source"/> into the buffer at <paramref name="destinationOffset"/> bytes, without ever materializing the full buffer as a managed array.</summary>
     public void CopyFrom(ReadOnlySpan<byte> source, nuint destinationOffset = 0)
     {
         ThrowIfDisposed();
@@ -64,7 +61,6 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         source.CopyTo(new Span<byte>(_pointer + destinationOffset, source.Length));
     }
 
-    /// <summary>A span over the entire buffer. Only valid for buffers up to <see cref="int.MaxValue"/> bytes.</summary>
     public Span<byte> AsSpan()
     {
         ThrowIfDisposed();
@@ -78,7 +74,6 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         return new Span<byte>(_pointer, (int)LengthBytes);
     }
 
-    /// <summary>A span over a byte-addressed slice of the buffer, for buffers too large to view in a single <see cref="Span{T}"/>.</summary>
     public Span<byte> AsSpan(nuint offset, int length)
     {
         ThrowIfDisposed();
@@ -91,7 +86,6 @@ public sealed unsafe class UnmanagedFitsBuffer : IDisposable
         return new Span<byte>(_pointer + offset, length);
     }
 
-    /// <summary>Reinterprets the buffer as 32-bit floating-point pixels. <see cref="LengthBytes"/> must be a multiple of <c>sizeof(float)</c>.</summary>
     public ReadOnlySpan<float> AsFloatSpan()
     {
         ThrowIfDisposed();

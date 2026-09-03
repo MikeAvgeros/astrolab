@@ -30,12 +30,19 @@ public sealed record AperturePhotometryRequest
 
     public static AperturePhotometryRequest Create(double centerX, double centerY, double apertureRadius, double annulusInnerRadius, double annulusOuterRadius, BackgroundEstimationMethod backgroundMethod = BackgroundEstimationMethod.Median)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(apertureRadius);
+        var request = new AperturePhotometryRequest(centerX, centerY, apertureRadius, annulusInnerRadius, annulusOuterRadius, backgroundMethod);
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(annulusInnerRadius);
+        request.Validate();
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(annulusOuterRadius);
+        return request;
+    }
 
-        return new AperturePhotometryRequest(centerX, centerY, apertureRadius, annulusInnerRadius, annulusOuterRadius, backgroundMethod);
+    public void Validate()
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureRadius);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(AnnulusInnerRadius);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(AnnulusOuterRadius);
     }
 }

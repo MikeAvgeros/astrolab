@@ -233,6 +233,13 @@ while §3 defines the higher-level engineering requirements.
   class. `Create(...)` validates its arguments and returns `new(...)`; the constructor performs no
   validation and MUST NOT be called from outside the record's own file. This makes the record
   impossible to construct in an invalid state.
+- **MUST:** When a record's invariants need checking against an already-constructed instance (see
+  the POST body-binding EXCEPTION below), the record exposes a public `Validate()` instance method
+  containing those checks, and `Create(...)` calls it internally instead of duplicating the checks
+  inline. This keeps one implementation of a record's invariants shared by both the
+  construct-and-validate path (`Create(...)`) and the validate-an-existing-instance path
+  (`Validate()`), so neither can drift out of sync with the other or with the record's own
+  properties.
 
   Example:
 
@@ -252,13 +259,24 @@ while §3 defines the higher-level engineering requirements.
 
       public static ApertureMeasurement Create(double flux, double area, int sampledPixelCount)
       {
-          ArgumentOutOfRangeException.ThrowIfNegative(area);
-          ArgumentOutOfRangeException.ThrowIfNegative(sampledPixelCount);
+          var measurement = new ApertureMeasurement(flux, area, sampledPixelCount);
 
-          return new ApertureMeasurement(flux, area, sampledPixelCount);
+          measurement.Validate();
+
+          return measurement;
+      }
+
+      public void Validate()
+      {
+          ArgumentOutOfRangeException.ThrowIfNegative(Area);
+          ArgumentOutOfRangeException.ThrowIfNegative(SampledPixelCount);
       }
   }
   ```
+
+  A record with no invariants to check (an empty `Create(...)` body) MUST NOT add an empty
+  `Validate()` method purely for symmetry — omit both the method and any call site that would
+  otherwise invoke it.
 
   This is an explicit (not primary) constructor, so it does not fall under §4.1's primary
   constructor ban — that ban targets classes and structs; records are not mentioned there because
@@ -275,7 +293,14 @@ while §3 defines the higher-level engineering requirements.
   (`System.Text.Json.Serialization`) so `System.Text.Json` can still use it during model binding.
   Construction via the framework bypasses `Create`'s validation exactly as it did under the old
   factory convention. Hand-written construction of such a DTO SHOULD still go through `Create`
-  when validation is required.
+  when validation is required. Because the endpoint handler receives an already-constructed
+  instance from model binding, it MUST call that instance's own `request.Validate()` (see the
+  `Validate()` bullet above) as the first line of the handler body rather than re-invoking
+  `Create(...)` by re-passing the instance's own properties back to it — the latter constructs a
+  redundant second instance purely to trigger validation as a side effect, and every property has
+  to be threaded through the call by hand, so an added property silently stops being carried into
+  the revalidated instance (and silently stops being validated) unless every such call site is
+  remembered and updated. See §6.5 for the full GET vs. POST request-validation flow.
 - **EXCEPTION:** A request DTO record bound via `[AsParameters]` (query/route parameter binding)
   MUST keep a **public** constructor. ASP.NET Core's parameter-binding metadata cache requires a
   public constructor for `[AsParameters]` complex-type binding and does not honor
@@ -692,6 +717,28 @@ representation changes.
 Shared boundary enums such as `StretchMode`, `ColorMap`, `DispersionAxis`, and `ArchiveSource`
 are permitted when they are plain string-serialised discriminators rather than domain models.
 
+### Request Validation: GET vs. POST
+
+A request DTO's private-constructor-plus-`Create(...)` pattern (§4.4) means the two HTTP binding
+paths reach validation differently, and each leaf handler MUST follow the path matching how its
+request DTO is bound:
+
+- **GET (query-bound).** Nothing constructs the DTO before the handler runs — minimal API binds
+  each query parameter to a plain primitive/enum/nullable handler argument (§6.5 intro; never
+  `[AsParameters]` on a private-constructor DTO, see §4.4). The handler's first line constructs
+  the request DTO by calling `XxxRequest.Create(...)` on those primitives, which both builds and
+  validates it in one step.
+- **POST (body-bound).** `System.Text.Json` constructs the DTO directly via its private
+  `[JsonConstructor]` (§4.4 EXCEPTION), bypassing `Create`'s validation entirely, so the handler
+  receives an already-built, not-yet-validated instance as a model-bound parameter. The handler's
+  first line MUST call `request.Validate()` on that instance — never reconstruct it by calling
+  `Create(...)` with its own properties (§4.4). A request DTO with no invariants to check has no
+  `Validate()` method and needs no call at all.
+
+Either path throws `ArgumentException`/`ArgumentOutOfRangeException` on invalid input;
+`RequestValidationExceptionHandler` (`AstroLab.Api`) maps any `ArgumentException` escaping a
+handler to `400 Bad Request` before `GlobalExceptionHandler`'s generic `500` catch-all runs.
+
 ### Roadmap Endpoint Rule
 
 A feature scaffolded before its Core algorithm exists MUST return HTTP 501. Its handler MUST
@@ -820,10 +867,22 @@ file, or another representation.
 
 ### 6.8 Global Exception Handling
 
-**Location:** `AstroLab.Api/GlobalExceptionHandler.cs`, `Program.cs`
+**Location:** `AstroLab.Api/RequestValidationExceptionHandler.cs`,
+`AstroLab.Api/GlobalExceptionHandler.cs`, `Program.cs`
 
 `Result<T>` covers expected failures such as validation, missing data, and deliberately
 unimplemented capabilities.
+
+A request DTO's `Create(...)`/`Validate()` (§4.4, §6.5) throws `ArgumentException` or
+`ArgumentOutOfRangeException` (a subtype of `ArgumentException`) for invalid input rather than
+returning a `Result<T>`, since it runs before there is any domain object to attach an `Error` to.
+`RequestValidationExceptionHandler`, registered ahead of `GlobalExceptionHandler` via
+`AddExceptionHandler<T>()`, catches any `ArgumentException` escaping a handler and maps it to
+`400 Bad Request` with title `invalid_request` and the exception's own message as `detail`. Both
+exception handlers run in registration order — `RequestValidationExceptionHandler` claims
+`ArgumentException` first (returning `true`) and `GlobalExceptionHandler` only ever sees whatever
+it does not (returning `false` for), so the more specific `400` mapping is never shadowed by the
+generic `500`.
 
 Unexpected exceptions escaping an endpoint are caught by `GlobalExceptionHandler`, registered
 with `AddExceptionHandler<T>()` and `AddProblemDetails()`, and enabled with

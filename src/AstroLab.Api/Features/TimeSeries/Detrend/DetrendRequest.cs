@@ -14,8 +14,15 @@ public sealed record DetrendRequest
 
     public static DetrendRequest Create(string method)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        var request = new DetrendRequest(method);
 
-        return new DetrendRequest(method);
+        request.Validate();
+
+        return request;
+    }
+
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(Method);
     }
 }

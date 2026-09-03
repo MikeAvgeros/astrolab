@@ -18,8 +18,15 @@ public sealed record DownloadRequest
 
     public static DownloadRequest Create(ArchiveSource archive, string datasetId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(datasetId);
+        var request = new DownloadRequest(archive, datasetId);
 
-        return new DownloadRequest(archive, datasetId);
+        request.Validate();
+
+        return request;
+    }
+
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(DatasetId);
     }
 }

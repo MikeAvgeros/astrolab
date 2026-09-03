@@ -25,8 +25,15 @@ public sealed record SpectrumExtractionRequest
 
     public static SpectrumExtractionRequest Create(DispersionAxis axis, ImmutableList<double> traceCenters, double apertureHalfWidth, ImmutableList<double>? dispersionCoefficients = null)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(apertureHalfWidth);
+        var request = new SpectrumExtractionRequest(axis, traceCenters, apertureHalfWidth, dispersionCoefficients);
 
-        return new SpectrumExtractionRequest(axis, traceCenters, apertureHalfWidth, dispersionCoefficients);
+        request.Validate();
+
+        return request;
+    }
+
+    public void Validate()
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureHalfWidth);
     }
 }

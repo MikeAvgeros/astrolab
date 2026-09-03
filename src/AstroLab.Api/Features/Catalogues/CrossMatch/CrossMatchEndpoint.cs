@@ -18,7 +18,7 @@ public static class CrossMatchEndpoint
 
     private static IResult CrossMatchSources(CrossMatchRequest request)
     {
-        _ = CrossMatchRequest.Create(request.FileId, request.RadiusArcsec);
+        request.Validate();
 
         return NotImplementedResult.Value("catalogues.crossmatch.not_implemented", "Catalogue cross-matching is not yet implemented.");
     }

@@ -16,10 +16,6 @@ public static class RedshiftEndpoint
         }
     }
 
-    private static IResult EstimateRedshift(string fileId, RedshiftEstimationRequest request)
-    {
-        _ = RedshiftEstimationRequest.Create(request.ObservedWavelengths, request.RestWavelengths);
-
-        return NotImplementedResult.Value("spectroscopy.redshift.not_implemented", "Redshift estimation is not yet implemented.");
-    }
+    private static IResult EstimateRedshift(string fileId, RedshiftEstimationRequest request) =>
+        NotImplementedResult.Value("spectroscopy.redshift.not_implemented", "Redshift estimation is not yet implemented.");
 }

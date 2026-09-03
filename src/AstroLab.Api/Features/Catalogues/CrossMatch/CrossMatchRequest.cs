@@ -17,10 +17,17 @@ public sealed record CrossMatchRequest
 
     public static CrossMatchRequest Create(string fileId, double radiusArcsec)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
+        var request = new CrossMatchRequest(fileId, radiusArcsec);
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radiusArcsec);
+        request.Validate();
 
-        return new CrossMatchRequest(fileId, radiusArcsec);
+        return request;
+    }
+
+    public void Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(FileId);
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RadiusArcsec);
     }
 }

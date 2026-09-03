@@ -22,7 +22,7 @@ public static class DownloadEndpoint
         ILocalFileStore fileStore,
         CancellationToken cancellationToken)
     {
-        request = DownloadRequest.Create(request.Archive, request.DatasetId);
+        request.Validate();
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 

@@ -16,6 +16,10 @@ public static class LinesEndpoint
         }
     }
 
-    private static IResult DetectLines(string fileId, [AsParameters] LineDetectionRequest request) =>
-        NotImplementedResult.Value("spectroscopy.lines.not_implemented", "Spectral line detection is not yet implemented.");
+    private static IResult DetectLines(string fileId, double? significanceThreshold = null)
+    {
+        _ = LineDetectionRequest.Create(significanceThreshold);
+
+        return NotImplementedResult.Value("spectroscopy.lines.not_implemented", "Spectral line detection is not yet implemented.");
+    }
 }

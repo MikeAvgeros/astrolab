@@ -14,6 +14,7 @@ builder.Services.AddAstroLabInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<RequestValidationExceptionHandler>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.ConfigureHttpJsonOptions(options =>

@@ -30,8 +30,10 @@ public static class AstrometryEndpoint
     }
 
     private static async Task<IResult> ConvertPixelToWorldAsync(
-        string fileId, [AsParameters] PixelToWorldRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+        string fileId, double pixelX, double pixelY, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
+        var request = PixelToWorldRequest.Create(pixelX, pixelY);
+
         var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
 
         if (wcsResult.IsFailure)
@@ -45,8 +47,10 @@ public static class AstrometryEndpoint
     }
 
     private static async Task<IResult> ConvertWorldToPixelAsync(
-        string fileId, [AsParameters] WorldToPixelRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+        string fileId, double rightAscension, double declination, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
+        var request = WorldToPixelRequest.Create(rightAscension, declination);
+
         var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
 
         if (wcsResult.IsFailure)

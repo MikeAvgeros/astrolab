@@ -16,6 +16,10 @@ public static class PeriodSearchEndpoint
         }
     }
 
-    private static IResult SearchForPeriod(string fileId, [AsParameters] PeriodSearchRequest request) =>
-        NotImplementedResult.Value("timeseries.periodsearch.not_implemented", "Periodicity search is not yet implemented.");
+    private static IResult SearchForPeriod(string fileId, double minPeriod, double maxPeriod)
+    {
+        _ = PeriodSearchRequest.Create(minPeriod, maxPeriod);
+
+        return NotImplementedResult.Value("timeseries.periodsearch.not_implemented", "Periodicity search is not yet implemented.");
+    }
 }

@@ -18,8 +18,15 @@ public static class SourcesEndpoint
     }
 
     private static async Task<IResult> DetectSourcesAsync(
-        string fileId, [AsParameters] SourceDetectionRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+        string fileId,
+        FitsDatasetReader datasetReader,
+        CancellationToken cancellationToken,
+        double thresholdSigma = SourceDetector.DefaultThresholdSigma,
+        int minimumArea = SourceDetector.DefaultMinimumArea,
+        int maxSources = SourceDetector.DefaultMaxSources)
     {
+        var request = SourceDetectionRequest.Create(thresholdSigma, minimumArea, maxSources);
+
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
 
         if (datasetResult.IsFailure)

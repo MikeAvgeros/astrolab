@@ -4,7 +4,7 @@ namespace AstroLab.Api.Features.Archives.Search;
 
 public sealed record ObservationSearchRequest
 {
-    private const int DefaultMaxResults = 50;
+    internal const int DefaultMaxResults = 50;
 
     private ObservationSearchRequest(
         ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,

@@ -5,9 +5,9 @@ namespace AstroLab.Api.Features.Images.Render;
 
 public sealed record RenderImageRequest
 {
-    private const double DefaultLowerPercentile = 1.0;
-    private const double DefaultUpperPercentile = 99.0;
-    private const double DefaultAsinhSoftening = 0.1;
+    internal const double DefaultLowerPercentile = 1.0;
+    internal const double DefaultUpperPercentile = 99.0;
+    internal const double DefaultAsinhSoftening = 0.1;
 
     private RenderImageRequest(StretchMode stretch = StretchMode.Asinh, ColorMap colorMap = ColorMap.Grayscale, 
         double? blackPoint = null, double? whitePoint = null, double lowerPercentile = DefaultLowerPercentile, 

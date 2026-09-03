@@ -16,6 +16,10 @@ public static class DetrendEndpoint
         }
     }
 
-    private static IResult DetrendLightCurve(string fileId, DetrendRequest request) =>
-        NotImplementedResult.Value("timeseries.detrend.not_implemented", "Light curve detrending is not yet implemented.");
+    private static IResult DetrendLightCurve(string fileId, DetrendRequest request)
+    {
+        _ = DetrendRequest.Create(request.Method);
+
+        return NotImplementedResult.Value("timeseries.detrend.not_implemented", "Light curve detrending is not yet implemented.");
+    }
 }

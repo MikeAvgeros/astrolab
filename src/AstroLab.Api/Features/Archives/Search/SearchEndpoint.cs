@@ -15,13 +15,20 @@ public static class SearchEndpoint
     }
 
     private static async Task<IResult> SearchAsync(
-        [AsParameters] ObservationSearchRequest request,
+        ArchiveSource archive,
         IEsoArchiveClient esoClient,
         IMastArchiveClient mastClient,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? target = null,
+        string? mission = null,
+        string? instrument = null,
+        double? searchRadiusDegrees = null,
+        int maxResults = ObservationSearchRequest.DefaultMaxResults)
     {
-        var query = request.SearchRadiusDegrees is { } searchRadiusDegrees
-            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, searchRadiusDegrees: searchRadiusDegrees, maxResults: request.MaxResults)
+        var request = ObservationSearchRequest.Create(archive, target, mission, instrument, searchRadiusDegrees, maxResults);
+
+        var query = request.SearchRadiusDegrees is { } searchRadiusDegreesValue
+            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, searchRadiusDegrees: searchRadiusDegreesValue, maxResults: request.MaxResults)
             : ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, maxResults: request.MaxResults);
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);

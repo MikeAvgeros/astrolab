@@ -22,6 +22,8 @@ public static class ExtractEndpoint
         FitsDatasetReader datasetReader,
         CancellationToken cancellationToken)
     {
+        request = SpectrumExtractionRequest.Create(request.Axis, request.TraceCenters, request.ApertureHalfWidth, request.DispersionCoefficients);
+
         var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
 
         if (datasetResult.IsFailure)

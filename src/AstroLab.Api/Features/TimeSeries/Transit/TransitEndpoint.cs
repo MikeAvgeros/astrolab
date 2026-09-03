@@ -16,6 +16,10 @@ public static class TransitEndpoint
         }
     }
 
-    private static IResult SearchForTransits(string fileId, [AsParameters] TransitRequest request) =>
-        NotImplementedResult.Value("timeseries.transit.not_implemented", "Transit search is not yet implemented.");
+    private static IResult SearchForTransits(string fileId, double minPeriod, double maxPeriod, double minTransitDepth)
+    {
+        _ = TransitRequest.Create(minPeriod, maxPeriod, minTransitDepth);
+
+        return NotImplementedResult.Value("timeseries.transit.not_implemented", "Transit search is not yet implemented.");
+    }
 }

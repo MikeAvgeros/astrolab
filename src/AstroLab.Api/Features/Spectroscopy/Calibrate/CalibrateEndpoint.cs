@@ -16,6 +16,10 @@ public static class CalibrateEndpoint
         }
     }
 
-    private static IResult CalibrateWavelengths(string fileId, WavelengthCalibrationRequest request) =>
-        NotImplementedResult.Value("spectroscopy.calibrate.not_implemented", "Wavelength calibration is not yet implemented.");
+    private static IResult CalibrateWavelengths(string fileId, WavelengthCalibrationRequest request)
+    {
+        _ = WavelengthCalibrationRequest.Create(request.PixelPositions, request.KnownWavelengths);
+
+        return NotImplementedResult.Value("spectroscopy.calibrate.not_implemented", "Wavelength calibration is not yet implemented.");
+    }
 }

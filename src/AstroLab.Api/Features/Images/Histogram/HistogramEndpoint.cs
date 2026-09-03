@@ -17,10 +17,12 @@ public static class HistogramEndpoint
 
     private static async Task<IResult> GetHistogramAsync(
         string fileId,
-        [AsParameters] HistogramRequest request,
         FitsDatasetReader datasetReader,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int binCount = ImageStatistics.DefaultDisplayHistogramBinCount)
     {
+        var request = HistogramRequest.Create(binCount);
+
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
 
         if (datasetResult.IsFailure)

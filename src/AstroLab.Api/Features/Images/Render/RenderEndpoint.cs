@@ -1,3 +1,4 @@
+using AstroLab.Core.Imaging;
 using AstroLab.Infrastructure.ImageRendering;
 using AstroLab.Infrastructure.Storage;
 
@@ -17,10 +18,20 @@ public static class RenderEndpoint
 
     private static async Task<IResult> RenderAsync(
         string fileId,
-        [AsParameters] RenderImageRequest request,
         FitsDatasetReader datasetReader,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StretchMode stretch = StretchMode.Asinh,
+        ColorMap colorMap = ColorMap.Grayscale,
+        double? blackPoint = null,
+        double? whitePoint = null,
+        double lowerPercentile = RenderImageRequest.DefaultLowerPercentile,
+        double upperPercentile = RenderImageRequest.DefaultUpperPercentile,
+        double asinhSoftening = RenderImageRequest.DefaultAsinhSoftening,
+        int? maxDimension = RenderOptions.DefaultMaxDimension)
     {
+        var request = RenderImageRequest.Create(
+            stretch, colorMap, blackPoint, whitePoint, lowerPercentile, upperPercentile, asinhSoftening, maxDimension);
+
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
 
         if (datasetResult.IsFailure)

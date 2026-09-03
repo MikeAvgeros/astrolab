@@ -16,6 +16,10 @@ public static class QueryEndpoint
         }
     }
 
-    private static IResult QueryCatalogue([AsParameters] CatalogueQueryRequest request) =>
-        NotImplementedResult.Value("catalogues.query.not_implemented", "Catalogue querying is not yet implemented.");
+    private static IResult QueryCatalogue(double rightAscension, double declination, double radiusArcsec)
+    {
+        _ = CatalogueQueryRequest.Create(rightAscension, declination, radiusArcsec);
+
+        return NotImplementedResult.Value("catalogues.query.not_implemented", "Catalogue querying is not yet implemented.");
+    }
 }

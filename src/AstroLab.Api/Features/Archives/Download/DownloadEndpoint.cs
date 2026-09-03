@@ -22,6 +22,8 @@ public static class DownloadEndpoint
         ILocalFileStore fileStore,
         CancellationToken cancellationToken)
     {
+        request = DownloadRequest.Create(request.Archive, request.DatasetId);
+
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 
         var downloadResult = await client.DownloadAsync(request.DatasetId, cancellationToken);

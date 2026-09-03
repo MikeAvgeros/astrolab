@@ -21,6 +21,9 @@ public static class PhotometryEndpoint
         FitsDatasetReader datasetReader,
         CancellationToken cancellationToken)
     {
+        request = AperturePhotometryRequest.Create(
+            request.CenterX, request.CenterY, request.ApertureRadius, request.AnnulusInnerRadius, request.AnnulusOuterRadius, request.BackgroundMethod);
+
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
         if (datasetResult.IsFailure)
         {

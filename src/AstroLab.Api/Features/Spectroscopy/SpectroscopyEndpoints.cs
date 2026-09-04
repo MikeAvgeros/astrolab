@@ -1,4 +1,5 @@
 using AstroLab.Api.Features.Spectroscopy.Calibrate;
+using AstroLab.Api.Features.Spectroscopy.Compare;
 using AstroLab.Api.Features.Spectroscopy.Extract;
 using AstroLab.Api.Features.Spectroscopy.Lines;
 using AstroLab.Api.Features.Spectroscopy.Redshift;
@@ -20,6 +21,8 @@ public static class SpectroscopyEndpoints
             group.MapLinesEndpoint();
 
             group.MapRedshiftEndpoint();
+
+            group.MapCompareEndpoint();
         }
     }
 }

@@ -4,6 +4,7 @@ using AstroLab.Api.Features.Archives;
 using AstroLab.Api.Features.Catalogues;
 using AstroLab.Api.Features.Fits;
 using AstroLab.Api.Features.Images;
+using AstroLab.Api.Features.Measurements;
 using AstroLab.Api.Features.Spectroscopy;
 using AstroLab.Api.Features.TimeSeries;
 using AstroLab.Infrastructure;
@@ -36,6 +37,7 @@ app.MapSpectroscopyEndpoints();
 app.MapArchivesEndpoints();
 app.MapTimeSeriesEndpoints();
 app.MapCataloguesEndpoints();
+app.MapMeasurementsEndpoints();
 
 app.Run();
 

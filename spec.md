@@ -397,20 +397,41 @@ AstroLab.slnx
 │   │   │   │   ├── Statistics/                     #   Pixel statistics
 │   │   │   │   ├── Photometry/                     #   Aperture flux measurement
 │   │   │   │   ├── Sources/                        #   Source detection — roadmap, HTTP 501 (§4.1 note)
-│   │   │   │   └── Astrometry/                     #   Pixel↔world WCS — roadmap, HTTP 501 (§4.1 note)
+│   │   │   │   ├── Astrometry/                     #   Pixel↔world WCS — roadmap, HTTP 501 (§4.1 note)
+│   │   │   │   ├── MultiPhotometry/                #   Per-source flux/magnitude/uncertainty — roadmap, HTTP 501
+│   │   │   │   ├── DifferentialPhotometry/         #   Target-vs-comparison differential magnitude — roadmap, HTTP 501
+│   │   │   │   ├── SourceCharacterization/         #   Source shape/ellipticity — roadmap, HTTP 501
+│   │   │   │   ├── Background/                     #   Mesh-based background modelling — roadmap, HTTP 501
+│   │   │   │   ├── Segmentation/                   #   Per-source pixel masks — roadmap, HTTP 501
+│   │   │   │   ├── Compare/                        #   Two-image comparison/subtraction — roadmap, HTTP 501
+│   │   │   │   ├── Align/                          #   Two-image registration transform — roadmap, HTTP 501
+│   │   │   │   ├── Stack/                          #   Multi-image combination — roadmap, HTTP 501
+│   │   │   │   ├── Separation/                     #   Angular separation via WCS — roadmap, HTTP 501
+│   │   │   │   ├── Footprint/                      #   Sky footprint corners — roadmap, HTTP 501
+│   │   │   │   └── Overlay/                        #   PNG render with sources overlaid — roadmap, HTTP 501
 │   │   │   ├── Spectroscopy/                       # "What can I learn from this spectrum?"
 │   │   │   │   ├── Extract/                        #   Boxcar extraction + wavelength calibration
 │   │   │   │   ├── Calibrate/                      #   Wavelength-dispersion fitting — roadmap, HTTP 501
 │   │   │   │   ├── Lines/                          #   Spectral line detection — roadmap, HTTP 501
-│   │   │   │   └── Redshift/                       #   Redshift estimation — roadmap, HTTP 501
+│   │   │   │   ├── Redshift/                       #   Redshift estimation — roadmap, HTTP 501
+│   │   │   │   └── Compare/                        #   Cross-correlate two spectra — roadmap, HTTP 501
 │   │   │   ├── TimeSeries/                         # "What can I learn from this time series?" — roadmap feature
 │   │   │   │   ├── LightCurve/                     #   Flux-vs-time extraction — HTTP 501
 │   │   │   │   ├── Detrend/                        #   Trend removal — HTTP 501
 │   │   │   │   ├── PeriodSearch/                   #   Periodicity search — HTTP 501
-│   │   │   │   └── Transit/                        #   Transit (brightness-dip) search — HTTP 501
+│   │   │   │   ├── Transit/                        #   Transit (brightness-dip) search — HTTP 501
+│   │   │   │   └── Compare/                        #   Compare two light curves — HTTP 501
 │   │   │   ├── Catalogues/                         # External catalogue integration — roadmap feature
 │   │   │   │   ├── Query/                          #   Cone-search query — HTTP 501
 │   │   │   │   └── CrossMatch/                     #   Source cross-match — HTTP 501
+│   │   │   ├── Measurements/                       # Higher-level derived measurements — roadmap feature
+│   │   │   │   ├── StellarColour/                  #   Two-band colour index — HTTP 501
+│   │   │   │   ├── StellarTemperature/             #   Colour → estimated temperature — HTTP 501
+│   │   │   │   ├── SpectralClassification/         #   Estimated spectral type — HTTP 501
+│   │   │   │   ├── RadialVelocity/                 #   Doppler shift → radial velocity — HTTP 501
+│   │   │   │   ├── GalaxyMorphology/               #   Size/ellipticity/morphology estimate — HTTP 501
+│   │   │   │   ├── SurfaceBrightness/              #   Magnitude per square arcsecond — HTTP 501
+│   │   │   │   └── PhysicalSize/                   #   Angular + distance → physical size — HTTP 501
 │   │   │   └── Archives/                           # Archive metadata search/download
 │   │   │       ├── Search/
 │   │   │       └── Download/
@@ -424,11 +445,15 @@ AstroLab.slnx
 └── storage/                                        # Local disk directory for raw FITS files (gitignored)
 ```
 
-**Roadmap:** `Images/Sources`, `Images/Astrometry`, `Spectroscopy/Calibrate`,
-`Spectroscopy/Lines`, `Spectroscopy/Redshift`, `TimeSeries`, and `Catalogues` are currently
-scaffolded at the API boundary but not implemented. Their endpoints return HTTP 501 via the
-shared `NotImplementedResult` helper (§6.5). They MUST NOT contain fake success responses,
-hard-coded results, or partial scientific implementations.
+**Roadmap:** `Images/Sources`, `Images/Astrometry`, `Images/MultiPhotometry`,
+`Images/DifferentialPhotometry`, `Images/SourceCharacterization`, `Images/Background`,
+`Images/Segmentation`, `Images/Compare`, `Images/Align`, `Images/Stack`, `Images/Separation`,
+`Images/Footprint`, `Images/Overlay`, `Spectroscopy/Calibrate`, `Spectroscopy/Lines`,
+`Spectroscopy/Redshift`, `Spectroscopy/Compare`, `TimeSeries` (including `TimeSeries/Compare`),
+`Catalogues`, and the entire `Measurements` feature area are currently scaffolded at the API
+boundary but not implemented. Their endpoints return HTTP 501 via the shared
+`NotImplementedResult` helper (§6.5). They MUST NOT contain fake success responses, hard-coded
+results, or partial scientific implementations.
 
 When a corresponding Core algorithm is implemented, replace the endpoint's
 `NotImplementedResult.Value(...)` call with the normal Request → Infrastructure → Core →

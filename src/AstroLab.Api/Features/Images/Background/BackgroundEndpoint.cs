@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.Background;
 /// <summary>
 /// Roadmap slice: modelling the 2D sky background of a staged image on a mesh, rather than a
 /// single global estimate. Request/response contract is final; the modelling algorithm itself is
-/// not yet implemented (see spec.md §4.1), so this route always returns HTTP 501.
+/// not yet implemented (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class BackgroundEndpoint
 {

@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Measurements.PhysicalSize;
 
 /// <summary>
 /// Roadmap slice: converting an angular size and a known distance into a physical size. Request/
-/// response contract is final; the calculation itself is not yet implemented (see spec.md §4.1),
+/// response contract is final; the calculation itself is not yet implemented (see spec.md §6.5),
 /// so this route always returns HTTP 501. Distance is a caller-supplied assumption, so the result
 /// is always distance-dependent rather than a direct measurement.
 /// </summary>

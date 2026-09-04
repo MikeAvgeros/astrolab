@@ -5,7 +5,7 @@ namespace AstroLab.Api.Features.Images.Segmentation;
 /// <summary>
 /// Roadmap slice: segmenting a staged image into per-source pixel masks for source isolation and
 /// masking. Request/response contract is final; the segmentation algorithm itself is not yet
-/// implemented (see spec.md §4.1), so this route always returns HTTP 501.
+/// implemented (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class SegmentationEndpoint
 {

@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Measurements.StellarColour;
 /// <summary>
 /// Roadmap slice: measuring a star's brightness and colour index from aperture photometry across
 /// two staged images taken in different bands. Request/response contract is final; the
-/// measurement itself is not yet implemented (see spec.md §4.1), so this route always returns
+/// measurement itself is not yet implemented (see spec.md §6.5), so this route always returns
 /// HTTP 501.
 /// </summary>
 public static class StellarColourEndpoint

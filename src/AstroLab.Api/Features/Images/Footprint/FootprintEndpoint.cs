@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.Footprint;
 /// <summary>
 /// Roadmap slice: reporting the sky footprint (corner RA/Dec) of a staged image, derived from its
 /// WCS and pixel dimensions. Response contract is final; the calculation itself is not yet wired
-/// up (see spec.md §4.1), so this route always returns HTTP 501.
+/// up (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class FootprintEndpoint
 {

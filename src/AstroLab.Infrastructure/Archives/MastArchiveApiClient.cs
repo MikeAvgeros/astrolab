@@ -66,7 +66,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
 
             if (resolved is not null)
                 return Result<MastTarget>.Success(
-                    new MastTarget(resolved.CanonicalName ?? target, resolved.RightAscension!.Value,
+                    MastTarget.Create(resolved.CanonicalName ?? target, resolved.RightAscension!.Value,
                         resolved.Declination!.Value));
 
             _logger.LogWarning("MAST could not resolve target '{Target}' to sky coordinates", target);
@@ -227,8 +227,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                     continue;
                 }
 
-                products.Add(new MastProduct(
-                    record.DataUri, record.ProductFilename, record.ProductType, record.DataProductType,
+                products.Add(MastProduct.Create(
+                    record.DataUri!, record.ProductFilename, record.ProductType, record.DataProductType,
                     record.CalibLevel, record.Size, record.DataRights));
             }
 
@@ -303,23 +303,23 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         return filters;
     }
 
-    private static MastObservation ToMastObservation(MastCaomRecord record) => new(
-        ObsId: record.ObsId!,
-        TargetName: record.TargetName,
-        Collection: record.ObsCollection,
-        Instrument: record.InstrumentName,
-        DataProductType: record.DataProductType,
-        CalibrationLevel: record.CalibLevel,
-        ObservationStart: record.Min,
-        ObservationEnd: record.Max,
-        ExposureTime: record.ExposureTime,
-        RightAscension: record.RightAscension,
-        Declination: record.Declination,
-        WavelengthMin: record.WavelengthMin,
-        WavelengthMax: record.WavelengthMax,
-        ProposalId: record.ProposalId,
-        ProposalPi: record.ProposalPi,
-        DataRights: record.DataRights);
+    private static MastObservation ToMastObservation(MastCaomRecord record) => MastObservation.Create(
+        obsId: record.ObsId!,
+        targetName: record.TargetName,
+        collection: record.ObsCollection,
+        instrument: record.InstrumentName,
+        dataProductType: record.DataProductType,
+        calibrationLevel: record.CalibLevel,
+        observationStart: record.Min,
+        observationEnd: record.Max,
+        exposureTime: record.ExposureTime,
+        rightAscension: record.RightAscension,
+        declination: record.Declination,
+        wavelengthMin: record.WavelengthMin,
+        wavelengthMax: record.WavelengthMax,
+        proposalId: record.ProposalId,
+        proposalPi: record.ProposalPi,
+        dataRights: record.DataRights);
 
     private static ArchiveObservation MapToArchiveObservation(MastObservation observation, string fallbackTarget)
     {

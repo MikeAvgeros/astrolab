@@ -8,6 +8,4 @@ namespace AstroLab.Infrastructure.Archives;
 [JsonSerializable(typeof(MastProductResponse))]
 [JsonSerializable(typeof(MastNameLookupRequest))]
 [JsonSerializable(typeof(MastNameLookupResponse))]
-internal partial class MastJsonContext : JsonSerializerContext
-{
-}
+internal partial class MastJsonContext : JsonSerializerContext;

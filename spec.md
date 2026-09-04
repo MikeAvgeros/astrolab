@@ -29,6 +29,7 @@ and local setup, see `CLAUDE.md`.
    - 5.2 [Dependency Rules](#52-dependency-rules)
    - 5.3 [Request Flow](#53-request-flow)
    - 5.4 [FITS Dataset Classification](#54-fits-dataset-classification)
+   - 5.5 [Deployment](#55-deployment)
 6. [Core Implementation Patterns](#6-core-implementation-patterns)
    - 6.1 [Result Pattern](#61-result-pattern)
    - 6.2 [Functional Core: Purity and Spans](#62-functional-core-purity-and-spans)
@@ -140,6 +141,12 @@ describe **what the system must do**; §4 describes **how code is written**.
 
 - **MUST:** Scientific algorithms in `AstroLab.Core` be pure, deterministic functions of their
   inputs, with no I/O or side effects (§6.2).
+
+### 3.5 NuGet Packages
+
+- **MUST:** Always search nuget.org for the latest stable version of each package before writing
+  any `.csproj` file.
+- **MUST NOT:** Rely on training data for version numbers as they go out of date quickly.
 
 ---
 
@@ -374,7 +381,11 @@ AstroLab.slnx
 │   │   │   ├── ImageScaler.cs
 │   │   │   ├── ImageStatistics.cs
 │   │   │   └── ColorMapper.cs
+│   │   ├── Astrometry/                              # Pure WCS parsing and pixel↔world conversion
+│   │   │   └── Wcs.cs
 │   │   ├── Photometry/                             # Pure aperture-photometry algorithms
+│   │   ├── Sources/                                 # Pure threshold-based source detection
+│   │   │   └── SourceDetector.cs
 │   │   ├── Spectroscopy/                           # Pure wavelength/spectral algorithms
 │   │   └── Result/                                 # Result<T> / Error discriminated union
 │   │
@@ -396,8 +407,8 @@ AstroLab.slnx
 │   │   │   │   ├── Render/                         #   FITS → PNG visualisation
 │   │   │   │   ├── Statistics/                     #   Pixel statistics
 │   │   │   │   ├── Photometry/                     #   Aperture flux measurement
-│   │   │   │   ├── Sources/                        #   Source detection — roadmap, HTTP 501 (§4.1 note)
-│   │   │   │   ├── Astrometry/                     #   Pixel↔world WCS — roadmap, HTTP 501 (§4.1 note)
+│   │   │   │   ├── Sources/                        #   Source detection, backed by Core.Sources.SourceDetector
+│   │   │   │   ├── Astrometry/                     #   Pixel↔world WCS, backed by Core.Astrometry.Wcs
 │   │   │   │   ├── MultiPhotometry/                #   Per-source flux/magnitude/uncertainty — roadmap, HTTP 501
 │   │   │   │   ├── DifferentialPhotometry/         #   Target-vs-comparison differential magnitude — roadmap, HTTP 501
 │   │   │   │   ├── SourceCharacterization/         #   Source shape/ellipticity — roadmap, HTTP 501
@@ -445,15 +456,19 @@ AstroLab.slnx
 └── storage/                                        # Local disk directory for raw FITS files (gitignored)
 ```
 
-**Roadmap:** `Images/Sources`, `Images/Astrometry`, `Images/MultiPhotometry`,
-`Images/DifferentialPhotometry`, `Images/SourceCharacterization`, `Images/Background`,
-`Images/Segmentation`, `Images/Compare`, `Images/Align`, `Images/Stack`, `Images/Separation`,
-`Images/Footprint`, `Images/Overlay`, `Spectroscopy/Calibrate`, `Spectroscopy/Lines`,
-`Spectroscopy/Redshift`, `Spectroscopy/Compare`, `TimeSeries` (including `TimeSeries/Compare`),
-`Catalogues`, and the entire `Measurements` feature area are currently scaffolded at the API
-boundary but not implemented. Their endpoints return HTTP 501 via the shared
-`NotImplementedResult` helper (§6.5). They MUST NOT contain fake success responses, hard-coded
-results, or partial scientific implementations.
+**Roadmap:** `Images/MultiPhotometry`, `Images/DifferentialPhotometry`,
+`Images/SourceCharacterization`, `Images/Background`, `Images/Segmentation`, `Images/Compare`,
+`Images/Align`, `Images/Stack`, `Images/Separation`, `Images/Footprint`, `Images/Overlay`,
+`Spectroscopy/Calibrate`, `Spectroscopy/Lines`, `Spectroscopy/Redshift`, `Spectroscopy/Compare`,
+`TimeSeries` (including `TimeSeries/Compare`), `Catalogues`, and the entire `Measurements`
+feature area are currently scaffolded at the API boundary but not implemented. Their endpoints
+return HTTP 501 via the shared `NotImplementedResult` helper (§6.5). They MUST NOT contain fake
+success responses, hard-coded results, or partial scientific implementations.
+
+`Images/Sources` (backed by `AstroLab.Core.Sources.SourceDetector`) and `Images/Astrometry`
+(backed by `AstroLab.Core.Astrometry.Wcs`) have since graduated off this roadmap and are fully
+implemented; `Images/Separation` and `Images/Footprint`, which build on the same WCS solution,
+remain roadmap/HTTP 501 pending their own Core algorithms.
 
 When a corresponding Core algorithm is implemented, replace the endpoint's
 `NotImplementedResult.Value(...)` call with the normal Request → Infrastructure → Core →
@@ -595,6 +610,19 @@ exists ahead of their roadmap consumers.
 `DataSizeBytes` is calculated from `(NAXIS1 × NAXIS2) + PCOUNT`, with each component clamped
 to a non-negative value before combining them, so malformed headers cannot produce a negative
 or nonsensical skip distance.
+
+### 5.5 Deployment
+
+**Location:** `Dockerfile` (repo root)
+
+`Dockerfile` is a multi-stage build producing a Linux container image
+(`mcr.microsoft.com/dotnet/aspnet:10.0`, non-root user, listens on `:8080`, `/app/storage` as a
+volume). The runtime stage installs `cfitsio` from Debian's package repository
+(`apt-get install libcfitsio-dev`) rather than via the `native/win-x64/` manual-drop convention
+used for local Windows dev — the `-dev` package provides the unversioned `libcfitsio.so` symlink
+that `AstroLab.Infrastructure.Fits.NativeMethods.LibraryName` (`"cfitsio"`) resolves to through
+the standard dynamic linker search path, and apt resolves cfitsio's own runtime dependencies
+automatically. This runs as root before the `USER astrolab` switch.
 
 ---
 
@@ -787,13 +815,27 @@ download surface: ESO's IVOA TAP service (ADQL over `ivoa.ObsCore`, via `tap_obs
 `api/v0/download/file`). They use resilient `HttpClient` instances resolved through
 `IHttpClientFactory`.
 
-Clients MUST be registered with:
+Each archive is split into two dedicated typed `HttpClient`s so the resilience policy sized for
+small metadata requests can never be applied to a large FITS transfer:
 
-`AddHttpClient<TInterface, TImpl>()`
+- An **API client** (`IEsoArchiveApiClient`/`EsoArchiveApiClient`,
+  `IMastArchiveApiClient`/`MastArchiveApiClient`) for TAP/DataLink/search/product requests. It
+  MUST be registered with `AddHttpClient<TInterface, TImpl>()` and
+  `AddStandardResilienceHandler()` (retries, attempt timeout, total-request timeout, circuit
+  breaker — no separate `HttpClient.Timeout`; the resilience timeouts are the source of truth).
+- A **download client** (`IEsoArchiveDownloadClient`/`EsoArchiveDownloadClient`,
+  `IMastArchiveDownloadClient`/`MastArchiveDownloadClient`) for FITS file downloads. It MUST be
+  registered as a plain typed `HttpClient` with `Timeout = Timeout.InfiniteTimeSpan` and MUST NOT
+  carry a resilience handler — no retries, no short attempt/total timeout, so a large download is
+  never auto-restarted and is governed solely by the caller's `CancellationToken`.
 
-and:
-
-`AddStandardResilienceHandler()`
+`IEsoArchiveClient`/`EsoArchiveClient` and `IMastArchiveClient`/`MastArchiveClient` remain the
+application-facing abstractions (registered as transient, matching the typed clients' own
+lifetime) — each is a thin orchestrator that delegates `SearchAsync`/`GetProductsAsync`
+(/`ResolveTargetAsync` for MAST) to its API client and `DownloadAsync(product, ct)` to its
+download client, and itself implements the `DownloadAsync(datasetId, ct)` convenience overload
+(look up products via the API client, pick one via `MastProductSelectionPolicy`/
+`EsoProductSelectionPolicy`, then download via the download client).
 
 Each client MUST be designed so refinements to its request/response contracts (additional
 filters, additional response fields) can land without changing callers, Core, or API feature
@@ -929,7 +971,7 @@ can reasonably be anticipated MUST be represented explicitly with `Result<T>`.
 
 **Location:** `AstroLab.Tests`
 
-Tests cover Core, Infrastructure, and API layers.
+Tests cover Core, Infrastructure, and API layers. Use xUnit v3.
 
 ### 7.1 Core Unit Tests
 

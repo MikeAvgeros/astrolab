@@ -21,7 +21,7 @@ public class MastArchiveDownloadClientTests
         var (client, handler) = CreateClient(_ =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("FITS-DATA"u8.ToArray()) }));
 
-        var product = new MastProduct("mast:JWST/product/custom.fits", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
+        var product = MastProduct.Create("mast:JWST/product/custom.fits", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
 
         var result = await client.DownloadAsync(product);
 
@@ -36,7 +36,7 @@ public class MastArchiveDownloadClientTests
     {
         var (client, _) = CreateClient(_ => throw new InvalidOperationException("should not be called"));
 
-        var product = new MastProduct("   ", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
+        var product = MastProduct.Create("   ", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
 
         var result = await client.DownloadAsync(product);
 
@@ -58,7 +58,7 @@ public class MastArchiveDownloadClientTests
             Content = new StringContent("error detail")
         }));
 
-        var product = new MastProduct("mast:JWST/product/custom.fits", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
+        var product = MastProduct.Create("mast:JWST/product/custom.fits", "custom.fits", "SCIENCE", "image", 3, 123, "PUBLIC");
 
         var result = await client.DownloadAsync(product);
 

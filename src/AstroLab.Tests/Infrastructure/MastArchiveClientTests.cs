@@ -14,8 +14,8 @@ public class MastArchiveClientTests
     [Fact]
     public async Task DownloadAsync_ByObservationId_SelectsBestProductAndDelegatesToDownloadClient()
     {
-        var raw = new MastProduct("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
-        var calibrated = new MastProduct("mast:HST/product/x_drz.fits", "x_drz.fits", "SCIENCE", "image", 3, 200, "PUBLIC");
+        var raw = MastProduct.Create("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
+        var calibrated = MastProduct.Create("mast:HST/product/x_drz.fits", "x_drz.fits", "SCIENCE", "image", 3, 200, "PUBLIC");
 
         var downloadClient = new StubMastArchiveDownloadClient(
             (_, _) => Task.FromResult(Result<ArchiveDownload>.Success(new ArchiveDownload(
@@ -68,8 +68,8 @@ public class MastArchiveClientTests
     [Fact]
     public void MastProductSelectionPolicy_PrefersCalibratedScienceFitsOverRawFits()
     {
-        var raw = new MastProduct("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
-        var calibrated = new MastProduct("mast:HST/product/x_drz.fits", "x_drz.fits", "SCIENCE", "image", 3, 200, "PUBLIC");
+        var raw = MastProduct.Create("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
+        var calibrated = MastProduct.Create("mast:HST/product/x_drz.fits", "x_drz.fits", "SCIENCE", "image", 3, 200, "PUBLIC");
 
         var selected = MastProductSelectionPolicy.SelectBest([raw, calibrated]);
 
@@ -79,8 +79,8 @@ public class MastArchiveClientTests
     [Fact]
     public void MastProductSelectionPolicy_IgnoresNonFitsProducts()
     {
-        var preview = new MastProduct("mast:HST/product/x.jpg", "x.jpg", "PREVIEW", "image", 3, 10, "PUBLIC");
-        var fits = new MastProduct("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
+        var preview = MastProduct.Create("mast:HST/product/x.jpg", "x.jpg", "PREVIEW", "image", 3, 10, "PUBLIC");
+        var fits = MastProduct.Create("mast:HST/product/x_raw.fits", "x_raw.fits", "SCIENCE", "image", 1, 100, "PUBLIC");
 
         var selected = MastProductSelectionPolicy.SelectBest([preview, fits]);
 
@@ -90,7 +90,7 @@ public class MastArchiveClientTests
     [Fact]
     public void MastProductSelectionPolicy_NoFitsProducts_ReturnsNull()
     {
-        var preview = new MastProduct("mast:HST/product/x.jpg", "x.jpg", "PREVIEW", "image", 3, 10, "PUBLIC");
+        var preview = MastProduct.Create("mast:HST/product/x.jpg", "x.jpg", "PREVIEW", "image", 3, 10, "PUBLIC");
 
         var selected = MastProductSelectionPolicy.SelectBest([preview]);
 

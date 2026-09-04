@@ -5,7 +5,7 @@ namespace AstroLab.Core.Fits;
 /// <summary>
 /// Classifies a staged FITS file's scientific data type from its already-parsed HDU metadata, and
 /// gates an analysis operation on the classification matching what that analysis expects. This is
-/// the "Identify Data Type" + validation step of the FITS processing pipeline (see spec.md §4.4):
+/// the "Identify Data Type" + validation step of the FITS processing pipeline (see spec.md §5.4):
 /// every analysis entry point calls <see cref="EnsureKind"/> before touching pixel data, so running
 /// the wrong kind of analysis against a file surfaces as a normal <see cref="Result{TValue}"/>
 /// failure rather than nonsensical output.

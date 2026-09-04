@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.Separation;
 /// <summary>
 /// Roadmap slice: computing the angular separation between two pixel positions in a staged image
 /// via its WCS solution. Request/response contract is final; the calculation itself is not yet
-/// wired up (see spec.md §4.1), so this route always returns HTTP 501.
+/// wired up (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class SeparationEndpoint
 {

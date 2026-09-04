@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.TimeSeries.Transit;
 /// <summary>
 /// Roadmap slice: periodic transit (brightness-dip) search over a light curve, e.g. for exoplanet
 /// detection. Request/response contract is final; the search algorithm itself is not yet
-/// implemented (see spec.md §4.1), so this route always returns HTTP 501.
+/// implemented (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class TransitEndpoint
 {

@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Measurements.SpectralClassification;
 /// <summary>
 /// Roadmap slice: estimating a spectral classification (e.g. OBAFGKM type) from a staged
 /// spectrum's overall shape and features. Response contract is final; the classification
-/// algorithm itself is not yet implemented (see spec.md §4.1), so this route always returns
+/// algorithm itself is not yet implemented (see spec.md §6.5), so this route always returns
 /// HTTP 501. The response is always a model-derived estimate, never a direct measurement.
 /// </summary>
 public static class SpectralClassificationEndpoint

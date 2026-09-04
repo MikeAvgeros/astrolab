@@ -4,5 +4,5 @@ public sealed class EsoArchiveOptions
 {
     public const string SectionName = "Archives:Eso";
     
-    public string BaseAddress { get; set; } = "https://archive.eso.org/";
+    public string BaseAddress { get; init; } = "https://archive.eso.org/";
 }

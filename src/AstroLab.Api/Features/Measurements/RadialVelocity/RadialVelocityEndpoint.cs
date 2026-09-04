@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Measurements.RadialVelocity;
 /// <summary>
 /// Roadmap slice: measuring radial velocity from the Doppler shift between a spectral line's rest
 /// and observed wavelength in a staged spectrum. Request/response contract is final; the
-/// calculation itself is not yet implemented (see spec.md §4.1), so this route always returns
+/// calculation itself is not yet implemented (see spec.md §6.5), so this route always returns
 /// HTTP 501.
 /// </summary>
 public static class RadialVelocityEndpoint

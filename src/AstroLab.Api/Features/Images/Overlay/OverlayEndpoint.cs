@@ -5,7 +5,7 @@ namespace AstroLab.Api.Features.Images.Overlay;
 /// <summary>
 /// Roadmap slice: rendering a staged image to PNG with detected sources overlaid as markers.
 /// Request contract is final; the overlay rendering itself is not yet implemented (see
-/// spec.md §4.1), so this route always returns HTTP 501.
+/// spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class OverlayEndpoint
 {

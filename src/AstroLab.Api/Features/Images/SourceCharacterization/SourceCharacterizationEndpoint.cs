@@ -5,7 +5,7 @@ namespace AstroLab.Api.Features.Images.SourceCharacterization;
 /// <summary>
 /// Roadmap slice: measuring the size, shape, and ellipticity of every source detected in a
 /// staged image. Request/response contract is final; the algorithm itself is not yet implemented
-/// (see spec.md §4.1), so this route always returns HTTP 501.
+/// (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class SourceCharacterizationEndpoint
 {

@@ -14,8 +14,8 @@ public class EsoArchiveClientTests
     [Fact]
     public async Task DownloadAsync_ByDatasetId_SelectsBestProductAndDelegatesToDownloadClient()
     {
-        var preview = new EsoProduct("ADP.123-preview", "ADP.123", null, "https://x/preview", "#preview", null, null, "image/jpeg", 5000, "PUBLIC");
-        var primary = new EsoProduct("ADP.123-this", "ADP.123", null, "https://x/file", "#this", null, 2, "application/x-fits", 200000, "PUBLIC");
+        var preview = EsoProduct.Create("ADP.123-preview", "ADP.123", null, "https://x/preview", "#preview", null, null, "image/jpeg", 5000, "PUBLIC");
+        var primary = EsoProduct.Create("ADP.123-this", "ADP.123", null, "https://x/file", "#this", null, 2, "application/x-fits", 200000, "PUBLIC");
 
         var downloadClient = new StubEsoArchiveDownloadClient(
             (product, _) => Task.FromResult(Result<ArchiveDownload>.Success(new ArchiveDownload(
@@ -68,8 +68,8 @@ public class EsoArchiveClientTests
     [Fact]
     public void EsoProductSelectionPolicy_PrefersPrimaryFitsOverPreview()
     {
-        var preview = new EsoProduct("p1", "ADP.123", null, "https://x/preview", "#preview", null, null, "image/jpeg", 5000, "PUBLIC");
-        var primary = new EsoProduct("p2", "ADP.123", null, "https://x/file", "#this", null, 2, "application/x-fits", 200000, "PUBLIC");
+        var preview = EsoProduct.Create("p1", "ADP.123", null, "https://x/preview", "#preview", null, null, "image/jpeg", 5000, "PUBLIC");
+        var primary = EsoProduct.Create("p2", "ADP.123", null, "https://x/file", "#this", null, 2, "application/x-fits", 200000, "PUBLIC");
 
         var selected = EsoProductSelectionPolicy.SelectBest([preview, primary]);
 
@@ -79,8 +79,8 @@ public class EsoArchiveClientTests
     [Fact]
     public void EsoProductSelectionPolicy_PrefersHigherCalibrationLevel()
     {
-        var raw = new EsoProduct("p1", "ADP.123", null, "https://x/raw.fits", "#this", null, 0, "application/x-fits", 100, "PUBLIC");
-        var reduced = new EsoProduct("p2", "ADP.123", null, "https://x/reduced.fits", "#this", null, 2, "application/x-fits", 100, "PUBLIC");
+        var raw = EsoProduct.Create("p1", "ADP.123", null, "https://x/raw.fits", "#this", null, 0, "application/x-fits", 100, "PUBLIC");
+        var reduced = EsoProduct.Create("p2", "ADP.123", null, "https://x/reduced.fits", "#this", null, 2, "application/x-fits", 100, "PUBLIC");
 
         var selected = EsoProductSelectionPolicy.SelectBest([raw, reduced]);
 

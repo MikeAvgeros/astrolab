@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Catalogues.CrossMatch;
 /// <summary>
 /// Roadmap slice: cross-matching detected sources from a staged image against an external
 /// catalogue. Request/response contract is final; the cross-match algorithm itself is not yet
-/// implemented (see spec.md §4.1), so this route always returns HTTP 501.
+/// implemented (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class CrossMatchEndpoint
 {

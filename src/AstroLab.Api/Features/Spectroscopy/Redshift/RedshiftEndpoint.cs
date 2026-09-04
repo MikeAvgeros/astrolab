@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Spectroscopy.Redshift;
 /// <summary>
 /// Roadmap slice: redshift estimation from observed-vs-rest spectral line wavelengths.
 /// Request/response contract is final; the estimation algorithm itself is not yet implemented
-/// (see spec.md §4.1), so this route always returns HTTP 501.
+/// (see spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class RedshiftEndpoint
 {

@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Catalogues.Query;
 
 /// <summary>
 /// Roadmap slice: querying an external astronomical catalogue by cone search. Request/response
-/// contract is final; the catalogue client itself is not yet implemented (see spec.md §4.1), so
+/// contract is final; the catalogue client itself is not yet implemented (see spec.md §6.5), so
 /// this route always returns HTTP 501.
 /// </summary>
 public static class QueryEndpoint

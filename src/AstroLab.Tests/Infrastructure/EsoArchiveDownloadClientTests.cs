@@ -28,7 +28,7 @@ public class EsoArchiveDownloadClientTests
             return Task.FromResult(response);
         });
 
-        var product = new EsoProduct("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, 2, "application/x-fits", 100, "PUBLIC");
+        var product = EsoProduct.Create("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, 2, "application/x-fits", 100, "PUBLIC");
 
         var result = await client.DownloadAsync(product);
 
@@ -49,7 +49,7 @@ public class EsoArchiveDownloadClientTests
         var (client, _) = CreateClient(_ =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("FITS-DATA"u8.ToArray()) }));
 
-        var product = new EsoProduct("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, null, null, null, null);
+        var product = EsoProduct.Create("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, null, null, null, null);
 
         var result = await client.DownloadAsync(product);
 
@@ -64,7 +64,7 @@ public class EsoArchiveDownloadClientTests
     {
         var (client, _) = CreateClient(_ => throw new InvalidOperationException("should not be called"));
 
-        var product = new EsoProduct("ADP.123-this", "ADP.123", null, "   ", "#this", null, null, null, null, null);
+        var product = EsoProduct.Create("ADP.123-this", "ADP.123", null, "   ", "#this", null, null, null, null, null);
 
         var result = await client.DownloadAsync(product);
 
@@ -86,7 +86,7 @@ public class EsoArchiveDownloadClientTests
             Content = new StringContent("error detail")
         }));
 
-        var product = new EsoProduct("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, null, null, null, null);
+        var product = EsoProduct.Create("ADP.123-this", "ADP.123", null, "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", null, null, null, null, null);
 
         var result = await client.DownloadAsync(product);
 

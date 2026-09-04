@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.Stack;
 /// <summary>
 /// Roadmap slice: combining multiple staged images of the same field into a single stacked image
 /// via mean, median, or sum combination. Request/response contract is final; the stacking
-/// algorithm itself is not yet implemented (see spec.md §4.1), so this route always returns
+/// algorithm itself is not yet implemented (see spec.md §6.5), so this route always returns
 /// HTTP 501.
 /// </summary>
 public static class StackEndpoint

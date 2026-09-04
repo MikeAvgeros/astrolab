@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.DifferentialPhotometry;
 /// <summary>
 /// Roadmap slice: differential photometry between a target aperture and a comparison aperture in
 /// the same staged image, producing a differential magnitude. Request/response contract is
-/// final; the algorithm itself is not yet implemented (see spec.md §4.1), so this route always
+/// final; the algorithm itself is not yet implemented (see spec.md §6.5), so this route always
 /// returns HTTP 501.
 /// </summary>
 public static class DifferentialPhotometryEndpoint

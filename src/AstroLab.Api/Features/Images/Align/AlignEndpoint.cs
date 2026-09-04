@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Images.Align;
 /// <summary>
 /// Roadmap slice: computing the geometric transform (offset, rotation, scale) needed to register
 /// one staged image onto another's pixel grid. Request/response contract is final; the alignment
-/// algorithm itself is not yet implemented (see spec.md §4.1), so this route always returns
+/// algorithm itself is not yet implemented (see spec.md §6.5), so this route always returns
 /// HTTP 501.
 /// </summary>
 public static class AlignEndpoint

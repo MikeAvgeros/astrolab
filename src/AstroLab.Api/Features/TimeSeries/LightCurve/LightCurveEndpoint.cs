@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.TimeSeries.LightCurve;
 /// <summary>
 /// Roadmap slice: extracting a light curve (flux vs. time) from a staged time-series FITS table.
 /// Response contract is final; the extraction algorithm itself is not yet implemented (see
-/// spec.md §4.1), so this route always returns HTTP 501.
+/// spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class LightCurveEndpoint
 {

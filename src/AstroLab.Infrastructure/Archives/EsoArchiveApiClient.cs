@@ -30,8 +30,6 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     public async Task<Result<IReadOnlyList<ArchiveObservation>>> SearchAsync(
         ArchiveSearchQuery query, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("ESO search started for target '{Target}' and instrument '{Instrument}'", query.Target, query.Instrument);
-
         try
         {
             var adqlQuery = BuildAdqlQuery(query);
@@ -231,17 +229,17 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
             var id = row.GetString("id") ?? datasetId;
 
-            products.Add(new EsoProduct(
-                Id: id,
-                ObservationId: datasetId,
-                FileName: null,
-                DataUri: dataUri,
-                ProductType: row.GetString("semantics"),
-                DataProductType: null,
-                CalibrationLevel: null,
-                Format: row.GetString("content_type"),
-                Size: row.GetLong("content_length"),
-                DataRights: null));
+            products.Add(EsoProduct.Create(
+                id: id,
+                observationId: datasetId,
+                fileName: null,
+                dataUri: dataUri,
+                productType: row.GetString("semantics"),
+                dataProductType: null,
+                calibrationLevel: null,
+                format: row.GetString("content_type"),
+                size: row.GetLong("content_length"),
+                dataRights: null));
         }
 
         return products;

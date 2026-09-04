@@ -20,11 +20,11 @@ public static class EsoProductSelectionPolicy
         {
             var score = Score(product);
 
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = product;
-            }
+            if (score <= bestScore) continue;
+            
+            bestScore = score;
+            
+            best = product;
         }
 
         return best;

@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.TimeSeries.Compare;
 /// <summary>
 /// Roadmap slice: comparing two staged light curves (from different dates or instruments) via
 /// their correlation and mean magnitude offset. Request/response contract is final; the
-/// comparison algorithm itself is not yet implemented (see spec.md §4.1), so this route always
+/// comparison algorithm itself is not yet implemented (see spec.md §6.5), so this route always
 /// returns HTTP 501.
 /// </summary>
 public static class CompareEndpoint

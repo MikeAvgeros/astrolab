@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Spectroscopy.Calibrate;
 /// <summary>
 /// Roadmap slice: fitting a wavelength-dispersion solution from known pixel/wavelength pairs.
 /// Request/response contract is final; the fitting algorithm itself is not yet implemented (see
-/// spec.md §4.1), so this route always returns HTTP 501.
+/// spec.md §6.5), so this route always returns HTTP 501.
 /// </summary>
 public static class CalibrateEndpoint
 {

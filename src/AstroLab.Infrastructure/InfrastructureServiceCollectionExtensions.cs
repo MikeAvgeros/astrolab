@@ -9,6 +9,12 @@ using Polly.Timeout;
 
 namespace AstroLab.Infrastructure;
 
+/// <summary>
+/// Single DI registration entry point for <c>AstroLab.Infrastructure</c>, called from
+/// <c>Program.cs</c>. Binds options from configuration and registers storage plus the ESO/MAST
+/// archive clients, each split into a resilience-wrapped API client and an unbounded-timeout
+/// download client.
+/// </summary>
 public static class InfrastructureServiceCollectionExtensions
 {
     private const int ArchiveApiRetryMaxAttempts = 3;

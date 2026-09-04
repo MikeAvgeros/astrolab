@@ -1,5 +1,10 @@
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Picks the single best downloadable product from a MAST product list, restricted to
+/// FITS-looking filenames and scored by public data rights and a science product type, weighted
+/// further by calibration level.
+/// </summary>
 public static class MastProductSelectionPolicy
 {
     private const string FitsExtension = ".fits";

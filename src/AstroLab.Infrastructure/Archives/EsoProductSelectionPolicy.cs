@@ -1,5 +1,10 @@
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Picks the single best downloadable product from an ESO DataLink product list, scoring public
+/// data rights, the primary (<c>#this</c>) product semantic, a FITS-looking format/filename, and
+/// calibration level, in that order of weight.
+/// </summary>
 public static class EsoProductSelectionPolicy
 {
     private const string PublicDataRights = "PUBLIC";

@@ -1,4 +1,3 @@
-using AstroLab.Core.Astrometry;
 using AstroLab.Core.Sources;
 
 namespace AstroLab.Api.Features.Images.Sources;
@@ -52,26 +51,8 @@ public sealed record DetectedSourceDto
         return new DetectedSourceDto(id, pixelX, pixelY, rightAscension, declination, pixelCount, peakValue, totalFlux, background, signalToNoiseRatio);
     }
 
-    public static DetectedSourceDto FromDetectedSource(DetectedSource source, Wcs? wcs)
-    {
-        double? rightAscension = null;
-
-        double? declination = null;
-
-        if (wcs is { } resolvedWcs)
-        {
-            var worldResult = resolvedWcs.PixelToWorld(source.PixelX, source.PixelY);
-
-            if (worldResult.IsSuccess)
-            {
-                rightAscension = worldResult.Value.RightAscension;
-
-                declination = worldResult.Value.Declination;
-            }
-        }
-
-        return Create(
+    public static DetectedSourceDto FromDetectedSource(DetectedSource source, double? rightAscension, double? declination) =>
+        Create(
             source.Id, source.PixelX, source.PixelY, rightAscension, declination,
             source.PixelCount, source.PeakValue, source.TotalFlux, source.Background, source.SignalToNoiseRatio);
-    }
 }

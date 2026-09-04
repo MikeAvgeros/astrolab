@@ -3,6 +3,13 @@ using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Application-facing MAST archive client. Thin orchestrator that delegates search/product
+/// discovery/target resolution to <see cref="IMastArchiveApiClient"/> and streamed FITS downloads
+/// to <see cref="IMastArchiveDownloadClient"/>, and implements the dataset-id download convenience
+/// overload by looking up products, picking one via <see cref="MastProductSelectionPolicy"/>, then
+/// downloading it.
+/// </summary>
 public sealed class MastArchiveClient : IMastArchiveClient
 {
     private readonly IMastArchiveApiClient _apiClient;

@@ -50,9 +50,28 @@ public static class SourcesEndpoint
         var wcs = wcsResult.IsSuccess ? wcsResult.Value : (Wcs?)null;
 
         var sourceDtos = detectionResult.Value
-            .Select(source => DetectedSourceDto.FromDetectedSource(source, wcs))
+            .Select(source =>
+            {
+                var (rightAscension, declination) = ResolveWorldCoordinates(wcs, source);
+
+                return DetectedSourceDto.FromDetectedSource(source, rightAscension, declination);
+            })
             .ToImmutableList();
 
         return Results.Ok(SourceDetectionResponse.Create(fileId, sourceDtos));
+    }
+
+    private static (double? RightAscension, double? Declination) ResolveWorldCoordinates(Wcs? wcs, DetectedSource source)
+    {
+        if (wcs is not { } resolvedWcs)
+        {
+            return (null, null);
+        }
+
+        var worldResult = resolvedWcs.PixelToWorld(source.PixelX, source.PixelY);
+
+        return worldResult.IsSuccess
+            ? (worldResult.Value.RightAscension, worldResult.Value.Declination)
+            : (null, null);
     }
 }

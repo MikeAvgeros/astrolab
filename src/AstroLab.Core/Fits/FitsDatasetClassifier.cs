@@ -23,11 +23,6 @@ public static class FitsDatasetClassifier
 
     public static FitsDatasetKind Classify(IReadOnlyList<HduDescriptor> hdus)
     {
-        if (HasTimeColumn(hdus))
-        {
-            return FitsDatasetKind.TimeSeries;
-        }
-
         var imageHdu = FindFirstImageHdu(hdus);
 
         if (imageHdu is { } descriptor)
@@ -35,20 +30,66 @@ public static class FitsDatasetClassifier
             return IsSpectrum(descriptor) ? FitsDatasetKind.Spectrum : FitsDatasetKind.Image;
         }
 
+        if (HasTimeColumn(hdus))
+        {
+            return FitsDatasetKind.TimeSeries;
+        }
+
         return HasTable(hdus) ? FitsDatasetKind.Table : FitsDatasetKind.Unknown;
     }
+    
+    public static bool MatchesKind(HduDescriptor hdu, FitsDatasetKind capability)
+    {
+        if (!HasPixelData(hdu))
+        {
+            return false;
+        }
 
-    public static bool HasPixelData(HduDescriptor hdu) => hdu.Image is { PixelCount: > 0 };
+        var isSpectrum = IsSpectrum(hdu);
+
+        return capability switch
+        {
+            FitsDatasetKind.Spectrum => isSpectrum,
+            FitsDatasetKind.Image => !isSpectrum,
+            _ => false
+        };
+    }
 
     public static Result<FitsDatasetKind> EnsureKind(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind required)
     {
+        if (HasCapability(hdus, required))
+        {
+            return Result<FitsDatasetKind>.Success(required);
+        }
+
         var actual = Classify(hdus);
 
-        return actual == required
-            ? Result<FitsDatasetKind>.Success(actual)
-            : Error.Validation(
-                "fits.data.unsupported_type",
-                $"This FITS file was identified as {actual}, but this analysis requires {required} data.");
+        return Error.Validation(
+            "fits.data.unsupported_type",
+            $"This FITS file was identified as {actual}, but this analysis requires {required} data.");
+    }
+    
+    private static bool HasPixelData(HduDescriptor hdu) => hdu.Image is { PixelCount: > 0 };
+
+    private static bool HasCapability(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind capability) => capability switch
+    {
+        FitsDatasetKind.Image or FitsDatasetKind.Spectrum => FindMatchingHdu(hdus, capability) is not null,
+        FitsDatasetKind.TimeSeries => HasTimeColumn(hdus),
+        FitsDatasetKind.Table => HasTable(hdus),
+        _ => false
+    };
+    
+    private static HduDescriptor? FindMatchingHdu(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind capability)
+    {
+        foreach (var hdu in hdus)
+        {
+            if (MatchesKind(hdu, capability))
+            {
+                return hdu;
+            }
+        }
+
+        return null;
     }
 
     private static bool HasTimeColumn(IReadOnlyList<HduDescriptor> hdus)

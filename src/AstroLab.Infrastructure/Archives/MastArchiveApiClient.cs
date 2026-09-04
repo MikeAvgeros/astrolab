@@ -6,6 +6,13 @@ using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Calls MAST's real Mashup API (<c>Mast.Caom.Filtered</c>/<c>Mast.Caom.Products</c>/
+/// <c>Mast.Name.Lookup</c>) for target resolution, observation search, and product discovery —
+/// the metadata/query half of the MAST archive integration, split from
+/// <see cref="MastArchiveDownloadClient"/> so a large FITS transfer never inherits a short-lived
+/// resilience policy sized for metadata requests.
+/// </summary>
 public sealed class MastArchiveApiClient : IMastArchiveApiClient
 {
     private const string InvokeEndpoint = "api/v0/invoke";

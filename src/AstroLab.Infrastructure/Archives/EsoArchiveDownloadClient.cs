@@ -6,6 +6,12 @@ using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Streams a FITS product's bytes from ESO via <see cref="System.IO.Pipelines.PipeReader"/> with
+/// <see cref="HttpCompletionOption.ResponseHeadersRead"/>. Registered with
+/// <see cref="Timeout.InfiniteTimeSpan"/> and no resilience handler, since a large download must
+/// never be auto-retried and is governed solely by the caller's cancellation token.
+/// </summary>
 public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
 {
     private readonly HttpClient _httpClient;

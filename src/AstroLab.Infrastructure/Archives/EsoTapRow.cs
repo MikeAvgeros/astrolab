@@ -3,6 +3,7 @@ using System.Text.Json;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>A single row of an ESO TAP/ADQL response, giving typed access to its columns by name via a shared column-index map.</summary>
 internal sealed class EsoTapRow
 {
     private readonly IReadOnlyDictionary<string, int> _columnIndex;

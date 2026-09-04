@@ -64,7 +64,7 @@ docker build -t astrolab-api .
 docker run -p 8080:8080 -v astrolab-storage:/app/storage astrolab-api
 ```
 
-Tests use xUnit v3.
+Tests use xUnit v3 (`xunit.v3` package). `AstroLab.Tests` builds as an executable (`OutputType=Exe`, required by xUnit v3's Microsoft.Testing.Platform model) and `dotnet test` runs it via the native MTP mode enabled by the root `global.json`'s `test.runner` setting — do not remove that setting or revert `OutputType` to `Library`.
 
 `Microsoft.AspNetCore.Mvc.Testing` and `ApiFactory.cs` are used for in-process API integration tests against `Program`.
 
@@ -621,9 +621,10 @@ Test:
 - HTTP status codes
 - response mapping
 - `Result<T>` mapping
-- 501 roadmap behaviour
-- global exception handling
+- global exception handling (`GlobalExceptionHandler`, `RequestValidationExceptionHandler`)
 - representative end-to-end FITS workflows
+
+Scaffolded HTTP 501 roadmap endpoints do not get dedicated tests — a stub returning `NotImplementedResult` is not yet a real code path, and testing it only pins down a value that changes the moment the real implementation lands. Cover a roadmap endpoint once its Request → Infrastructure → Core → `Result<T>` → Response flow is actually implemented.
 
 External ESO/MAST calls should not be required for normal deterministic application tests.
 

@@ -1019,10 +1019,11 @@ API integration tests SHOULD verify:
 - response DTO mapping
 - Result-to-response mapping
 - unsupported capability responses
-- HTTP 501 roadmap endpoints
-- global exception handling
+- global exception handling (`GlobalExceptionHandler`, `RequestValidationExceptionHandler`)
 - cancellation behaviour where practical
 - end-to-end FITS workflows for representative datasets
+
+Scaffolded HTTP 501 roadmap endpoints do not require dedicated tests — a stub returning `NotImplementedResult` is not a real code path yet, and a test against it only pins down a value that changes the moment the real implementation lands. Cover a roadmap endpoint once its Request → Infrastructure → Core → `Result<T>` → Response flow is actually implemented (§6.5).
 
 API tests MUST NOT require external ESO or MAST services unless explicitly designated as integration/acceptance tests.
 

@@ -71,7 +71,7 @@ public sealed class FitsDatasetReader
             return Result<FitsDataset>.Failure(kindResult.Error);
         }
 
-        var imageLocation = FindFirstImageLocation(locations);
+        var imageLocation = FindMatchingLocation(locations, requiredKind);
 
         if (imageLocation is not { } location || location.Descriptor.Image is not { } descriptor)
         {
@@ -106,8 +106,16 @@ public sealed class FitsDatasetReader
         return builder.MoveToImmutable();
     }
 
-    private static HduLocation? FindFirstImageLocation(ImmutableArray<HduLocation> locations)
+    private static HduLocation? FindMatchingLocation(ImmutableArray<HduLocation> locations, FitsDatasetKind requiredKind)
     {
-        return locations.FirstOrDefault(location => FitsDatasetClassifier.HasPixelData(location.Descriptor));
+        foreach (var location in locations)
+        {
+            if (FitsDatasetClassifier.MatchesKind(location.Descriptor, requiredKind))
+            {
+                return location;
+            }
+        }
+
+        return null;
     }
 }

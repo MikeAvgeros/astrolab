@@ -7,6 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Calls ESO's real IVOA TAP service (ADQL over <c>ivoa.ObsCore</c>) for observation search and
+/// DataLink for product discovery — the metadata/query half of the ESO archive integration, split
+/// from <see cref="EsoArchiveDownloadClient"/> so a large FITS transfer never inherits a
+/// short-lived resilience policy sized for metadata requests.
+/// </summary>
 public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 {
     private const string TapEndpoint = "tap_obs/sync";

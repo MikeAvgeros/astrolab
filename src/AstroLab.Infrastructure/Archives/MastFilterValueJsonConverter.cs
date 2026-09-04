@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>Write-only JSON converter serialising a <see cref="MastFilterValue"/> as either a plain string or a <c>{min, max}</c> range object, matching the Mashup API's filter syntax.</summary>
 internal sealed class MastFilterValueJsonConverter : JsonConverter<MastFilterValue>
 {
     public override MastFilterValue Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

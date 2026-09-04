@@ -3,6 +3,13 @@ using Microsoft.Extensions.Logging;
 
 namespace AstroLab.Infrastructure.Archives;
 
+/// <summary>
+/// Application-facing ESO archive client. Thin orchestrator that delegates search/product
+/// discovery to <see cref="IEsoArchiveApiClient"/> and streamed FITS downloads to
+/// <see cref="IEsoArchiveDownloadClient"/>, and implements the dataset-id download convenience
+/// overload by looking up products, picking one via <see cref="EsoProductSelectionPolicy"/>, then
+/// downloading it.
+/// </summary>
 public sealed class EsoArchiveClient : IEsoArchiveClient
 {
     private readonly IEsoArchiveApiClient _apiClient;
@@ -11,9 +18,9 @@ public sealed class EsoArchiveClient : IEsoArchiveClient
 
     public EsoArchiveClient(IEsoArchiveApiClient apiClient, IEsoArchiveDownloadClient downloadClient, ILogger<EsoArchiveClient> logger)
     {
-        _apiClient = apiClient;
-        _downloadClient = downloadClient;
-        _logger = logger;
+        _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+        _downloadClient = downloadClient ?? throw new ArgumentNullException(nameof(downloadClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public ArchiveSource Source => ArchiveSource.Eso;

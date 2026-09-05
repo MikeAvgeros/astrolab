@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Keep this file current:** whenever you make a change to this project that affects the project structure, feature slices, architecture, dependency rules, commands, or development workflow, update the relevant section of this file in the same change.
+> **Keep this file current:** whenever you make a change to this project that affects the project structure, feature slices, architecture, dependency rules, commands, business rule or development workflow, update the relevant section of this file in the same change.
 
-The authoritative engineering specification is `spec.md`. This file contains the operational guidance and the rules most relevant to an AI coding agent.
+The authoritative engineering specification that defines the required architecture, behaviour, domain rules, API contracts, coding standards, and implementation constraints is `spec.md`. This file contains the operational guidance and the rules most relevant to an AI coding agent.
 
 ---
 

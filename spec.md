@@ -136,7 +136,17 @@ These conventions apply uniformly across the solution. They define **how code is
 - **MUST:** Use C# 14 `extension(...)` member syntax for new extension members rather than the classic `this`-parameter extension-method form.
 - **MUST NOT:** Use primary constructors on classes, structs, or records. All three use an explicit constructor body. Records follow the private-constructor-plus-`Create(...)` pattern in §4.4.
 
-### 4.2 Comments and Literals
+### 4.2 Method Ordering
+
+Within a class, order methods according to their visibility and usage:
+
+- **Public methods MUST appear before private methods.**
+- **Private methods MUST be ordered according to the order in which they are used by the class**, with a method appearing before the private methods it calls where practical.
+- A method that is only used internally by the class **MUST be private**. Do not make a method public merely because it may be useful to a potential future requirement.
+- If a future requirement requires an existing private method to be part of the class's public API, its visibility MAY be changed from `private` to `public` at that time.
+- Do not expose methods speculatively. Keep the smallest appropriate visibility for the current requirements.
+
+### 4.3 Comments and Literals
 
 - **MUST NOT:** Add `//` comments to explain code whose purpose or behaviour is already clear from its implementation.
 - **MUST NOT:** Add `///` XML documentation comments to models, DTOs, records, or their properties, including request/response DTOs and other data-only types. Type and property names MUST be sufficiently descriptive and self-documenting.
@@ -149,7 +159,7 @@ These conventions apply uniformly across the solution. They define **how code is
 - **MUST NOT:** Add redundant parentheses to a mathematical expression — parentheses that restate C#'s existing operator precedence rather than changing evaluation order. Use parentheses only where they are required to produce the correct result, or where a mixed chain of different operator kinds would otherwise be genuinely ambiguous to a reader.
 - **MUST NOT:** Add a trailing comma after the last member of an `enum` declaration.
 
-### 4.3 Control Flow and LINQ
+### 4.4 Control Flow and LINQ
 
 - **SHOULD:** Prefer LINQ for collection-oriented operations when it improves readability and does not introduce a meaningful performance or allocation cost.
 - **SHOULD:** Prefer explicit `for`/`foreach` loops for numerical, pixel-processing, buffer-processing, or other performance-critical algorithms when they provide clearer control over iteration, memory access, allocations, or algorithmic complexity.
@@ -161,7 +171,7 @@ These conventions apply uniformly across the solution. They define **how code is
 - **MUST:** Suffix asynchronous methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` with `Async`, including interface members.
 - **SHOULD:** Prefer `var` when the right-hand side makes the type unambiguous at the call site. Use an explicit type when it improves clarity.
 
-### 4.4 Immutability and Records
+### 4.5 Immutability and Records
 
 - **SHOULD:** Prefer immutable types by default.
 - **MUST:** Configuration classes bound through the Options pattern (`IOptions<T>`) MAY remain mutable because the configuration binder requires settable properties.
@@ -218,7 +228,7 @@ public sealed record ApertureMeasurement
 }
 ```
 
-### 4.5 Line Endings and Formatting
+### 4.6 Line Endings and Formatting
 
 - **MUST:** Repository files use CRLF line endings, enforced by `.gitattributes` (`* text eol=crlf`).
 - **SHOULD:** Separate consecutive executable statements with a single blank line when doing so improves readability, except between variable assignments in constructors.

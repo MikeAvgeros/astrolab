@@ -2,11 +2,18 @@ using System.Text.Json.Serialization;
 
 namespace AstroLab.Infrastructure.Archives;
 
-internal sealed class MastNameLookupResponse
+internal sealed record MastNameLookupResponse
 {
+    [JsonConstructor]
+    internal MastNameLookupResponse(string? status, List<MastResolvedCoordinate>? resolvedCoordinate)
+    {
+        Status = status ?? string.Empty;
+        ResolvedCoordinate = resolvedCoordinate ?? [];
+    }
+
     [JsonPropertyName("status")]
-    public string Status { get; set; } = string.Empty;
+    public string Status { get; }
 
     [JsonPropertyName("resolvedCoordinate")]
-    public List<MastResolvedCoordinate> ResolvedCoordinate { get; set; } = [];
+    public List<MastResolvedCoordinate> ResolvedCoordinate { get; }
 }

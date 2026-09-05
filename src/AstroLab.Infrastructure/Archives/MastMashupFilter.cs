@@ -2,11 +2,20 @@ using System.Text.Json.Serialization;
 
 namespace AstroLab.Infrastructure.Archives;
 
-internal sealed class MastMashupFilter
+internal sealed record MastMashupFilter
 {
+    [JsonConstructor]
+    internal MastMashupFilter(string paramName, List<MastFilterValue> values)
+    {
+        ParamName = paramName;
+        Values = values;
+    }
+
     [JsonPropertyName("paramName")]
-    public string ParamName { get; set; } = string.Empty;
+    public string ParamName { get; }
 
     [JsonPropertyName("values")]
-    public List<MastFilterValue> Values { get; set; } = [];
+    public List<MastFilterValue> Values { get; }
+
+    public static MastMashupFilter Create(string paramName, List<MastFilterValue> values) => new(paramName, values);
 }

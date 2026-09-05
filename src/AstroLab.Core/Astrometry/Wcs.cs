@@ -3,13 +3,9 @@ using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Astrometry;
 
-/// <summary>
-/// A parsed, validated FITS World Coordinate System solution for a 2D image HDU (Calabretta &amp;
-/// Greisen 2002, Papers I &amp; II), supporting conversion between pixel and celestial (RA/Dec)
-/// coordinates for the <see cref="WcsProjection.Tan"/>, <see cref="WcsProjection.Sin"/>, and
-/// <see cref="WcsProjection.Arc"/> zenithal projections. Immutable and pure — carries no I/O and
-/// is not specific to any telescope, instrument, or axis ordering.
-/// </summary>
+// FITS WCS solution for a 2D image HDU (Calabretta & Greisen 2002, Papers I & II), supporting
+// conversion between pixel and celestial (RA/Dec) coordinates for the Tan, Sin, and Arc zenithal
+// projections.
 public readonly record struct Wcs
 {
     private const double DegreesToRadians = Math.PI / 180.0;

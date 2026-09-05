@@ -18,6 +18,7 @@ public static class FitsDatasetClassifier
     private const int FirstFieldNumber = 1;
     private const int NoFields = 0;
     private const int SingleAxisDimension = 1;
+    private const int MinimumTimeSeriesFieldCount = 2;
 
     private static readonly string[] SpectralCTypePrefixes = ["WAVE", "FREQ", "ENER", "AWAV", "VELO"];
 
@@ -30,7 +31,7 @@ public static class FitsDatasetClassifier
             return IsSpectrum(descriptor) ? FitsDatasetKind.Spectrum : FitsDatasetKind.Image;
         }
 
-        if (HasTimeColumn(hdus))
+        if (HasTimeSeriesData(hdus))
         {
             return FitsDatasetKind.TimeSeries;
         }
@@ -74,7 +75,7 @@ public static class FitsDatasetClassifier
     private static bool HasCapability(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind capability) => capability switch
     {
         FitsDatasetKind.Image or FitsDatasetKind.Spectrum => FindMatchingHdu(hdus, capability) is not null,
-        FitsDatasetKind.TimeSeries => HasTimeColumn(hdus),
+        FitsDatasetKind.TimeSeries => HasTimeSeriesData(hdus),
         FitsDatasetKind.Table => HasTable(hdus),
         _ => false
     };
@@ -92,7 +93,7 @@ public static class FitsDatasetClassifier
         return null;
     }
 
-    private static bool HasTimeColumn(IReadOnlyList<HduDescriptor> hdus)
+    private static bool HasTimeSeriesData(IReadOnlyList<HduDescriptor> hdus)
     {
         foreach (var hdu in hdus)
         {
@@ -102,6 +103,11 @@ public static class FitsDatasetClassifier
             }
 
             var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
+
+            if (fieldCount < MinimumTimeSeriesFieldCount)
+            {
+                continue;
+            }
 
             for (var field = FirstFieldNumber; field <= fieldCount; field++)
             {

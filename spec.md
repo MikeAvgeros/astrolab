@@ -179,18 +179,18 @@ Within a class, order methods according to their visibility and usage:
 - **MUST:** Use records for immutable data-only types such as DTOs, request/response models, value objects, and measurement results. Small value types MAY use `readonly record struct`.
 - **MUST:** A concrete record type defaults to `sealed`. Leave a record unsealed only when inheritance/polymorphism is an explicit, documented part of its design. `readonly record struct` types are implicitly sealed and MUST NOT carry the modifier.
 - **MUST:** Declare a record's properties explicitly with `{ get; }` accessors, never `{ get; init; }`, and set them only from the record's own constructor. Because properties are get-only, records do not support `with`-expression mutation; construct a new instance through `Create(...)` instead.
-- **MUST:** A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself — not a companion `<Name>Factory` class. `Create(...)` validates its arguments and returns `new(...)`; the constructor performs no validation and MUST NOT be called from outside the record's own file. This makes the record impossible to construct in an invalid state.
-- **MUST:** When a record's invariants need checking against an already-constructed instance, the record exposes a public `Validate()` instance method containing those checks, and `Create(...)` calls it internally instead of duplicating the checks inline.
-- **MUST NOT:** Add an empty `Validate()` method purely for symmetry when a record has no invariants to check.
+- **MUST:** A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself — not a companion `<Name>Factory` class. `Create(...)` validates its arguments inline and returns `new(...)`; the constructor performs no validation and MUST NOT be called from outside the record's own file. This makes the record impossible to construct in an invalid state. A record that is only ever constructed through its own `Create(...)` — this is the normal case, and includes every `AstroLab.Core` domain record — has no need for a separate `Validate()` method; its checks live directly in `Create(...)`.
+- **MUST:** When a framework can construct a record without going through `Create(...)` — for example, the `[JsonConstructor]`-bound request DTO described in the EXCEPTION below, which `System.Text.Json` constructs directly during model binding — the record exposes a public `Validate()` instance method containing those checks, so the caller can invoke `request.Validate()` after binding. `Create(...)` calls `Validate()` internally instead of duplicating the checks, so hand-written construction still goes through the same checks.
+- **MUST NOT:** Add an empty `Validate()` method purely for symmetry when a record has no invariants to check, or when the record is never constructed outside its own `Create(...)`.
 - **MUST:** Use `ImmutableList<T>` for collection-shaped properties on API-boundary records. `AstroLab.Core` hot-path types are exempt and MUST use span/array-based representations appropriate to their allocation constraints.
 - **MAY:** Types with established semantic smart constructors, such as `Error.Validation(...)` and `Result<T>.Success(...)`, expose those constructors directly on the type instead of a generic `Create(...)`, as long as they still funnel through the same private constructor.
 - **EXCEPTION:** A request DTO record bound directly from an HTTP request body (no `[AsParameters]`) keeps a **private** constructor but marks it `[JsonConstructor]` (`System.Text.Json.Serialization`) so `System.Text.Json` can still use it during model binding. Construction via the framework bypasses `Create`'s validation. Hand-written construction SHOULD still go through `Create(...)` when validation is required. Because the endpoint handler receives an already-constructed instance from model binding, it MUST call that instance's own `request.Validate()` when applicable.
 - **EXCEPTION:** A request DTO record bound via `[AsParameters]` (query/route parameter binding) MUST keep a **public** constructor. ASP.NET Core's parameter-binding metadata cache requires a public constructor for `[AsParameters]` complex-type binding. The constructor still performs no validation, properties remain `{ get; }`-only, and `Create(...)` remains the validated entry point for hand-written construction.
 
-Example:
+Example — a Core domain record, only ever constructed through its own `Create(...)`, validates inline:
 
 ```csharp
-public sealed record ApertureMeasurement
+public readonly record struct ApertureMeasurement
 {
     private ApertureMeasurement(double flux, double area, int sampledPixelCount)
     {
@@ -205,28 +205,18 @@ public sealed record ApertureMeasurement
 
     public int SampledPixelCount { get; }
 
-    public static ApertureMeasurement Create(
-        double flux,
-        double area,
-        int sampledPixelCount)
+    public static ApertureMeasurement Create(double flux, double area, int sampledPixelCount)
     {
-        var measurement = new ApertureMeasurement(
-            flux,
-            area,
-            sampledPixelCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(area);
 
-        measurement.Validate();
+        ArgumentOutOfRangeException.ThrowIfNegative(sampledPixelCount);
 
-        return measurement;
-    }
-
-    public void Validate()
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(Area);
-        ArgumentOutOfRangeException.ThrowIfNegative(SampledPixelCount);
+        return new ApertureMeasurement(flux, area, sampledPixelCount);
     }
 }
 ```
+
+A `Validate()` method only appears where a framework can also construct the record outside `Create(...)` — see the `[JsonConstructor]` EXCEPTION below for the shape that applies to.
 
 ### 4.6 Line Endings and Formatting
 
@@ -295,6 +285,7 @@ AstroLab.slnx
 │   │   │   ├── Images/
 │   │   │   │   ├── Render/
 │   │   │   │   ├── Statistics/
+│   │   │   │   ├── Histogram/
 │   │   │   │   ├── Photometry/
 │   │   │   │   ├── Sources/
 │   │   │   │   ├── Astrometry/

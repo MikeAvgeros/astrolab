@@ -87,6 +87,13 @@ public readonly record struct FitsImageDescriptor
                 return Result<ImmutableArray<int>>.Failure(axisResult.Error);
             }
 
+            if (axisResult.Value is < 0 or > int.MaxValue)
+            {
+                return Error.Validation(
+                    "fits.header.invalid_naxis",
+                    $"NAXIS{i} must be between 0 and {int.MaxValue}, was {axisResult.Value}.");
+            }
+
             builder.Add((int)axisResult.Value);
         }
 

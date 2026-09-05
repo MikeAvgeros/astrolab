@@ -149,6 +149,31 @@ public class AllocationTests
     }
 
     [Fact]
+    public void ImageDownsampler_Downsample_AllocatesNoManagedMemory()
+    {
+        const int width = 512;
+
+        const int height = 512;
+
+        const int factor = 4;
+
+        var source = new float[width * height];
+
+        for (var i = 0; i < source.Length; i++)
+        {
+            source[i] = i % 1000;
+        }
+
+        var (destWidth, destHeight) = ImageDownsampler.ComputeDownsampledDimensions(width, height, factor);
+
+        var destination = new float[destWidth * destHeight];
+
+        var allocated = MeasureAllocatedBytes(() => ImageDownsampler.Downsample(source, width, height, factor, destination));
+
+        Assert.Equal(0, allocated);
+    }
+
+    [Fact]
     public void SpectrumExtractor_ExtractBoxcar_AllocatesNoManagedMemory()
     {
         const int width = 500;

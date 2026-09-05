@@ -47,11 +47,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                 Error.Validation("mast.invalid_target", "Target name must be provided."));
         }
 
-        var requestPayload = new MastNameLookupRequest
-        {
-            Service = NameLookupService,
-            Params = new MastNameLookupParams { Input = target }
-        };
+        var requestPayload = MastNameLookupRequest.Create(NameLookupService, MastNameLookupParams.Create(target));
 
         try
         {
@@ -119,18 +115,14 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
 
         var target = targetResult.Value;
 
-        var requestPayload = new MastMashupRequest
-        {
-            Service = CaomFilteredService,
-            Params = new MastMashupParams
-            {
-                Columns = RequestedColumns,
-                Filters = BuildFilters(query),
-                Position = FormattableString.Invariant($"{target.RightAscension}, {target.Declination}"),
-                Radius = query.SearchRadiusDegrees,
-                PageSize = query.MaxResults
-            }
-        };
+        var requestPayload = MastMashupRequest.Create(
+            CaomFilteredService,
+            MastMashupParams.Create(
+                RequestedColumns,
+                BuildFilters(query),
+                FormattableString.Invariant($"{target.RightAscension}, {target.Declination}"),
+                query.SearchRadiusDegrees,
+                query.MaxResults));
 
         try
         {
@@ -194,11 +186,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                 Error.Validation("mast.invalid_observation_id", "observationId must not be empty."));
         }
 
-        var requestPayload = new MastProductRequest
-        {
-            Service = ProductsService,
-            Params = new MastProductParams { ObsId = observationId }
-        };
+        var requestPayload = MastProductRequest.Create(ProductsService, MastProductParams.Create(observationId));
 
         try
         {
@@ -263,48 +251,27 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
 
         if (!string.IsNullOrWhiteSpace(query.Mission))
         {
-            filters.Add(new MastMashupFilter
-            {
-                ParamName = CollectionParam,
-                Values = [MastFilterValue.FromText(query.Mission)]
-            });
+            filters.Add(MastMashupFilter.Create(CollectionParam, [MastFilterValue.FromText(query.Mission)]));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Instrument))
         {
-            filters.Add(new MastMashupFilter
-            {
-                ParamName = InstrumentNameParam,
-                Values = [MastFilterValue.FromText(query.Instrument)]
-            });
+            filters.Add(MastMashupFilter.Create(InstrumentNameParam, [MastFilterValue.FromText(query.Instrument)]));
         }
 
         if (query is { From: { } from, To: { } to })
         {
-            filters.Add(new MastMashupFilter
-            {
-                ParamName = MinParam,
-                Values =
-                [
-                    MastFilterValue.FromRange(ModifiedJulianDate.FromDateTimeOffset(from), ModifiedJulianDate.FromDateTimeOffset(to))
-                ]
-            });
+            filters.Add(MastMashupFilter.Create(
+                MinParam,
+                [MastFilterValue.FromRange(ModifiedJulianDate.FromDateTimeOffset(from), ModifiedJulianDate.FromDateTimeOffset(to))]));
         }
         else if (query.From is { } fromOnly)
         {
-            filters.Add(new MastMashupFilter
-            {
-                ParamName = MinParam,
-                Values = [MastFilterValue.FromMinBound(ModifiedJulianDate.FromDateTimeOffset(fromOnly))]
-            });
+            filters.Add(MastMashupFilter.Create(MinParam, [MastFilterValue.FromMinBound(ModifiedJulianDate.FromDateTimeOffset(fromOnly))]));
         }
         else if (query.To is { } toOnly)
         {
-            filters.Add(new MastMashupFilter
-            {
-                ParamName = MinParam,
-                Values = [MastFilterValue.FromMaxBound(ModifiedJulianDate.FromDateTimeOffset(toOnly))]
-            });
+            filters.Add(MastMashupFilter.Create(MinParam, [MastFilterValue.FromMaxBound(ModifiedJulianDate.FromDateTimeOffset(toOnly))]));
         }
 
         return filters;

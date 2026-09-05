@@ -4,7 +4,6 @@ using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Imaging;
 
-/// <summary>Summary statistics for a pixel array, computed while ignoring non-finite (NaN/Infinity) pixels.</summary>
 public readonly record struct ImageStatistics
 {
     private const int DefaultHistogramBins = 65536;

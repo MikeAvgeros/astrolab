@@ -44,7 +44,7 @@ into the real [CFITSIO](https://heasarc.gsfc.nasa.gov/fitsio/) C library via P/I
   release from source in its own build stage, and the runtime stage ends up with `libcfitsio.so`
   already installed and `ldconfig`'d — see the `cfitsio-build` stage in the `Dockerfile`.
 - **`dotnet run` (e.g. developing directly on Windows/macOS/Linux, not in Docker)**: CFITSIO is
-  *not* bundled with the app. You need to supply a compiled CFITSIO shared library yourself and
+  _not_ bundled with the app. You need to supply a compiled CFITSIO shared library yourself and
   make it loadable by the .NET runtime:
   - **Windows**: obtain or build `cfitsio.dll` (e.g. via [vcpkg](https://vcpkg.io) —
     `vcpkg install cfitsio` — or by compiling the same pinned source the Dockerfile uses with
@@ -85,14 +85,14 @@ if that capability isn't present.
 
 `GET /api/archives/search`
 
-| Query parameter       | Type   | Notes                                         |
-| --------------------- | ------ | --------------------------------------------- |
-| `archive`             | enum   | `Eso` or `Mast` (required)                    |
-| `target`              | string | Target name — see archive-specific note below |
-| `mission`             | string | Optional mission/collection filter            |
-| `instrument`          | string | Optional instrument filter                    |
-| `searchRadiusDegrees` | double | Optional cone-search radius                   |
-| `maxResults`          | int    | Default `50`                                  |
+| Query parameter       | Type   | Notes                              |
+| --------------------- | ------ | ---------------------------------- |
+| `archive`             | enum   | `Eso` or `Mast` (required)         |
+| `target`              | string | Target name (required)             |
+| `mission`             | string | Optional mission/collection filter |
+| `instrument`          | string | Optional instrument filter         |
+| `searchRadiusDegrees` | double | Optional cone-search radius        |
+| `maxResults`          | int    | Default `50`                       |
 
 - **MAST**: `target` is resolved through MAST's own name-resolution service, so common names
   (`M31`, `NGC 224`, `Andromeda Galaxy`) work directly.
@@ -169,8 +169,8 @@ Everything below takes the `fileId` from step 1.
 
 ### Time series (`/api/timeseries/{fileId}/...`)
 
-| Method & route     | Description                                                 |
-| ------------------ | ----------------------------------------------------------- |
+| Method & route     | Description                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /light-curve` | Extracts flux-vs-time from a staged time-series FITS table. Requires a native CFITSIO library — see [Native dependency: CFITSIO](#native-dependency-cfitsio). |
 
 ### Catalogues (`/api/catalogues/...`)

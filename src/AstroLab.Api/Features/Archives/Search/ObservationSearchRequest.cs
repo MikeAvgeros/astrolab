@@ -7,7 +7,7 @@ public sealed record ObservationSearchRequest
     internal const int DefaultMaxResults = 50;
 
     private ObservationSearchRequest(
-        ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,
+        ArchiveSource archive, string target, string? mission = null, string? instrument = null,
         double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
         Archive = archive;
@@ -20,7 +20,7 @@ public sealed record ObservationSearchRequest
 
     public ArchiveSource Archive { get; }
 
-    public string? Target { get; }
+    public string Target { get; }
 
     public string? Mission { get; }
 
@@ -31,9 +31,11 @@ public sealed record ObservationSearchRequest
     public int MaxResults { get; }
 
     public static ObservationSearchRequest Create(
-        ArchiveSource archive, string? target = null, string? mission = null, string? instrument = null,
+        ArchiveSource archive, string target, string? mission = null, string? instrument = null,
         double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(target);
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
 
         return new ObservationSearchRequest(archive, target, mission, instrument, searchRadiusDegrees, maxResults);

@@ -391,6 +391,14 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task SearchObservations_MissingRequiredTargetParameter_ReturnsBadRequest()
+    {
+        var response = await _client.GetAsync("/api/archives/search?archive=Eso");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetWcs_ReturnsProjectionAndReferenceMetadata()
     {
         var fileId = await UploadGradientImageWithWcsAsync();

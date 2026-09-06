@@ -16,10 +16,10 @@ public static class SearchEndpoint
 
     private static async Task<IResult> SearchAsync(
         ArchiveSource archive,
+        string target,
         IEsoArchiveClient esoClient,
         IMastArchiveClient mastClient,
         CancellationToken cancellationToken,
-        string? target = null,
         string? mission = null,
         string? instrument = null,
         double? searchRadiusDegrees = null,

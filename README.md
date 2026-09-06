@@ -158,7 +158,7 @@ Everything below takes the `fileId` from step 1.
 | `GET /sources`                   | Detects candidate point sources (`thresholdSigma`, `minimumArea`, `maxSources`); reports RA/Dec per source when the file carries a usable WCS.                                                                                                         |
 | `POST /photometry/aperture`      | Background-subtracted aperture photometry at a pixel position. Body: `centerX`, `centerY`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`, `backgroundMethod`.                                                                           |
 | `GET /photometry/sources`        | Aperture photometry (instrumental magnitude + uncertainty) for every source the detector finds. Query: `thresholdSigma`, `minimumArea`, `maxSources`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`, `magnitudeZeroPoint`.              |
-| `POST /photometry/differential`  | Differential magnitude between a target and comparison aperture in the same image. Body: `targetCenterX`/`Y`, `comparisonCenterX`/`Y`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`.                                                  |
+| `POST /photometry/differential`  | Differential magnitude between a target and comparison aperture in the same image. Body: `targetCenterX`/`Y`, `comparisonCenterX`/`Y`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`.                                                   |
 | `GET /astrometry/wcs`            | Reports the WCS solution (projection, reference pixel/coordinates, pixel scale, rotation).                                                                                                                                                             |
 | `GET /astrometry/pixel-to-world` | Converts `pixelX`/`pixelY` to RA/Dec via the WCS.                                                                                                                                                                                                      |
 | `GET /astrometry/world-to-pixel` | Converts `rightAscension`/`declination` to a pixel position via the WCS.                                                                                                                                                                               |
@@ -166,11 +166,11 @@ Everything below takes the `fileId` from step 1.
 
 ### Spectroscopy (`/api/spectroscopy/{fileId}/...`)
 
-| Method & route   | Description                                                                                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /extract`  | Extracts a 1D boxcar flux spectrum from an image HDU classified as spectral data, optionally wavelength-calibrated from dispersion coefficients. Body: `axis` (`Horizontal`\|`Vertical`), `traceCenters`, `apertureHalfWidth`, optional `dispersionCoefficients`. |
-| `POST /calibrate` | Fits a polynomial wavelength-dispersion solution (least squares) from known pixel/wavelength pairs. Body: `pixelPositions`, `knownWavelengths`. Returns `dispersionCoefficients` and `residualRms`.                                                              |
-| `GET /lines`      | Detects spectral lines in a 1D spectrum collapsed across the full spatial extent of a spectroscopic frame. Query: optional `significanceThreshold`.                                                                                                              |
+| Method & route    | Description                                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /extract`   | Extracts a 1D boxcar flux spectrum from an image HDU classified as spectral data, optionally wavelength-calibrated from dispersion coefficients. Body: `axis` (`Horizontal`\|`Vertical`), `traceCenters`, `apertureHalfWidth`, optional `dispersionCoefficients`. |
+| `POST /calibrate` | Fits a polynomial wavelength-dispersion solution (least squares) from known pixel/wavelength pairs. Body: `pixelPositions`, `knownWavelengths`. Returns `dispersionCoefficients` and `residualRms`.                                                               |
+| `GET /lines`      | Detects spectral lines in a 1D spectrum collapsed across the full spatial extent of a spectroscopic frame. Query: optional `significanceThreshold`.                                                                                                               |
 | `POST /redshift`  | Estimates redshift from paired observed/rest-frame spectral line wavelengths. Body: `observedWavelengths`, `restWavelengths`.                                                                                                                                     |
 
 ### Time series (`/api/timeseries/{fileId}/...`)
@@ -178,7 +178,7 @@ Everything below takes the `fileId` from step 1.
 | Method & route     | Description                                                                                                                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /light-curve` | Extracts flux-vs-time from a staged time-series FITS table. Requires a native CFITSIO library — see [Native dependency: CFITSIO](#native-dependency-cfitsio). |
-| `POST /detrend`    | Removes a long-term trend from a light curve. Body: `method` (`linear`\|`median`). Requires a native CFITSIO library.                                        |
+| `POST /detrend`    | Removes a long-term trend from a light curve. Body: `method` (`linear`\|`median`). Requires a native CFITSIO library.                                         |
 | `POST /compare`    | Compares two staged light curves via Pearson correlation and mean instrumental-magnitude offset. Body: `comparisonFileId`. Requires a native CFITSIO library. |
 
 ### Catalogues (`/api/catalogues/...`)
@@ -329,3 +329,27 @@ That's the full path from "find a galaxy in an archive" to "photometric measurem
 FITS file," using only currently-implemented endpoints. The same flow works with `archive=Eso` and
 an ESO-style target string (e.g. `M 31`), or by skipping steps 1–2 entirely and uploading your own
 FITS file at step 3's `fileId`.
+
+# The Science Behind the AstroLab API
+
+AstroLab automates core observational astronomy techniques on **FITS** (Flexible Image Transport System) files—the universal file standard that stores raw pixel grids alongside metadata detailing exposure time, instrument parameters, and celestial pointing.
+
+## Astrometry (World Coordinate System - WCS)
+
+Cameras capture images on 2D pixel grids ($X, Y$). AstroLab uses WCS mathematical matrices stored in FITS headers to project flat pixel coordinates into universal sky coordinates: Right Ascension (RA, longitude equivalent) and Declination (Dec, latitude equivalent).
+
+## Aperture Photometry
+
+To measure the brightness of a star, the API places a central circular mask (aperture) over the target and an outer ring (annulus) around it. It sums the total light in the center, calculates average background sky noise in the ring, and subtracts the background to calculate net flux ($F_{	ext{net}}$):
+
+$$F_{	ext{net}} = F_{	ext{total}} - (A_{	ext{aperture}} \times I_{	ext{background}})$$
+
+## Spectroscopy & Redshift
+
+Prism-like optics split light into individual wavelengths. AstroLab extracts 1D light profiles, detects absorption/emission lines, and calculates cosmological redshift ($z$) by comparing observed wavelengths ($\lambda_{	ext{obs}}$) against stationary laboratory wavelengths ($\lambda_{	ext{rest}}$):
+
+$$z = \frac{\lambda_{	ext{obs}} - \lambda_{	ext{rest}}}{\lambda_{	ext{rest}}}$$
+
+## Time-Series Analysis (Light Curves)
+
+By tracking brightness across multiple time steps, the API builds light curves used to discover transiting exoplanets or variable stars, applying detrending algorithms to strip out instrumental drift.

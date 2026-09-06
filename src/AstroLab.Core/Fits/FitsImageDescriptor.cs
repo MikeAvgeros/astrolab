@@ -42,7 +42,7 @@ public readonly record struct FitsImageDescriptor
 
     public static Result<FitsImageDescriptor> FromHeader(FitsHeader header) =>
         header.GetInteger("BITPIX")
-            .Bind(ToBitpixType)
+            .Bind(ToBitPixType)
             .Bind(bitpix => header.GetInteger("NAXIS")
                 .Bind(naxis => ReadAxes(header, (int)naxis))
                 .Map(axes =>
@@ -56,10 +56,12 @@ public readonly record struct FitsImageDescriptor
                     var blank = blankResult.IsSuccess ? blankResult.Value : (long?)null;
 
                     return Create(bitpix, axes, bzero, bscale, blank);
-
                 }));
 
-    private static Result<BitPixType> ToBitpixType(long value) =>
+    private static FitsImageDescriptor Create(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank) =>
+        new(bitPix, nAxes, bZero, bScale, blank);
+
+    private static Result<BitPixType> ToBitPixType(long value) =>
         Enum.IsDefined(typeof(BitPixType), (int)value)
             ? (BitPixType)(int)value
             : Error.Validation("fits.header.invalid_bitpix", $"BITPIX value {value} is not a valid FITS pixel representation.");
@@ -99,7 +101,4 @@ public readonly record struct FitsImageDescriptor
 
         return builder.MoveToImmutable();
     }
-
-    public static FitsImageDescriptor Create(BitPixType bitPix, ImmutableArray<int> nAxes, double bZero, double bScale, long? blank) =>
-        new(bitPix, nAxes, bZero, bScale, blank);
 }

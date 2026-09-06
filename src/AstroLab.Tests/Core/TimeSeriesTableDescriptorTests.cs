@@ -37,7 +37,7 @@ public class TimeSeriesTableDescriptorTests
 
         var header = FitsHeader.Parse(BuildHeaderBlock([.. cards])).Value;
 
-        return HduDescriptor.FromHeader(1, header);
+        return HduDescriptor.FromHeader(1, header).Value;
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class TimeSeriesTableDescriptorTests
             "NAXIS   =                    0",
             "END")).Value;
 
-        var hdu = HduDescriptor.FromHeader(1, header);
+        var hdu = HduDescriptor.FromHeader(1, header).Value;
 
         var result = TimeSeriesTableDescriptor.Resolve(hdu);
 
@@ -119,6 +119,16 @@ public class TimeSeriesTableDescriptorTests
     public void Resolve_TimeColumnFormHasNoExplicitRepeatCount_ResolvesAsScalar()
     {
         var hdu = BuildTableHduWithForms(10, [("TIME", "D"), ("FLUX", "1D")]);
+
+        var result = TimeSeriesTableDescriptor.Resolve(hdu);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public void Resolve_ColumnFormIsCharacterString_ResolvesAsScalarRegardlessOfWidth()
+    {
+        var hdu = BuildTableHduWithForms(10, [("TIME", "20A"), ("FLUX", "1D")]);
 
         var result = TimeSeriesTableDescriptor.Resolve(hdu);
 
@@ -158,7 +168,7 @@ public class TimeSeriesTableDescriptorTests
 
         var header = FitsHeader.Parse(BuildHeaderBlock([.. cards])).Value;
 
-        var hdu = HduDescriptor.FromHeader(1, header);
+        var hdu = HduDescriptor.FromHeader(1, header).Value;
 
         var result = TimeSeriesTableDescriptor.Resolve(hdu);
 

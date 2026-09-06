@@ -58,7 +58,14 @@ public static class FitsHeaderReader
                 return Result<ImmutableArray<HduLocation>>.Failure(headerResult.Error);
             }
 
-            var descriptor = HduDescriptor.FromHeader(index, headerResult.Value);
+            var descriptorResult = HduDescriptor.FromHeader(index, headerResult.Value);
+
+            if (descriptorResult.IsFailure)
+            {
+                return Result<ImmutableArray<HduLocation>>.Failure(descriptorResult.Error);
+            }
+
+            var descriptor = descriptorResult.Value;
 
             var dataOffset = stream.Position;
 

@@ -86,12 +86,11 @@ public static class ImageDownsampler
             {
                 var value = source[rowOffset + sourceX];
 
-                if (float.IsFinite(value))
-                {
-                    sum += value;
+                if (!float.IsFinite(value)) continue;
+                
+                sum += value;
 
-                    count++;
-                }
+                count++;
             }
         }
 

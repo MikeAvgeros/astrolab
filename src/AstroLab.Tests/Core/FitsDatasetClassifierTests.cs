@@ -14,7 +14,7 @@ public class FitsDatasetClassifierTests
     {
         var header = FitsHeader.Parse(BuildHeaderBlock(cards)).Value;
 
-        return HduDescriptor.FromHeader(index, header);
+        return HduDescriptor.FromHeader(index, header).Value;
     }
 
     private static HduDescriptor PrimaryHdu() => BuildHdu(
@@ -85,6 +85,16 @@ public class FitsDatasetClassifierTests
     public void Classify_TableWithOnlyTimeColumn_DoesNotReportTimeSeries()
     {
         var hdus = new[] { PrimaryHdu(), TableHdu(1, 1, "TIME") };
+
+        Assert.Equal(FitsDatasetKind.Table, FitsDatasetClassifier.Classify(hdus));
+
+        Assert.False(FitsDatasetClassifier.EnsureKind(hdus, FitsDatasetKind.TimeSeries).IsSuccess);
+    }
+
+    [Fact]
+    public void Classify_TableWithTimeColumnButNoFluxColumn_DoesNotReportTimeSeries()
+    {
+        var hdus = new[] { PrimaryHdu(), TableHdu(1, 2, "TIME", "RA") };
 
         Assert.Equal(FitsDatasetKind.Table, FitsDatasetClassifier.Classify(hdus));
 

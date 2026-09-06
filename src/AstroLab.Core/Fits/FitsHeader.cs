@@ -37,14 +37,12 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
         {
             value = _keywords[i].Value;
 
-            return value.Kind != FitsValueKind.None;
-
+            return true;
         }
 
         value = FitsValue.None;
 
         return false;
-
     }
 
     public Result<FitsValue> Get(string keyword) => TryGetValue(keyword, out var value)

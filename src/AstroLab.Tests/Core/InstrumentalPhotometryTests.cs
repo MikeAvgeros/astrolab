@@ -39,6 +39,16 @@ public class InstrumentalPhotometryTests
     }
 
     [Fact]
+    public void ComputeMagnitude_RejectsNegativeFluxUncertainty()
+    {
+        var result = InstrumentalPhotometry.ComputeMagnitude(netFlux: 100.0, fluxUncertainty: -1.0, zeroPoint: 25.0);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.invalid_flux_uncertainty", result.Error.Code);
+    }
+
+    [Fact]
     public void ComputeDifferentialMagnitude_CombinesUncertaintiesInQuadrature()
     {
         var (differential, uncertainty) = InstrumentalPhotometry.ComputeDifferentialMagnitude(

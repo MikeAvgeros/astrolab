@@ -1,6 +1,6 @@
 namespace AstroLab.Core.Fits;
 
-public readonly struct FitsValue
+public readonly record struct FitsValue
 {
     private readonly string? _text;
     private readonly long _integer;
@@ -46,23 +46,6 @@ public readonly struct FitsValue
         ? _logical
         : throw new InvalidOperationException($"FitsValue is {Kind}, not Logical.");
 
-    public TResult Match<TResult>(
-        Func<TResult> onNone,
-        Func<string, TResult> onString,
-        Func<long, TResult> onInteger,
-        Func<double, TResult> onReal,
-        Func<bool, TResult> onLogical,
-        Func<string, TResult> onUndefined) => Kind switch
-        {
-            FitsValueKind.None => onNone(),
-            FitsValueKind.String => onString(_text!),
-            FitsValueKind.Integer => onInteger(_integer),
-            FitsValueKind.Real => onReal(_real),
-            FitsValueKind.Logical => onLogical(_logical),
-            FitsValueKind.Undefined => onUndefined(_text ?? string.Empty),
-            _ => throw new InvalidOperationException($"Unhandled FitsValueKind: {Kind}"),
-        };
-
     public override string ToString() => Match(
         onNone: () => string.Empty,
         onString: s => s,
@@ -70,4 +53,21 @@ public readonly struct FitsValue
         onReal: r => r.ToString("G17"),
         onLogical: b => b ? "T" : "F",
         onUndefined: s => s);
+    
+    private TResult Match<TResult>(
+        Func<TResult> onNone,
+        Func<string, TResult> onString,
+        Func<long, TResult> onInteger,
+        Func<double, TResult> onReal,
+        Func<bool, TResult> onLogical,
+        Func<string, TResult> onUndefined) => Kind switch
+    {
+        FitsValueKind.None => onNone(),
+        FitsValueKind.String => onString(_text!),
+        FitsValueKind.Integer => onInteger(_integer),
+        FitsValueKind.Real => onReal(_real),
+        FitsValueKind.Logical => onLogical(_logical),
+        FitsValueKind.Undefined => onUndefined(_text ?? string.Empty),
+        _ => throw new InvalidOperationException($"Unhandled FitsValueKind: {Kind}"),
+    };
 }

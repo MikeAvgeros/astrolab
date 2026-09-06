@@ -72,6 +72,20 @@ public class ApertureEngineTests
     }
 
     [Fact]
+    public void MeasureCircularAperture_AllPixelsNonFinite_ReturnsEmptyApertureFailure()
+    {
+        var pixels = new float[25];
+
+        Array.Fill(pixels, float.NaN);
+
+        var result = ApertureEngine.MeasureCircularAperture(pixels, 5, 5, 2, 2, 2);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.empty_aperture", result.Error.Code);
+    }
+
+    [Fact]
     public void MeasureAnnulusBackground_Median_IsRobustToOutliers()
     {
         const int size = 121;

@@ -26,9 +26,15 @@ public static class InstrumentalPhotometry
                 "photometry.non_positive_net_flux", "Instrumental magnitude requires a positive net flux.");
         }
 
-        var magnitude = zeroPoint - (MagnitudeScaleFactor * Math.Log10(netFlux));
+        if (fluxUncertainty < 0.0 || !double.IsFinite(fluxUncertainty))
+        {
+            return Error.Validation(
+                "photometry.invalid_flux_uncertainty", "fluxUncertainty must be a finite, non-negative value.");
+        }
 
-        var magnitudeUncertainty = (MagnitudeScaleFactor / Math.Log(10.0)) * (fluxUncertainty / netFlux);
+        var magnitude = zeroPoint - MagnitudeScaleFactor * Math.Log10(netFlux);
+
+        var magnitudeUncertainty = MagnitudeScaleFactor / Math.Log(10.0) * (fluxUncertainty / netFlux);
 
         return (magnitude, magnitudeUncertainty);
     }
@@ -39,7 +45,7 @@ public static class InstrumentalPhotometry
         var differential = targetMagnitude - comparisonMagnitude;
 
         var uncertainty = Math.Sqrt(
-            (targetMagnitudeUncertainty * targetMagnitudeUncertainty) + (comparisonMagnitudeUncertainty * comparisonMagnitudeUncertainty));
+            targetMagnitudeUncertainty * targetMagnitudeUncertainty + comparisonMagnitudeUncertainty * comparisonMagnitudeUncertainty);
 
         return (differential, uncertainty);
     }

@@ -1,3 +1,5 @@
+using AstroLab.Core.Result;
+
 namespace AstroLab.Core.Fits;
 
 public readonly record struct HduDescriptor
@@ -27,31 +29,41 @@ public readonly record struct HduDescriptor
         _ => NoDataBytes,
     };
 
-    private long TableDataSizeBytes()
-    {
-        var rowLength = NonNegative(Header.GetInteger("NAXIS1").GetValueOrDefault(NoDataBytes));
-
-        var rowCount = NonNegative(Header.GetInteger("NAXIS2").GetValueOrDefault(NoDataBytes));
-
-        var heapSize = NonNegative(Header.GetInteger("PCOUNT").GetValueOrDefault(NoDataBytes));
-
-        return rowLength * rowCount + heapSize;
-    }
-
-    private static long NonNegative(long value) => Math.Max(value, NoDataBytes);
-
-    public static HduDescriptor FromHeader(int index, FitsHeader header)
+    public static Result<HduDescriptor> FromHeader(int index, FitsHeader header)
     {
         var type = ClassifyHduType(index, header);
 
         var hasPixelData = type is HduType.Primary or HduType.Image;
 
-        var descriptor = hasPixelData ? FitsImageDescriptor.FromHeader(header) : default;
+        if (!hasPixelData)
+        {
+            return Create(index, type, header, null);
+        }
 
-        var image = hasPixelData && descriptor.IsSuccess ? descriptor.Value : (FitsImageDescriptor?)null;
-
-        return Create(index, type, header, image);
+        return FitsImageDescriptor.FromHeader(header).Map(image => Create(index, type, header, image));
     }
+
+    private static HduDescriptor Create(int index, HduType type, FitsHeader header, FitsImageDescriptor? image)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+
+        ArgumentNullException.ThrowIfNull(header);
+
+        return new HduDescriptor(index, type, header, image);
+    }
+
+    private long TableDataSizeBytes()
+    {
+        var rowLength = BoundedNonNegative(Header.GetInteger("NAXIS1").GetValueOrDefault(NoDataBytes));
+
+        var rowCount = BoundedNonNegative(Header.GetInteger("NAXIS2").GetValueOrDefault(NoDataBytes));
+
+        var heapSize = BoundedNonNegative(Header.GetInteger("PCOUNT").GetValueOrDefault(NoDataBytes));
+
+        return rowLength * rowCount + heapSize;
+    }
+
+    private static long BoundedNonNegative(long value) => Math.Clamp(value, NoDataBytes, int.MaxValue);
 
     private static HduType ClassifyHduType(int index, FitsHeader header)
     {
@@ -74,14 +86,5 @@ public readonly record struct HduDescriptor
             "BINTABLE" => HduType.BinaryTable,
             _ => HduType.Unknown,
         };
-    }
-
-    public static HduDescriptor Create(int index, HduType type, FitsHeader header, FitsImageDescriptor? image)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(index);
-
-        ArgumentNullException.ThrowIfNull(header);
-
-        return new HduDescriptor(index, type, header, image);
     }
 }

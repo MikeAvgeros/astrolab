@@ -17,13 +17,7 @@ public static class SpectrumExtractor
     private const string DispersionAxisHeaderKeyword = "DISPAXIS";
     private const long DefaultDispersionAxisValue = 1;
     private const long VerticalDispersionAxisValue = 2;
-
-    /// <summary>
-    /// Resolves which frame axis carries the dispersion direction from the FITS <c>DISPAXIS</c>
-    /// convention (1 = horizontal/NAXIS1, 2 = vertical/NAXIS2), defaulting to horizontal when the
-    /// keyword is absent or carries any other value — this is the common convention, but is only a
-    /// default: a file with no explicit <c>DISPAXIS</c> card carries no authoritative answer.
-    /// </summary>
+    
     public static DispersionAxis ResolveDispersionAxis(FitsHeader header) =>
         header.GetInteger(DispersionAxisHeaderKeyword).GetValueOrDefault(DefaultDispersionAxisValue) == VerticalDispersionAxisValue
             ? DispersionAxis.Vertical
@@ -160,14 +154,7 @@ public static class SpectrumExtractor
 
         return Result<Unit>.Success(Unit.Value);
     }
-
-    /// <summary>
-    /// Fits a polynomial wavelength-dispersion solution (least squares, via the normal equations)
-    /// from known pixel/wavelength pairs. The polynomial degree is chosen automatically as
-    /// <c>min(<see cref="MaxDispersionDegree"/>, pairs - 1)</c>, so two pairs give an exact linear
-    /// fit and more pairs give an over-determined low-order fit rather than exact interpolation
-    /// (which would be numerically unstable for noisy arc-line measurements).
-    /// </summary>
+    
     public static Result<(double[] Coefficients, double ResidualRms)> FitDispersionSolution(
         ReadOnlySpan<double> pixelPositions, ReadOnlySpan<double> knownWavelengths)
     {

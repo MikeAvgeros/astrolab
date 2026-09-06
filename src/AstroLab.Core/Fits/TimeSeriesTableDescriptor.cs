@@ -116,10 +116,7 @@ public readonly record struct TimeSeriesTableDescriptor
 
         return Result<Unit>.Success(Unit.Value);
     }
-
-    // Parses TFORMn's leading repeat count ("1D" -> 1, "D" -> 1, "20A" -> 20). A P/Q type code marks
-    // a variable-length array column, whose own leading digit is a descriptor count rather than the
-    // per-row element count, so it is rejected here rather than misread as a scalar column.
+    
     private static Result<int> ParseFixedRepeatCount(string tform)
     {
         if (tform.Length == 0)
@@ -148,7 +145,7 @@ public readonly record struct TimeSeriesTableDescriptor
                 $"TFORM '{tform}' is a variable-length array column, which is not yet supported.");
         }
 
-        if (digitCount == 0)
+        if (typeCode == 'A' || digitCount == 0)
         {
             return ScalarRepeatCount;
         }

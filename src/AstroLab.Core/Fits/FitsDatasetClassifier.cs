@@ -13,6 +13,7 @@ namespace AstroLab.Core.Fits;
 public static class FitsDatasetClassifier
 {
     private const string TimeColumnName = "TIME";
+    private const string FluxColumnName = "FLUX";
     private const string TotalFieldsKeyword = "TFIELDS";
     private const string DispersionAxisKeyword = "DISPAXIS";
     private const int FirstFieldNumber = 1;
@@ -112,11 +113,16 @@ public static class FitsDatasetClassifier
             return false;
         }
 
+        return HasColumn(hdu.Header, fieldCount, TimeColumnName) && HasColumn(hdu.Header, fieldCount, FluxColumnName);
+    }
+
+    private static bool HasColumn(FitsHeader header, long fieldCount, string columnName)
+    {
         for (var field = FirstFieldNumber; field <= fieldCount; field++)
         {
-            var nameResult = hdu.Header.GetString($"TTYPE{field}");
+            var nameResult = header.GetString($"TTYPE{field}");
 
-            if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), TimeColumnName, StringComparison.OrdinalIgnoreCase))
+            if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), columnName, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

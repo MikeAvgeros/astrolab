@@ -174,7 +174,7 @@ public class FitsHeaderTests
 
         var header = FitsHeader.Parse(block).Value;
 
-        var hdu = HduDescriptor.FromHeader(0, header);
+        var hdu = HduDescriptor.FromHeader(0, header).Value;
 
         Assert.Equal(HduType.Primary, hdu.Type);
 

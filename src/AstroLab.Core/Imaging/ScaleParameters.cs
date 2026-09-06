@@ -2,7 +2,7 @@ namespace AstroLab.Core.Imaging;
 
 public readonly record struct ScaleParameters
 {
-    private const double DefaultAsinhSoftening = 0.1;
+    internal const double DefaultAsinhSoftening = 0.1;
 
     private ScaleParameters(double blackPoint, double whitePoint, StretchMode mode, double asinhSoftening)
     {

@@ -200,32 +200,7 @@ public readonly record struct Wcs
 
         return (CrPix1 + p1 - PixelCenterOffset, CrPix2 + p2 - PixelCenterOffset);
     }
-
-    private Result<Unit> ValidateProjectionRadius(double radiusDegrees) => Projection switch
-    {
-        WcsProjection.Sin when radiusDegrees > RadiansToDegrees => Error.Validation(
-            "astrometry.point_outside_projection", "Pixel position lies outside the valid radius of a SIN projection."),
-        _ => Result<Unit>.Success(Unit.Value),
-    };
-
-    private Result<Unit> ValidateNativeLatitude(double thetaRadians) => Projection switch
-    {
-        WcsProjection.Tan when thetaRadians <= 0.0 => PointNotVisibleError("TAN"),
-        WcsProjection.Sin when thetaRadians < 0.0 => PointNotVisibleError("SIN"),
-        _ => Result<Unit>.Success(Unit.Value),
-    };
-
-    private static Error PointNotVisibleError(string projectionCode) => Error.Validation(
-        "astrometry.point_not_visible",
-        $"The requested sky position is more than 90 degrees from the reference point and is not representable in a {projectionCode} projection.");
-
-    private static double NormalizeDegrees(double degrees)
-    {
-        var normalized = degrees % FullCircleDegrees;
-
-        return normalized < 0.0 ? normalized + FullCircleDegrees : normalized;
-    }
-
+    
     public static Result<Wcs> FromHeader(FitsHeader header)
     {
         var cType1Result = header.GetString("CTYPE1");
@@ -305,6 +280,31 @@ public readonly record struct Wcs
             cType1Result.Value, cType2Result.Value, projection.Value,
             crPix1.Value, crPix2.Value, crVal1.Value, crVal2.Value,
             cd11, cd12, cd21, cd22, longitudeAxisIndex, latitudeAxisIndex, radeSys);
+    }
+
+    private Result<Unit> ValidateProjectionRadius(double radiusDegrees) => Projection switch
+    {
+        WcsProjection.Sin when radiusDegrees > RadiansToDegrees => Error.Validation(
+            "astrometry.point_outside_projection", "Pixel position lies outside the valid radius of a SIN projection."),
+        _ => Result<Unit>.Success(Unit.Value),
+    };
+
+    private Result<Unit> ValidateNativeLatitude(double thetaRadians) => Projection switch
+    {
+        WcsProjection.Tan when thetaRadians <= 0.0 => PointNotVisibleError("TAN"),
+        WcsProjection.Sin when thetaRadians < 0.0 => PointNotVisibleError("SIN"),
+        _ => Result<Unit>.Success(Unit.Value),
+    };
+
+    private static Error PointNotVisibleError(string projectionCode) => Error.Validation(
+        "astrometry.point_not_visible",
+        $"The requested sky position is more than 90 degrees from the reference point and is not representable in a {projectionCode} projection.");
+
+    private static double NormalizeDegrees(double degrees)
+    {
+        var normalized = degrees % FullCircleDegrees;
+
+        return normalized < 0.0 ? normalized + FullCircleDegrees : normalized;
     }
 
     private static (string AxisType, string? ProjectionCode) ParseCType(string cType)

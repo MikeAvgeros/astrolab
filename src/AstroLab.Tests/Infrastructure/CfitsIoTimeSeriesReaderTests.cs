@@ -23,7 +23,7 @@ public class CfitsIoTimeSeriesReaderTests
         {
             var header = FitsHeader.Parse(ReadHeaderBlock(path, hduIndex: 1)).Value;
 
-            var hdu = HduDescriptor.FromHeader(1, header);
+            var hdu = HduDescriptor.FromHeader(1, header).Value;
 
             var descriptor = TimeSeriesTableDescriptor.Resolve(hdu).Value;
 
@@ -51,7 +51,7 @@ public class CfitsIoTimeSeriesReaderTests
 
         var header = FitsHeader.Parse(ReadHeaderBlock(existingPath, hduIndex: 1)).Value;
 
-        var descriptor = TimeSeriesTableDescriptor.Resolve(HduDescriptor.FromHeader(1, header)).Value;
+        var descriptor = TimeSeriesTableDescriptor.Resolve(HduDescriptor.FromHeader(1, header).Value).Value;
 
         File.Delete(existingPath);
 

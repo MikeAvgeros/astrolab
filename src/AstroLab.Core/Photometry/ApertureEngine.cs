@@ -80,7 +80,9 @@ public static class ApertureEngine
             }
         }
 
-        return ApertureMeasurement.Create(flux, area, sampledPixels);
+        return sampledPixels > 0
+            ? ApertureMeasurement.Create(flux, area, sampledPixels)
+            : Error.Validation("photometry.empty_aperture", "No valid pixels were found within the photometric aperture.");
     }
 
     public static Result<AnnulusMeasurement> MeasureAnnulusBackground(
@@ -236,7 +238,7 @@ public static class ApertureEngine
                 {
                     var dx = px + PixelCenterOffset - centerX;
 
-                    var distanceSquared = (dx * dx) + dySquared;
+                    var distanceSquared = dx * dx + dySquared;
 
                     if (distanceSquared < innerRadiusSquared || distanceSquared > outerRadiusSquared)
                     {
@@ -267,7 +269,7 @@ public static class ApertureEngine
 
             var median = count % 2 == 1
                 ? samples[count / 2]
-                : (samples[(count / 2) - 1] + samples[count / 2]) / 2.0f;
+                : (samples[count / 2 - 1] + samples[count / 2]) / 2.0f;
 
             return AnnulusMeasurement.Create(median, count);
         }
@@ -299,7 +301,7 @@ public static class ApertureEngine
 
         for (var sy = 0; sy < oversampling; sy++)
         {
-            var subY = py + ((sy + PixelCenterOffset) / oversampling);
+            var subY = py + (sy + PixelCenterOffset) / oversampling;
 
             var dy = subY - centerY;
 
@@ -307,11 +309,11 @@ public static class ApertureEngine
 
             for (var sx = 0; sx < oversampling; sx++)
             {
-                var subX = px + ((sx + PixelCenterOffset) / oversampling);
+                var subX = px + (sx + PixelCenterOffset) / oversampling;
 
                 var dx = subX - centerX;
 
-                if ((dx * dx) + dySquared <= radiusSquared)
+                if (dx * dx + dySquared <= radiusSquared)
                 {
                     hits++;
                 }
@@ -327,7 +329,7 @@ public static class ApertureEngine
 
         var dy = Math.Max(0.0, Math.Max(py - centerY, centerY - (py + 1)));
 
-        return Math.Sqrt((dx * dx) + (dy * dy));
+        return Math.Sqrt(dx * dx + dy * dy);
     }
 
     private static double FarthestCornerDistance(int px, int py, double centerX, double centerY)

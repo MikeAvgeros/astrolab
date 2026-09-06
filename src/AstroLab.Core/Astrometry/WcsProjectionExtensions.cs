@@ -17,7 +17,7 @@ public static class WcsProjectionExtensions
             WcsProjection.Tan => "TAN",
             WcsProjection.Sin => "SIN",
             WcsProjection.Arc => "ARC",
-            _ => throw new ArgumentOutOfRangeException(nameof(projection)),
+            _ => throw new ArgumentOutOfRangeException(nameof(projection))
         };
 
         public double NativeLatitudeToRadiusDegrees(double nativeLatitudeRadians) => projection switch
@@ -25,7 +25,7 @@ public static class WcsProjectionExtensions
             WcsProjection.Tan => DegreesPerRadian / Math.Tan(nativeLatitudeRadians),
             WcsProjection.Sin => DegreesPerRadian * Math.Cos(nativeLatitudeRadians),
             WcsProjection.Arc => DegreesPerRadian * (RightAngleRadians - nativeLatitudeRadians),
-            _ => throw new ArgumentOutOfRangeException(nameof(projection)),
+            _ => throw new ArgumentOutOfRangeException(nameof(projection))
         };
 
         public double RadiusDegreesToNativeLatitude(double radiusDegrees) => projection switch
@@ -33,7 +33,7 @@ public static class WcsProjectionExtensions
             WcsProjection.Tan => Math.Atan2(DegreesPerRadian, radiusDegrees),
             WcsProjection.Sin => Math.Acos(radiusDegrees / DegreesPerRadian),
             WcsProjection.Arc => RightAngleRadians - (radiusDegrees / DegreesPerRadian),
-            _ => throw new ArgumentOutOfRangeException(nameof(projection)),
+            _ => throw new ArgumentOutOfRangeException(nameof(projection))
         };
     }
 
@@ -42,6 +42,6 @@ public static class WcsProjectionExtensions
         "TAN" => WcsProjection.Tan,
         "SIN" => WcsProjection.Sin,
         "ARC" => WcsProjection.Arc,
-        _ => null,
+        _ => null
     };
 }

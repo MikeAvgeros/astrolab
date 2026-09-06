@@ -43,7 +43,7 @@ public readonly record struct ImageStatistics
 
     public long InvalidPixelCount => TotalPixelCount - ValidPixelCount;
 
-    public double DeadPixelPercentage => InvalidPixelCount / (double)TotalPixelCount * PercentageScale;
+    public double DeadPixelPercentage => TotalPixelCount > 0 ? InvalidPixelCount / (double)TotalPixelCount * PercentageScale : 0.0;
 
     public static Result<ImageStatistics> Compute(ReadOnlySpan<float> pixels)
     {
@@ -123,7 +123,6 @@ public readonly record struct ImageStatistics
         if (statsResult.IsFailure)
         {
             return Result<(double, double)>.Failure(statsResult.Error);
-
         }
 
         var stats = statsResult.Value;
@@ -223,6 +222,39 @@ public readonly record struct ImageStatistics
 
         return ImageHistogram.Create([.. binEdges], [.. counts], stats.ValidPixelCount);
     }
+    
+    public static SkyBackgroundStatistics ComputeSkyBackground(ReadOnlySpan<float> pixels, ImageStatistics stats)
+    {
+        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
+        {
+            return SkyBackgroundStatistics.Create(stats.Min, stats.Max, 0.0);
+        }
+
+        var histogram = ArrayPool<long>.Shared.Rent(SkyBackgroundHistogramBins);
+
+        try
+        {
+            var histogramSpan = histogram.AsSpan(0, SkyBackgroundHistogramBins);
+
+            histogramSpan.Clear();
+
+            var range = stats.Max - stats.Min;
+
+            var scale = SkyBackgroundHistogramBins / range;
+
+            PopulateHistogram(pixels, stats.Min, scale, histogramSpan);
+
+            var q1 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundLowerPercentile);
+
+            var q3 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundUpperPercentile);
+
+            return SkyBackgroundStatistics.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
+        }
+        finally
+        {
+            ArrayPool<long>.Shared.Return(histogram);
+        }
+    }
 
     private static void PopulateHistogram(ReadOnlySpan<float> pixels, double min, double scale, Span<long> histogram)
     {
@@ -260,40 +292,7 @@ public readonly record struct ImageStatistics
         return min + histogram.Length / scale;
     }
 
-    public static SkyBackgroundStatistics ComputeSkyBackground(ReadOnlySpan<float> pixels, ImageStatistics stats)
-    {
-        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
-        {
-            return SkyBackgroundStatistics.Create(stats.Min, stats.Max, 0.0);
-        }
-
-        var histogram = ArrayPool<long>.Shared.Rent(SkyBackgroundHistogramBins);
-
-        try
-        {
-            var histogramSpan = histogram.AsSpan(0, SkyBackgroundHistogramBins);
-
-            histogramSpan.Clear();
-
-            var range = stats.Max - stats.Min;
-
-            var scale = SkyBackgroundHistogramBins / range;
-
-            PopulateHistogram(pixels, stats.Min, scale, histogramSpan);
-
-            var q1 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundLowerPercentile);
-
-            var q3 = FindPercentileValue(histogramSpan, stats.ValidPixelCount, stats.Min, scale, SkyBackgroundUpperPercentile);
-
-            return SkyBackgroundStatistics.Create(q1, q3, (q3 - q1) / IqrToSigmaFactor);
-        }
-        finally
-        {
-            ArrayPool<long>.Shared.Return(histogram);
-        }
-    }
-
-    public static ImageStatistics Create(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
+    private static ImageStatistics Create(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(validPixelCount);
 

@@ -89,19 +89,25 @@ public static class LightCurveDetrender
 
         var detrended = new double[flux.Length];
 
+        Span<double> window = stackalloc double[MovingMedianWindowPoints];
+
         for (var i = 0; i < flux.Length; i++)
         {
             var windowStart = Math.Max(0, i - halfWindow);
 
             var windowEnd = Math.Min(flux.Length - 1, i + halfWindow);
 
-            var window = flux[windowStart..(windowEnd + 1)].ToArray();
+            var windowLength = windowEnd - windowStart + 1;
 
-            Array.Sort(window);
+            var activeWindow = window[..windowLength];
 
-            var median = window.Length % 2 == 1
-                ? window[window.Length / 2]
-                : (window[(window.Length / 2) - 1] + window[window.Length / 2]) / 2.0;
+            flux[windowStart..(windowEnd + 1)].CopyTo(activeWindow);
+
+            activeWindow.Sort();
+
+            var median = windowLength % 2 == 1
+                ? activeWindow[windowLength / 2]
+                : (activeWindow[(windowLength / 2) - 1] + activeWindow[windowLength / 2]) / 2.0;
 
             detrended[i] = flux[i] - median;
         }

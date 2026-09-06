@@ -66,6 +66,27 @@ internal static class SyntheticFits
     ]);
 
     /// <summary>
+    /// A 9x3, 8-bit spectroscopic frame (<c>DISPAXIS=1</c>, horizontal dispersion) where every
+    /// pixel is 10 except column 4, which is 100 across all 3 spatial rows. Collapsing the full
+    /// spatial extent therefore gives an exact, hand-checkable 1D spectrum: 30 everywhere except a
+    /// single 300-flux spike at dispersion bin 4.
+    /// </summary>
+    public static byte[] SmallSpectrumWithEmissionLine() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                    9",
+                "NAXIS2  =                    3",
+                "DISPAXIS=                    1",
+                "END",
+            ],
+            BuildEmissionLinePixelData())
+    ]);
+
+    /// <summary>
     /// A 3-HDU file where the ONLY HDU with pixel data (extension 1, a plain 4x2 gradient image)
     /// carries no spectral marker of its own, but an unrelated, dataless extension (2) carries a
     /// stray <c>DISPAXIS</c> card. Regression fixture for the classify/load HDU-selection mismatch:
@@ -235,6 +256,25 @@ internal static class SyntheticFits
             for (var x = 4; x <= 6; x++)
             {
                 pixels[(y * width) + x] = 200;
+            }
+        }
+
+        return pixels;
+    }
+
+    private static byte[] BuildEmissionLinePixelData()
+    {
+        const int width = 9;
+        const int height = 3;
+        const int lineColumn = 4;
+
+        var pixels = new byte[width * height];
+
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                pixels[(y * width) + x] = (byte)(x == lineColumn ? 100 : 10);
             }
         }
 

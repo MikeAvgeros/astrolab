@@ -1,26 +1,42 @@
+using AstroLab.Core.TimeSeries;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.TimeSeries.Compare;
 
-/// <summary>
-/// Roadmap slice: comparing two staged light curves (from different dates or instruments) via
-/// their correlation and mean magnitude offset. Request/response contract is final; the
-/// comparison algorithm itself is not yet implemented (see spec.md §6.5), so this route always
-/// returns HTTP 501.
-/// </summary>
+/// <summary>Compares two staged light curves (from different dates or instruments) via their correlation and mean magnitude offset.</summary>
 public static class CompareEndpoint
 {
     extension(IEndpointRouteBuilder group)
     {
         public void MapCompareEndpoint()
         {
-            group.MapPost("/{fileId}/compare", CompareLightCurves)
-                .WithSummary("Compares two staged light curves from different dates or instruments. Not yet implemented.");
+            group.MapPost("/{fileId}/compare", CompareLightCurvesAsync)
+                .WithSummary("Compares two staged light curves from different dates or instruments.");
         }
     }
 
-    private static IResult CompareLightCurves(string fileId, LightCurveCompareRequest request)
+    private static async Task<IResult> CompareLightCurvesAsync(
+        string fileId, LightCurveCompareRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return NotImplementedResult.Value("timeseries.compare.not_implemented", "Light curve comparison is not yet implemented.");
+        var primaryResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
+
+        if (primaryResult.IsFailure)
+        {
+            return primaryResult.Error.ToProblem();
+        }
+
+        var comparisonResult = await datasetReader.LoadLightCurveAsync(request.ComparisonFileId, cancellationToken);
+
+        if (comparisonResult.IsFailure)
+        {
+            return comparisonResult.Error.ToProblem();
+        }
+
+        var compareResult = LightCurveComparer.Compare(primaryResult.Value.Flux, comparisonResult.Value.Flux);
+
+        return compareResult.ToApiResult(compare => Results.Ok(LightCurveCompareResponse.Create(
+            fileId, request.ComparisonFileId, compare.CorrelationCoefficient, compare.MeanMagnitudeDifference)));
     }
 }

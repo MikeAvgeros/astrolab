@@ -1,3 +1,4 @@
+using AstroLab.Core.Fits;
 using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Spectroscopy;
@@ -13,6 +14,20 @@ public static class SpectrumExtractor
     private const int MaxDispersionDegree = 3;
     private const int MinimumCalibrationPoints = 2;
     private const double SingularSystemTolerance = 1e-10;
+    private const string DispersionAxisHeaderKeyword = "DISPAXIS";
+    private const long DefaultDispersionAxisValue = 1;
+    private const long VerticalDispersionAxisValue = 2;
+
+    /// <summary>
+    /// Resolves which frame axis carries the dispersion direction from the FITS <c>DISPAXIS</c>
+    /// convention (1 = horizontal/NAXIS1, 2 = vertical/NAXIS2), defaulting to horizontal when the
+    /// keyword is absent or carries any other value — this is the common convention, but is only a
+    /// default: a file with no explicit <c>DISPAXIS</c> card carries no authoritative answer.
+    /// </summary>
+    public static DispersionAxis ResolveDispersionAxis(FitsHeader header) =>
+        header.GetInteger(DispersionAxisHeaderKeyword).GetValueOrDefault(DefaultDispersionAxisValue) == VerticalDispersionAxisValue
+            ? DispersionAxis.Vertical
+            : DispersionAxis.Horizontal;
 
     public static Result<Unit> ExtractBoxcar(
         ReadOnlySpan<float> image,

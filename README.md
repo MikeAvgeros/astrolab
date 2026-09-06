@@ -157,21 +157,29 @@ Everything below takes the `fileId` from step 1.
 | `GET /histogram`                 | Pixel-value histogram (`binCount` query param) for client-side plotting.                                                                                                                                                                               |
 | `GET /sources`                   | Detects candidate point sources (`thresholdSigma`, `minimumArea`, `maxSources`); reports RA/Dec per source when the file carries a usable WCS.                                                                                                         |
 | `POST /photometry/aperture`      | Background-subtracted aperture photometry at a pixel position. Body: `centerX`, `centerY`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`, `backgroundMethod`.                                                                           |
+| `GET /photometry/sources`        | Aperture photometry (instrumental magnitude + uncertainty) for every source the detector finds. Query: `thresholdSigma`, `minimumArea`, `maxSources`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`, `magnitudeZeroPoint`.              |
+| `POST /photometry/differential`  | Differential magnitude between a target and comparison aperture in the same image. Body: `targetCenterX`/`Y`, `comparisonCenterX`/`Y`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`.                                                  |
 | `GET /astrometry/wcs`            | Reports the WCS solution (projection, reference pixel/coordinates, pixel scale, rotation).                                                                                                                                                             |
 | `GET /astrometry/pixel-to-world` | Converts `pixelX`/`pixelY` to RA/Dec via the WCS.                                                                                                                                                                                                      |
 | `GET /astrometry/world-to-pixel` | Converts `rightAscension`/`declination` to a pixel position via the WCS.                                                                                                                                                                               |
+| `GET /astrometry/footprint`      | Reports the sky footprint (corner RA/Dec) of the image, derived from its WCS and pixel dimensions.                                                                                                                                                     |
 
 ### Spectroscopy (`/api/spectroscopy/{fileId}/...`)
 
-| Method & route  | Description                                                                                                                                                                                                                                                       |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /extract` | Extracts a 1D boxcar flux spectrum from an image HDU classified as spectral data, optionally wavelength-calibrated from dispersion coefficients. Body: `axis` (`Horizontal`\|`Vertical`), `traceCenters`, `apertureHalfWidth`, optional `dispersionCoefficients`. |
+| Method & route   | Description                                                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /extract`  | Extracts a 1D boxcar flux spectrum from an image HDU classified as spectral data, optionally wavelength-calibrated from dispersion coefficients. Body: `axis` (`Horizontal`\|`Vertical`), `traceCenters`, `apertureHalfWidth`, optional `dispersionCoefficients`. |
+| `POST /calibrate` | Fits a polynomial wavelength-dispersion solution (least squares) from known pixel/wavelength pairs. Body: `pixelPositions`, `knownWavelengths`. Returns `dispersionCoefficients` and `residualRms`.                                                              |
+| `GET /lines`      | Detects spectral lines in a 1D spectrum collapsed across the full spatial extent of a spectroscopic frame. Query: optional `significanceThreshold`.                                                                                                              |
+| `POST /redshift`  | Estimates redshift from paired observed/rest-frame spectral line wavelengths. Body: `observedWavelengths`, `restWavelengths`.                                                                                                                                     |
 
 ### Time series (`/api/timeseries/{fileId}/...`)
 
 | Method & route     | Description                                                                                                                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /light-curve` | Extracts flux-vs-time from a staged time-series FITS table. Requires a native CFITSIO library — see [Native dependency: CFITSIO](#native-dependency-cfitsio). |
+| `POST /detrend`    | Removes a long-term trend from a light curve. Body: `method` (`linear`\|`median`). Requires a native CFITSIO library.                                        |
+| `POST /compare`    | Compares two staged light curves via Pearson correlation and mean instrumental-magnitude offset. Body: `comparisonFileId`. Requires a native CFITSIO library. |
 
 ### Catalogues (`/api/catalogues/...`)
 
@@ -185,14 +193,13 @@ The following slices are scaffolded with a final request/response contract but n
 implementation yet — they always return HTTP 501 rather than a fake or partial result. Do not build
 against their response bodies expecting real numbers yet:
 
-- `GET/POST /api/images/{fileId}/background`, `/photometry/differential`, `/photometry/sources`,
-  `/sources/characterization`, `/segmentation`, `/render/overlay`, `/astrometry/footprint`,
-  `/astrometry/separation`
+- `GET/POST /api/images/{fileId}/background`, `/sources/characterization`, `/segmentation`,
+  `/render/overlay`, `/astrometry/separation`
 - `POST /api/images/align`, `/compare`, `/stack`
 - `GET/POST /api/measurements/*` — galaxy morphology, physical size, radial velocity, spectral
   classification, stellar colour, stellar temperature, surface brightness
-- `POST /api/spectroscopy/{fileId}/calibrate`, `/compare`; `GET /lines`; `POST /redshift`
-- `POST /api/timeseries/{fileId}/compare`, `/detrend`; `GET /period-search`, `/transit`
+- `POST /api/spectroscopy/{fileId}/compare`
+- `GET /api/timeseries/{fileId}/period-search`, `/transit`
 - `GET /api/catalogues/query`; `POST /api/catalogues/cross-match`
 
 ---

@@ -339,6 +339,95 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task MeasureAllSources_ReturnsPositiveFluxAndFiniteMagnitudeForTheDetectedSource()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/photometry/sources?apertureRadius=3&annulusInnerRadius=4&annulusOuterRadius=5");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var sources = body.GetProperty("sources").EnumerateArray().ToArray();
+
+        var source = Assert.Single(sources);
+
+        Assert.Equal(1, source.GetProperty("sourceId").GetInt32());
+
+        var netFlux = source.GetProperty("netFlux").GetDouble();
+
+        Assert.True(netFlux > 0 && double.IsFinite(netFlux));
+
+        Assert.True(source.GetProperty("fluxUncertainty").GetDouble() > 0);
+
+        Assert.True(double.IsFinite(source.GetProperty("instrumentalMagnitude").GetDouble()));
+
+        Assert.True(source.GetProperty("magnitudeUncertainty").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task MeasureAllSources_RejectsNonPositiveApertureRadius()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/photometry/sources?apertureRadius=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MeasureDifferential_AtIdenticalTargetAndComparisonPositions_ReturnsZeroDifferential()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var request = new
+        {
+            TargetCenterX = 5.0,
+            TargetCenterY = 5.0,
+            ComparisonCenterX = 5.0,
+            ComparisonCenterY = 5.0,
+            ApertureRadius = 1.5,
+            AnnulusInnerRadius = 2.0,
+            AnnulusOuterRadius = 3.0,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/differential", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(body.GetProperty("targetMagnitude").GetDouble(), body.GetProperty("comparisonMagnitude").GetDouble(), precision: 9);
+
+        Assert.Equal(0.0, body.GetProperty("differentialMagnitude").GetDouble(), precision: 9);
+
+        Assert.True(body.GetProperty("uncertainty").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task MeasureDifferential_RejectsNonPositiveApertureRadius()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var request = new
+        {
+            TargetCenterX = 5.0,
+            TargetCenterY = 5.0,
+            ComparisonCenterX = 1.0,
+            ComparisonCenterY = 1.0,
+            ApertureRadius = 0.0,
+            AnnulusInnerRadius = 2.0,
+            AnnulusOuterRadius = 3.0,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/differential", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ExtractSpectrum_SumsRowsPerColumnExactly()
     {
         var fileId = await UploadGradientSpectrumFrameAsync();
@@ -380,6 +469,64 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         
         Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task DetectLines_OnFrameWithASingleEmissionSpike_ReportsExactPositionFluxAndFwhm()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines?significanceThreshold=3");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var line = body.GetProperty("lines").EnumerateArray().Single();
+
+        Assert.Equal(4.0, line.GetProperty("wavelength").GetDouble(), precision: 6);
+
+        Assert.Equal(270.0, line.GetProperty("flux").GetDouble(), precision: 6);
+
+        Assert.Equal(1.0, line.GetProperty("fwhm").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task DetectLines_OnSmoothGradientSpectrum_FindsNoLines()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Empty(body.GetProperty("lines").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DetectLines_OnPlainImage_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("fits.data.unsupported_type", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task DetectLines_RejectsNonPositiveSignificanceThreshold()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines?significanceThreshold=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

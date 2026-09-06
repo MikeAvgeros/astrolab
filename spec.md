@@ -267,6 +267,7 @@ AstroLab.slnx
 │   │   ├── Sources/                            # Source detection
 │   │   │   └── SourceDetector.cs
 │   │   ├── Spectroscopy/                       # Spectral algorithms
+│   │   ├── TimeSeries/                         # Light-curve algorithms (detrend, compare)
 │   │   └── Result/                             # Result<T> / Error
 │   │
 │   ├── AstroLab.Infrastructure/                # Imperative Shell

@@ -383,6 +383,84 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task EstimateRedshift_ComputesMeanFractionalWavelengthShift()
+    {
+        var request = new
+        {
+            ObservedWavelengths = new[] { 505.0, 1020.0 },
+            RestWavelengths = new[] { 500.0, 1000.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/redshift", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0.015, body.GetProperty("redshift").GetDouble(), precision: 9);
+
+        Assert.Equal(0.005, body.GetProperty("uncertainty").GetDouble(), precision: 9);
+    }
+
+    [Fact]
+    public async Task EstimateRedshift_RejectsMismatchedLinePairLengths()
+    {
+        var request = new
+        {
+            ObservedWavelengths = new[] { 505.0, 1020.0 },
+            RestWavelengths = new[] { 500.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/redshift", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.redshift.length_mismatch", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task CalibrateWavelengths_TwoPixelWavelengthPairs_FitsExactLinearDispersionSolution()
+    {
+        var request = new
+        {
+            PixelPositions = new[] { 0.0, 10.0 },
+            KnownWavelengths = new[] { 500.0, 520.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/calibrate", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var coefficients = body.GetProperty("dispersionCoefficients").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([500.0, 2.0], coefficients.Select(c => Math.Round(c, 6)).ToArray());
+
+        Assert.Equal(0.0, body.GetProperty("residualRms").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task CalibrateWavelengths_RejectsFewerThanTwoPixelWavelengthPairs()
+    {
+        var request = new
+        {
+            PixelPositions = new[] { 0.0 },
+            KnownWavelengths = new[] { 500.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/calibrate", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.calibration_insufficient_points", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task SearchObservations_MissingRequiredArchiveParameter_ReturnsBadRequest()
     {
         var response = await _client.GetAsync("/api/archives/search?target=M31");
@@ -489,6 +567,51 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/world-to-pixel?rightAscension=180&declination=120");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetFootprint_ReturnsFourCornersMatchingPixelToWorldAtImageEdges()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/footprint");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var corners = body.GetProperty("corners").EnumerateArray().ToArray();
+
+        Assert.Equal(4, corners.Length);
+
+        // SmallGradientImageWithWcs is 4x2, so its pixel-index corners are (0,0), (3,0), (0,1), (3,1).
+        double[] cornerPixelsX = [0, 3, 0, 3];
+
+        double[] cornerPixelsY = [0, 0, 1, 1];
+
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var expectedResponse = await _client.GetAsync(
+                $"/api/images/{fileId}/astrometry/pixel-to-world?pixelX={cornerPixelsX[i]:R}&pixelY={cornerPixelsY[i]:R}");
+
+            Assert.Equal(HttpStatusCode.OK, expectedResponse.StatusCode);
+
+            var expected = await expectedResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(expected.GetProperty("rightAscension").GetDouble(), corners[i].GetProperty("rightAscension").GetDouble(), precision: 9);
+
+            Assert.Equal(expected.GetProperty("declination").GetDouble(), corners[i].GetProperty("declination").GetDouble(), precision: 9);
+        }
+    }
+
+    [Fact]
+    public async Task GetFootprint_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/footprint");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

@@ -10,6 +10,10 @@ namespace AstroLab.Core.Spectroscopy;
 /// </summary>
 public static class SpectrumExtractor
 {
+    private const int MaxDispersionDegree = 3;
+    private const int MinimumCalibrationPoints = 2;
+    private const double SingularSystemTolerance = 1e-10;
+
     public static Result<Unit> ExtractBoxcar(
         ReadOnlySpan<float> image,
         int width,
@@ -140,5 +144,165 @@ public static class SpectrumExtractor
         }
 
         return Result<Unit>.Success(Unit.Value);
+    }
+
+    /// <summary>
+    /// Fits a polynomial wavelength-dispersion solution (least squares, via the normal equations)
+    /// from known pixel/wavelength pairs. The polynomial degree is chosen automatically as
+    /// <c>min(<see cref="MaxDispersionDegree"/>, pairs - 1)</c>, so two pairs give an exact linear
+    /// fit and more pairs give an over-determined low-order fit rather than exact interpolation
+    /// (which would be numerically unstable for noisy arc-line measurements).
+    /// </summary>
+    public static Result<(double[] Coefficients, double ResidualRms)> FitDispersionSolution(
+        ReadOnlySpan<double> pixelPositions, ReadOnlySpan<double> knownWavelengths)
+    {
+        if (pixelPositions.Length != knownWavelengths.Length)
+        {
+            return Error.Validation(
+                "spectroscopy.calibration_length_mismatch",
+                $"pixelPositions length ({pixelPositions.Length}) must equal knownWavelengths length ({knownWavelengths.Length}).");
+        }
+
+        if (pixelPositions.Length < MinimumCalibrationPoints)
+        {
+            return Error.Validation(
+                "spectroscopy.calibration_insufficient_points",
+                $"At least {MinimumCalibrationPoints} pixel/wavelength pairs are required to fit a dispersion solution.");
+        }
+
+        for (var i = 0; i < pixelPositions.Length; i++)
+        {
+            if (!double.IsFinite(pixelPositions[i]) || !double.IsFinite(knownWavelengths[i]))
+            {
+                return Error.Validation(
+                    "spectroscopy.calibration_non_finite_value", "Pixel positions and known wavelengths must be finite.");
+            }
+        }
+
+        var degree = Math.Min(MaxDispersionDegree, pixelPositions.Length - 1);
+
+        var coefficientCount = degree + 1;
+
+        var normalMatrix = new double[coefficientCount, coefficientCount];
+
+        var rhs = new double[coefficientCount];
+
+        var basis = new double[coefficientCount];
+
+        for (var i = 0; i < pixelPositions.Length; i++)
+        {
+            basis[0] = 1.0;
+
+            for (var power = 1; power < coefficientCount; power++)
+            {
+                basis[power] = basis[power - 1] * pixelPositions[i];
+            }
+
+            for (var row = 0; row < coefficientCount; row++)
+            {
+                rhs[row] += basis[row] * knownWavelengths[i];
+
+                for (var col = 0; col < coefficientCount; col++)
+                {
+                    normalMatrix[row, col] += basis[row] * basis[col];
+                }
+            }
+        }
+
+        var solveResult = SolveLinearSystem(normalMatrix, rhs);
+
+        if (solveResult.IsFailure)
+        {
+            return Result<(double[], double)>.Failure(solveResult.Error);
+        }
+
+        var coefficients = solveResult.Value;
+
+        var sumSquaredResiduals = 0.0;
+
+        for (var i = 0; i < pixelPositions.Length; i++)
+        {
+            var residual = EvaluateWavelength(pixelPositions[i], coefficients) - knownWavelengths[i];
+
+            sumSquaredResiduals += residual * residual;
+        }
+
+        var residualRms = Math.Sqrt(sumSquaredResiduals / pixelPositions.Length);
+
+        return (coefficients, residualRms);
+    }
+
+    private static Result<double[]> SolveLinearSystem(double[,] matrix, double[] rhs)
+    {
+        var n = rhs.Length;
+
+        for (var pivotColumn = 0; pivotColumn < n; pivotColumn++)
+        {
+            var pivotRow = pivotColumn;
+
+            var largestPivotMagnitude = Math.Abs(matrix[pivotColumn, pivotColumn]);
+
+            for (var row = pivotColumn + 1; row < n; row++)
+            {
+                var candidateMagnitude = Math.Abs(matrix[row, pivotColumn]);
+
+                if (candidateMagnitude > largestPivotMagnitude)
+                {
+                    largestPivotMagnitude = candidateMagnitude;
+
+                    pivotRow = row;
+                }
+            }
+
+            if (largestPivotMagnitude < SingularSystemTolerance)
+            {
+                return Error.Validation(
+                    "spectroscopy.calibration_singular_system",
+                    "The pixel positions do not provide enough independent information to fit a dispersion solution.");
+            }
+
+            if (pivotRow != pivotColumn)
+            {
+                SwapRows(matrix, rhs, pivotColumn, pivotRow, n);
+            }
+
+            for (var row = pivotColumn + 1; row < n; row++)
+            {
+                var factor = matrix[row, pivotColumn] / matrix[pivotColumn, pivotColumn];
+
+                for (var col = pivotColumn; col < n; col++)
+                {
+                    matrix[row, col] -= factor * matrix[pivotColumn, col];
+                }
+
+                rhs[row] -= factor * rhs[pivotColumn];
+            }
+        }
+
+        var solution = new double[n];
+
+        for (var row = n - 1; row >= 0; row--)
+        {
+            var sum = rhs[row];
+
+            for (var col = row + 1; col < n; col++)
+            {
+                sum -= matrix[row, col] * solution[col];
+            }
+
+            solution[row] = sum / matrix[row, row];
+        }
+
+        return solution;
+    }
+
+    private static void SwapRows(double[,] matrix, double[] rhs, int rowA, int rowB, int columnCount)
+    {
+        for (var col = 0; col < columnCount; col++)
+        {
+            (matrix[rowA, col], matrix[rowB, col]) = (matrix[rowB, col], matrix[rowA, col]);
+        }
+
+        (rhs[rowA], rhs[rowB]) = (rhs[rowB], rhs[rowA]);
     }
 }

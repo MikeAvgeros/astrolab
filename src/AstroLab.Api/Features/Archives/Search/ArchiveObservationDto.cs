@@ -5,7 +5,7 @@ namespace AstroLab.Api.Features.Archives.Search;
 public sealed record ArchiveObservationDto
 {
     private ArchiveObservationDto(
-        string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source,
+        string datasetId, string target, string instrument, DateTimeOffset? observationDate, ArchiveSource source,
         string? collection, string? dataProductType, int? calibrationLevel,
         double? rightAscension, double? declination, double? exposureTimeSeconds,
         double? wavelengthMinMicrometres, double? wavelengthMaxMicrometres,
@@ -35,7 +35,7 @@ public sealed record ArchiveObservationDto
 
     public string Instrument { get; }
 
-    public DateTimeOffset ObservationDate { get; }
+    public DateTimeOffset? ObservationDate { get; }
 
     public ArchiveSource Source { get; }
 

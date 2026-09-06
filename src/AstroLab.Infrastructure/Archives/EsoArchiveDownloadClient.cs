@@ -64,7 +64,8 @@ public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception occurred while downloading ESO product {ProductId}", product.Id);
-            return Result<ArchiveDownload>.Failure(Error.Unexpected("eso.download_exception", ex.Message));
+            return Result<ArchiveDownload>.Failure(
+                Error.Unexpected("eso.download_unexpected_error", "An unexpected error occurred while downloading the product."));
         }
     }
 

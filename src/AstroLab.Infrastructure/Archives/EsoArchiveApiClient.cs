@@ -74,7 +74,8 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception occurred during ESO archive search for target {Target}", query.Target);
-            return Result<IReadOnlyList<ArchiveObservation>>.Failure(Error.Unexpected("eso.search_exception", ex.Message));
+            return Result<IReadOnlyList<ArchiveObservation>>.Failure(
+                Error.Unexpected("eso.search_unexpected_error", "An unexpected error occurred while searching ESO archive."));
         }
     }
 
@@ -113,7 +114,8 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception occurred during ESO product discovery for dataset {DatasetId}", datasetId);
-            return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected("eso.products_exception", ex.Message));
+            return Result<IReadOnlyList<EsoProduct>>.Failure(
+                Error.Unexpected("eso.products_unexpected_error", "An unexpected error occurred while retrieving products."));
         }
     }
 
@@ -124,6 +126,11 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         if (!string.IsNullOrWhiteSpace(query.Target))
         {
             conditions.Add($"target_name LIKE '%{EscapeAdqlLiteral(query.Target)}%'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Mission))
+        {
+            conditions.Add($"obs_collection = '{EscapeAdqlLiteral(query.Mission)}'");
         }
 
         if (!string.IsNullOrWhiteSpace(query.Instrument))

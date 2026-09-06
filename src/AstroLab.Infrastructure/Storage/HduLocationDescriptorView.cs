@@ -23,10 +23,33 @@ public readonly struct HduLocationDescriptorView : IReadOnlyList<HduDescriptor>
 
     public HduDescriptor this[int index] => _locations[index].Descriptor;
 
-    public IEnumerator<HduDescriptor> GetEnumerator()
-    {
-        return _locations.Select(location => location.Descriptor).GetEnumerator();
-    }
+    public Enumerator GetEnumerator() => new(this);
+
+    IEnumerator<HduDescriptor> IEnumerable<HduDescriptor>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public struct Enumerator : IEnumerator<HduDescriptor>
+    {
+        private readonly HduLocationDescriptorView _view;
+        private int _index;
+
+        internal Enumerator(HduLocationDescriptorView view)
+        {
+            _view = view;
+            _index = -1;
+        }
+
+        public HduDescriptor Current => _view[_index];
+
+        object IEnumerator.Current => Current;
+
+        public bool MoveNext() => ++_index < _view.Count;
+
+        public void Reset() => _index = -1;
+
+        public void Dispose()
+        {
+        }
+    }
 }

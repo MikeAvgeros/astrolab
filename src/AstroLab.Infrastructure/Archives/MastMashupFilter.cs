@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastMashupFilter
 {
-    [JsonConstructor]
-    internal MastMashupFilter(string paramName, List<MastFilterValue> values)
+    private MastMashupFilter(string paramName, List<MastFilterValue> values)
     {
         ParamName = paramName;
         Values = values;

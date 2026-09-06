@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastNameLookupParams
 {
-    [JsonConstructor]
-    internal MastNameLookupParams(string input)
+    private MastNameLookupParams(string input)
     {
         Input = input;
     }

@@ -1,5 +1,6 @@
 namespace AstroLab.Infrastructure.Storage;
 
+/// <summary>Configuration bound from the <c>Storage</c> section, controlling where staged FITS files live on disk and the largest upload accepted.</summary>
 public sealed class LocalFileStoreOptions
 {
     public const string SectionName = "Storage";

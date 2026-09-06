@@ -16,6 +16,7 @@ namespace AstroLab.Infrastructure.Storage;
 public static class CfitsIoTimeSeriesReader
 {
     private const double NullValueSubstitute = double.NaN;
+    private const long MaxSupportedRowCount = int.MaxValue;
 
     public static Task<Result<LightCurveTableData>> ReadAsync(
         string filePath, int hduNumber, TimeSeriesTableDescriptor descriptor, CancellationToken cancellationToken) =>
@@ -39,7 +40,14 @@ public static class CfitsIoTimeSeriesReader
             return CfitsIoErrorMapper.ToError("fits.cfitsio.hdu_move_failed", moveStatus);
         }
 
-        var rowCount = checked((int)descriptor.RowCount);
+        if (descriptor.RowCount > MaxSupportedRowCount)
+        {
+            return Error.Validation(
+                "fits.header.invalid_naxis",
+                $"NAXIS2 ({descriptor.RowCount}) exceeds the supported maximum of {MaxSupportedRowCount} rows.");
+        }
+
+        var rowCount = (int)descriptor.RowCount;
 
         var timeResult = ReadColumn(handle.Pointer, descriptor.TimeColumnNumber, rowCount);
 

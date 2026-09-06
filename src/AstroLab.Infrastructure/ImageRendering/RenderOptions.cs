@@ -7,6 +7,8 @@ public readonly record struct RenderOptions
     private const double DefaultAsinhSoftening = 0.1;
     private const double DefaultAutoLowerPercentile = 1.0;
     private const double DefaultAutoUpperPercentile = 99.0;
+    private const double MinPercentile = 0.0;
+    private const double MaxPercentile = 100.0;
 
     public const int DefaultMaxDimension = 4096;
 
@@ -56,6 +58,23 @@ public readonly record struct RenderOptions
         double? whitePoint = null,
         double autoLowerPercentile = DefaultAutoLowerPercentile,
         double autoUpperPercentile = DefaultAutoUpperPercentile,
-        int? maxDimension = DefaultMaxDimension) =>
-        new(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, autoLowerPercentile, autoUpperPercentile, maxDimension);
+        int? maxDimension = DefaultMaxDimension)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(asinhSoftening);
+
+        if (autoLowerPercentile < MinPercentile || autoUpperPercentile > MaxPercentile || autoLowerPercentile >= autoUpperPercentile)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(autoLowerPercentile),
+                autoLowerPercentile,
+                $"Require {MinPercentile} <= autoLowerPercentile < autoUpperPercentile <= {MaxPercentile}.");
+        }
+
+        if (maxDimension is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDimension), maxDimension, "Must be null or positive.");
+        }
+
+        return new RenderOptions(stretch, asinhSoftening, colorMap, blackPoint, whitePoint, autoLowerPercentile, autoUpperPercentile, maxDimension);
+    }
 }

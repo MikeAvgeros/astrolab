@@ -3,7 +3,7 @@ namespace AstroLab.Infrastructure.Archives;
 public readonly record struct ArchiveObservation
 {
     private ArchiveObservation(
-        string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source,
+        string datasetId, string target, string instrument, DateTimeOffset? observationDate, ArchiveSource source,
         string? collection, string? dataProductType, int? calibrationLevel,
         double? rightAscension, double? declination, double? exposureTimeSeconds,
         double? wavelengthMinMicrometres, double? wavelengthMaxMicrometres,
@@ -33,7 +33,7 @@ public readonly record struct ArchiveObservation
 
     public string Instrument { get; }
 
-    public DateTimeOffset ObservationDate { get; }
+    public DateTimeOffset? ObservationDate { get; }
 
     public ArchiveSource Source { get; }
 
@@ -60,7 +60,7 @@ public readonly record struct ArchiveObservation
     public string? DataRights { get; }
 
     public static ArchiveObservation Create(
-        string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source,
+        string datasetId, string target, string instrument, DateTimeOffset? observationDate, ArchiveSource source,
         string? collection = null, string? dataProductType = null, int? calibrationLevel = null,
         double? rightAscension = null, double? declination = null, double? exposureTimeSeconds = null,
         double? wavelengthMinMicrometres = null, double? wavelengthMaxMicrometres = null,

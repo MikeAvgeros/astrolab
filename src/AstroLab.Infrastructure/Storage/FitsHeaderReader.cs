@@ -15,36 +15,6 @@ public static class FitsHeaderReader
     private const int BlockSize = 2880;
     private const int MaxBlocks = 200;
     
-    public static async Task<Result<FitsHeader>> ReadHeaderAsync(Stream stream, CancellationToken cancellationToken = default)
-    {
-        using var accumulated = new MemoryStream();
-
-        var block = new byte[BlockSize];
-
-        for (var blockIndex = 0; blockIndex < MaxBlocks; blockIndex++)
-        {
-            var bytesRead = await ReadExactAsync(stream, block, cancellationToken);
-
-            if (bytesRead < BlockSize)
-            {
-                return Error.Validation(
-                    "fits.header.truncated_file", "File ended before a complete FITS header block was read.");
-            }
-
-            accumulated.Write(block);
-
-            var parseResult = FitsHeader.Parse(accumulated.GetBuffer().AsSpan(0, (int)accumulated.Length));
-
-            if (parseResult.IsSuccess || parseResult.Error.Code != "fits.header.missing_end")
-            {
-                return parseResult;
-            }
-        }
-
-        return Error.Validation(
-            "fits.header.too_large", $"Header exceeded {MaxBlocks * BlockSize:N0} bytes without an END card.");
-    }
-    
     public static async Task<Result<ImmutableArray<HduLocation>>> ReadAllHeadersAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         var locations = ImmutableArray.CreateBuilder<HduLocation>();
@@ -85,6 +55,36 @@ public static class FitsHeaderReader
         }
 
         return Result<ImmutableArray<HduLocation>>.Success(locations.ToImmutable());
+    }
+    
+    private static async Task<Result<FitsHeader>> ReadHeaderAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        using var accumulated = new MemoryStream();
+
+        var block = new byte[BlockSize];
+
+        for (var blockIndex = 0; blockIndex < MaxBlocks; blockIndex++)
+        {
+            var bytesRead = await ReadExactAsync(stream, block, cancellationToken);
+
+            if (bytesRead < BlockSize)
+            {
+                return Error.Validation(
+                    "fits.header.truncated_file", "File ended before a complete FITS header block was read.");
+            }
+
+            accumulated.Write(block);
+
+            var parseResult = FitsHeader.Parse(accumulated.GetBuffer().AsSpan(0, (int)accumulated.Length));
+
+            if (parseResult.IsSuccess || parseResult.Error.Code != "fits.header.missing_end")
+            {
+                return parseResult;
+            }
+        }
+
+        return Error.Validation(
+            "fits.header.too_large", $"Header exceeded {MaxBlocks * BlockSize:N0} bytes without an END card.");
     }
 
     private static long RoundUpToBlockSize(long byteCount)

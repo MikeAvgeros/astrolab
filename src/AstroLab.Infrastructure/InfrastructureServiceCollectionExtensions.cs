@@ -20,7 +20,14 @@ public static class InfrastructureServiceCollectionExtensions
     private const int ArchiveApiRetryMaxAttempts = 3;
     private const int ArchiveApiRetryDelaySeconds = 2;
     private const int ArchiveApiAttemptTimeoutSeconds = 30;
-    private const int ArchiveApiTotalRequestTimeoutSeconds = 60;
+    private const int ArchiveApiRetryBackoffBufferSeconds = 30;
+
+    // Must comfortably exceed one attempt per try (the initial attempt plus every retry) so the
+    // total-timeout budget never cuts off a retry the policy above was just configured to make;
+    // the buffer covers the delay-with-backoff between attempts.
+    private const int ArchiveApiTotalRequestTimeoutSeconds =
+        ArchiveApiAttemptTimeoutSeconds * (ArchiveApiRetryMaxAttempts + 1) + ArchiveApiRetryBackoffBufferSeconds;
+
     private const int ArchiveApiCircuitBreakerSamplingDurationSeconds = ArchiveApiAttemptTimeoutSeconds * 2;
 
     extension(IServiceCollection services)

@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastProductParams
 {
-    [JsonConstructor]
-    internal MastProductParams(string obsId)
+    private MastProductParams(string obsId)
     {
         ObsId = obsId;
     }

@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastMashupParams
 {
-    [JsonConstructor]
-    internal MastMashupParams(
+    private MastMashupParams(
         string columns,
         List<MastMashupFilter> filters,
         string? position,

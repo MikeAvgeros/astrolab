@@ -23,6 +23,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string CollectionParam = "obs_collection";
     private const string InstrumentNameParam = "instrument_name";
     private const string MinParam = "t_min";
+    private const string MaxParam = "t_max";
     private const string UnknownInstrument = "UNKNOWN";
     private const string RequestFormFieldName = "request";
 
@@ -76,7 +77,6 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
 
             return Result<MastTarget>.Failure(
                 Error.NotFound("mast.target_not_resolved", $"Could not resolve target '{target}' to sky coordinates."));
-
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -259,19 +259,14 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             filters.Add(MastMashupFilter.Create(InstrumentNameParam, [MastFilterValue.FromText(query.Instrument)]));
         }
 
-        if (query is { From: { } from, To: { } to })
+        if (query.From is { } from)
         {
-            filters.Add(MastMashupFilter.Create(
-                MinParam,
-                [MastFilterValue.FromRange(ModifiedJulianDate.FromDateTimeOffset(from), ModifiedJulianDate.FromDateTimeOffset(to))]));
+            filters.Add(MastMashupFilter.Create(MaxParam, [MastFilterValue.FromMinBound(ModifiedJulianDate.FromDateTimeOffset(from))]));
         }
-        else if (query.From is { } fromOnly)
+
+        if (query.To is { } to)
         {
-            filters.Add(MastMashupFilter.Create(MinParam, [MastFilterValue.FromMinBound(ModifiedJulianDate.FromDateTimeOffset(fromOnly))]));
-        }
-        else if (query.To is { } toOnly)
-        {
-            filters.Add(MastMashupFilter.Create(MinParam, [MastFilterValue.FromMaxBound(ModifiedJulianDate.FromDateTimeOffset(toOnly))]));
+            filters.Add(MastMashupFilter.Create(MinParam, [MastFilterValue.FromMaxBound(ModifiedJulianDate.FromDateTimeOffset(to))]));
         }
 
         return filters;

@@ -12,6 +12,7 @@ namespace AstroLab.Infrastructure.Storage;
 public static class FitsPixelDataReader
 {
     private const int ChunkSize = 81_920;
+    private const long MaxSupportedDataSizeBytes = 64L * 1024 * 1024 * 1024;
 
     public static async Task<Result<UnmanagedFitsBuffer>> ReadImageDataAsync(
         Stream stream, FitsImageDescriptor descriptor, CancellationToken cancellationToken = default)
@@ -21,7 +22,14 @@ public static class FitsPixelDataReader
             return Error.Validation("fits.data.no_pixels", "HDU has no pixel data (NAXIS = 0).");
         }
 
-        var totalBytes = checked((nuint)descriptor.DataSizeBytes);
+        if (descriptor.DataSizeBytes is <= 0 or > MaxSupportedDataSizeBytes)
+        {
+            return Error.Validation(
+                "fits.data.invalid_size",
+                $"Computed pixel data size ({descriptor.DataSizeBytes} bytes) is negative, zero, or exceeds the supported maximum of {MaxSupportedDataSizeBytes} bytes.");
+        }
+
+        var totalBytes = (nuint)descriptor.DataSizeBytes;
 
         var buffer = UnmanagedFitsBuffer.Allocate(totalBytes);
 

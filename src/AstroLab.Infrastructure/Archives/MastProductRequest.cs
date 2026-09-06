@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastProductRequest
 {
-    [JsonConstructor]
-    internal MastProductRequest(string service, string format, MastProductParams parameters)
+    private MastProductRequest(string service, string format, MastProductParams parameters)
     {
         Service = service;
         Format = format;

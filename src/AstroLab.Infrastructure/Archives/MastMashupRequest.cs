@@ -4,8 +4,7 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastMashupRequest
 {
-    [JsonConstructor]
-    internal MastMashupRequest(string service, string format, MastMashupParams parameters)
+    private MastMashupRequest(string service, string format, MastMashupParams parameters)
     {
         Service = service;
         Format = format;

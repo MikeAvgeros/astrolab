@@ -27,10 +27,13 @@ namespace AstroLab.Infrastructure.Fits;
 /// 1-based, matching cfitsio's own convention rather than .NET's.
 /// </para>
 /// <para>
-/// Row/element counts for the table column routines are a different story: cfitsio defines those
-/// parameters as its own fixed-width <c>LONGLONG</c> typedef (<c>long long</c> on every platform,
-/// including Windows), not the platform-variant C <c>long</c> described above, so they are marshaled
-/// as a plain C# <see cref="long"/> rather than <see cref="CLong"/>.
+/// Row/element *count* parameters are a different story: cfitsio defines those as its own
+/// fixed-width <c>LONGLONG</c> typedef (<c>long long</c> on every platform, including Windows),
+/// not the platform-variant C <c>long</c> described above, so they are marshaled as a plain C#
+/// <see cref="long"/> rather than <see cref="CLong"/>. This applies both to the table column
+/// routines' row/element counts and to <c>ffgpxv</c>'s <c>nelem</c> parameter — note that the same
+/// <c>ffgpxv</c> call also takes a <c>firstpix</c> array, which is the platform-variant <c>long</c>
+/// and is therefore marshaled as <see cref="CLong"/> instead.
 /// </para>
 /// </remarks>
 internal static partial class NativeMethods
@@ -76,7 +79,7 @@ internal static partial class NativeMethods
         nint fptr,
         int dataType,
         CLong[] firstPixel,
-        CLong numberOfElements,
+        long numberOfElements,
         nint nullValue,
         nint outputArray,
         out int anyNull,

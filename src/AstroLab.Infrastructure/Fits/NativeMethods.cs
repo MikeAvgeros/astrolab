@@ -26,6 +26,12 @@ namespace AstroLab.Infrastructure.Fits;
 /// HDU numbers, header record numbers, and pixel coordinates passed to these bindings are all
 /// 1-based, matching cfitsio's own convention rather than .NET's.
 /// </para>
+/// <para>
+/// Row/element counts for the table column routines are a different story: cfitsio defines those
+/// parameters as its own fixed-width <c>LONGLONG</c> typedef (<c>long long</c> on every platform,
+/// including Windows), not the platform-variant C <c>long</c> described above, so they are marshaled
+/// as a plain C# <see cref="long"/> rather than <see cref="CLong"/>.
+/// </para>
 /// </remarks>
 internal static partial class NativeMethods
 {
@@ -73,6 +79,18 @@ internal static partial class NativeMethods
         CLong numberOfElements,
         nint nullValue,
         nint outputArray,
+        out int anyNull,
+        out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffgcvd")]
+    internal static partial int ReadColumnDoubles(
+        nint fptr,
+        int columnNumber,
+        long firstRow,
+        long firstElement,
+        long numberOfElements,
+        double nullValue,
+        Span<double> outputArray,
         out int anyNull,
         out int status);
 }

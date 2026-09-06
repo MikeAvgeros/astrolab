@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace AstroLab.Tests.Features;
@@ -154,6 +155,68 @@ internal static class SyntheticFits
             ],
             BuildSourcePixelData())
     ]);
+
+    /// <summary>
+    /// A 2-HDU file whose extension HDU is a BINTABLE with a TIME and a FLUX column (both 1D,
+    /// 8-byte doubles, big-endian per the FITS standard), for exercising real cfitsio binary
+    /// table reads end-to-end.
+    /// </summary>
+    public static byte[] TimeSeriesBinaryTable(double[] time, double[] flux)
+    {
+        if (time.Length != flux.Length)
+        {
+            throw new ArgumentException("time and flux must have the same length.");
+        }
+
+        var primary = (
+            Cards: new[]
+            {
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    0",
+                "END",
+            },
+            Data: Array.Empty<byte>());
+
+        const int bytesPerRow = sizeof(double) * 2;
+
+        var tableExtension = (
+            Cards: new[]
+            {
+                "XTENSION= 'BINTABLE'",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                $"NAXIS1  =                   {bytesPerRow}",
+                $"NAXIS2  =           {time.Length,10}",
+                "PCOUNT  =                    0",
+                "GCOUNT  =                    1",
+                "TFIELDS =                    2",
+                "TTYPE1  = 'TIME    '",
+                "TFORM1  = '1D      '",
+                "TTYPE2  = 'FLUX    '",
+                "TFORM2  = '1D      '",
+                "END",
+            },
+            Data: BuildTimeSeriesRows(time, flux));
+
+        return BuildMultiHdu([primary, tableExtension]);
+    }
+
+    private static byte[] BuildTimeSeriesRows(double[] time, double[] flux)
+    {
+        var data = new byte[time.Length * sizeof(double) * 2];
+
+        for (var row = 0; row < time.Length; row++)
+        {
+            var offset = row * sizeof(double) * 2;
+
+            BinaryPrimitives.WriteDoubleBigEndian(data.AsSpan(offset, sizeof(double)), time[row]);
+
+            BinaryPrimitives.WriteDoubleBigEndian(data.AsSpan(offset + sizeof(double), sizeof(double)), flux[row]);
+        }
+
+        return data;
+    }
 
     private static byte[] BuildSourcePixelData()
     {

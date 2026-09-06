@@ -164,4 +164,26 @@ public class FitsDatasetClassifierTests
 
         Assert.False(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Spectrum));
     }
+
+    [Fact]
+    public void MatchesKind_TimeSeriesTableHdu_MatchesTimeSeriesAndTableNotImage()
+    {
+        var hdu = TableHdu(1, 2, "TIME", "FLUX");
+
+        Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.TimeSeries));
+
+        Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Table));
+
+        Assert.False(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Image));
+    }
+
+    [Fact]
+    public void MatchesKind_TableWithoutTimeColumn_MatchesTableNotTimeSeries()
+    {
+        var hdu = TableHdu(1, 2, "RA", "DEC");
+
+        Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Table));
+
+        Assert.False(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.TimeSeries));
+    }
 }

@@ -31,7 +31,7 @@ For day-to-day operational details such as build/test commands, the current repo
 6. [Core Implementation Patterns](#6-core-implementation-patterns)
    - 6.1 [Result Pattern](#61-result-pattern)
    - 6.2 [Functional Core: Purity and Allocation Awareness](#62-functional-core-purity-and-allocation-awareness)
-   - 6.3 [Unmanaged Native Buffers](#63-unmanaged-native-buffers)
+   - 6.3 [Unmanaged Native Buffers and CFITSIO Table Reading](#63-unmanaged-native-buffers-and-cfitsio-table-reading)
    - 6.4 [Pipeline Streaming](#64-pipeline-streaming)
    - 6.5 [Vertical Slice API Endpoints (REPR Pattern)](#65-vertical-slice-api-endpoints-repr-pattern)
    - 6.6 [Archive Clients: ESO and MAST](#66-archive-clients-eso-and-mast)
@@ -179,9 +179,9 @@ Within a class, order methods according to their visibility and usage:
 - **MUST:** Use records for immutable data-only types such as DTOs, request/response models, value objects, and measurement results. Small value types MAY use `readonly record struct`.
 - **MUST:** A concrete record type defaults to `sealed`. Leave a record unsealed only when inheritance/polymorphism is an explicit, documented part of its design. `readonly record struct` types are implicitly sealed and MUST NOT carry the modifier.
 - **MUST:** Declare a record's properties explicitly with `{ get; }` accessors, never `{ get; init; }`, and set them only from the record's own constructor. Because properties are get-only, records do not support `with`-expression mutation; construct a new instance through `Create(...)` instead.
-- **MUST:** A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself — not a companion `<Name>Factory` class. `Create(...)` validates its arguments inline and returns `new(...)`; the constructor performs no validation and MUST NOT be called from outside the record's own file. This makes the record impossible to construct in an invalid state. A record that is only ever constructed through its own `Create(...)` — this is the normal case, and includes every `AstroLab.Core` domain record — has no need for a separate `Validate()` method; its checks live directly in `Create(...)`.
+- **MUST:** A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself. `Create(...)` validates its arguments inline and returns `new(...)`; the constructor performs no validation and MUST NOT be called from outside the record's own file. This makes the record impossible to construct in an invalid state. A record that is only ever constructed through its own `Create(...)` — this is the normal case, and includes every `AstroLab.Core` domain record — has no need for a separate `Validate()` method; its checks live directly in `Create(...)`.
 - **MUST:** When a framework can construct a record without going through `Create(...)` — for example, the `[JsonConstructor]`-bound request DTO described in the EXCEPTION below, which `System.Text.Json` constructs directly during model binding — the record exposes a public `Validate()` instance method containing those checks, so the caller can invoke `request.Validate()` after binding. `Create(...)` calls `Validate()` internally instead of duplicating the checks, so hand-written construction still goes through the same checks.
-- **MUST NOT:** Add an empty `Validate()` method purely for symmetry when a record has no invariants to check, or when the record is never constructed outside its own `Create(...)`.
+- **MUST NOT:** Add an empty `Validate()` method purely for symmetry when a record has no invariants to check, or when the record is never constructed outside its own `Create(...)`. A `Validate()` method only appears where a framework can also construct the record outside `Create(...)` — see the `[JsonConstructor]` EXCEPTION below for the shape that applies to.
 - **MUST:** Use `ImmutableList<T>` for collection-shaped properties on API-boundary records. `AstroLab.Core` hot-path types are exempt and MUST use span/array-based representations appropriate to their allocation constraints.
 - **MAY:** Types with established semantic smart constructors, such as `Error.Validation(...)` and `Result<T>.Success(...)`, expose those constructors directly on the type instead of a generic `Create(...)`, as long as they still funnel through the same private constructor.
 - **EXCEPTION:** A request DTO record bound directly from an HTTP request body (no `[AsParameters]`) keeps a **private** constructor but marks it `[JsonConstructor]` (`System.Text.Json.Serialization`) so `System.Text.Json` can still use it during model binding. Construction via the framework bypasses `Create`'s validation. Hand-written construction SHOULD still go through `Create(...)` when validation is required. Because the endpoint handler receives an already-constructed instance from model binding, it MUST call that instance's own `request.Validate()` when applicable.
@@ -215,8 +215,6 @@ public readonly record struct ApertureMeasurement
     }
 }
 ```
-
-A `Validate()` method only appears where a framework can also construct the record outside `Create(...)` — see the `[JsonConstructor]` EXCEPTION below for the shape that applies to.
 
 ### 4.6 Line Endings and Formatting
 
@@ -611,7 +609,7 @@ The requirement is therefore:
 
 Allocation behaviour SHOULD be measured for algorithms identified as performance-critical.
 
-### 6.3 Unmanaged Native Buffers
+### 6.3 Unmanaged Native Buffers and CFITSIO Table Reading
 
 **Location:** `AstroLab.Infrastructure/Fits`
 
@@ -633,6 +631,15 @@ CFITSIO-specific handles and P/Invoke declarations MUST remain inside Infrastruc
 The rest of the application MUST depend on AstroLab abstractions rather than CFITSIO APIs.
 
 If a future implementation replaces CFITSIO with another FITS reader, Core and API code SHOULD require no changes.
+
+**CFITSIO usage.** FITS header parsing and image pixel decoding are pure C# (`FitsHeaderReader`, `FitsCardParser`, `FitsPixelDataReader`, `FitsPixelConverter`) and do not use CFITSIO. The one exception is binary/ASCII table column reading (`CfitsIoTimeSeriesReader`, backing the `/api/timeseries/{fileId}/light-curve` endpoint): decoding an arbitrary column storage type with `TSCAL`/`TZERO` applied, and eventually variable-length columns and tile-compressed images, is exactly the kind of well-trodden binary-format logic CFITSIO already solves, so that reader goes through the native library rather than re-implementing it by hand.
+
+- `FitsFileHandle` owns a cfitsio `fitsfile*` obtained via `ffopen`, with the same disposal/double-free guarantees as `UnmanagedFitsBuffer`.
+- `CfitsIoErrorMapper` translates a cfitsio `status` code (`ffgerr` plus the `ffgmsg` message stack) into a `Result<TValue>`-friendly `Error`; no cfitsio status code MUST surface as a raw exception or raw native error text to an API client.
+- Row/element-count parameters on the table-reading bindings (e.g. `ffgcvd`) are cfitsio's own fixed-width `LONGLONG` (`long long` on every platform, including Windows) and MUST be marshaled as a plain `long`, **not** `CLong` — `CLong` is reserved for the axis-length/pixel-coordinate bindings (`ffgipr`, `ffgpxv`) that use the platform-variant C `long` instead. Getting this distinction wrong silently corrupts marshaling on Windows without a compile-time error.
+- Deciding *which* column/HDU to read (`TimeSeriesTableDescriptor.Resolve`, parsing `TFIELDS`/`NAXIS2`/`TTYPEn`) is pure header interpretation and MUST stay in Core, fully unit-testable without cfitsio present. Only the actual native column-value read crosses into Infrastructure.
+- `TimeSeriesTableDescriptor.Resolve` MUST validate each resolved column's `TFORMn` and reject anything other than a scalar (repeat count = 1) column with `fits.data.unsupported_column_shape`, rather than silently reading a fixed-repeat array column's or a variable-length (`P`/`Q`) column's data as if it were one value per row.
+- Tests that call into real cfitsio (`FitsFileHandleTests`, `CfitsIoTimeSeriesReaderTests`, `TimeSeriesWorkflowTests`) MUST dynamically skip (`Assert.Skip`) when the native library cannot be loaded, rather than fail, since it is installed via apt in the Docker/CI image (§5.5) but not guaranteed on every developer machine.
 
 ### 6.4 Pipeline Streaming
 
@@ -921,7 +928,7 @@ A Core algorithm MUST NOT know or care whether its output becomes a PNG, JSON re
 
 Request-boundary validation MAY use `ArgumentException` or `ArgumentOutOfRangeException` where required by the request DTO construction model.
 
-`RequestValidationExceptionHandler`, registered ahead of `GlobalExceptionHandler`, catches those request-validation exceptions and maps them to HTTP 400.
+`RequestValidationExceptionHandler`, registered ahead of `GlobalExceptionHandler`, catches those request-validation exceptions and maps them to HTTP 400. It also catches `Microsoft.AspNetCore.Http.BadHttpRequestException`, thrown by minimal API parameter binding when a required parameter (e.g. an endpoint parameter with no default value) is missing — `Program.cs` explicitly sets `RouteHandlerOptions.ThrowOnBadRequest = true` so this is thrown consistently in every hosting environment. Left at its default, `ThrowOnBadRequest` follows `IsDevelopment()`: `true` in Development (throws, reaching the exception handler chain) but `false` otherwise (the framework silently writes an empty-body 400 without ever reaching a registered `IExceptionHandler`) — an environment-dependent difference that MUST NOT be relied upon.
 
 Unexpected exceptions escaping an endpoint are caught by `GlobalExceptionHandler`, registered with `AddExceptionHandler<T>()` and `AddProblemDetails()`, and enabled with `app.UseExceptionHandler()`.
 

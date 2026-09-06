@@ -6,12 +6,14 @@ namespace AstroLab.Infrastructure.Storage;
 
 /// <summary>
 /// High-level facade combining <see cref="ILocalFileStore"/>, <see cref="FitsHeaderReader"/>,
-/// <see cref="FitsPixelDataReader"/>, and <see cref="FitsPixelConverter"/> into the operations API
-/// feature slices actually need: inspecting every HDU in a staged file, and loading the pixel data
-/// of the first HDU that matches a required <see cref="FitsDatasetKind"/> (validated up front via
-/// <see cref="FitsDatasetClassifier.EnsureKind"/>, so an analysis never runs against the wrong kind
-/// of data). Keeping this orchestration here — rather than duplicated across the Images and
-/// Spectroscopy feature slices — is what lets those endpoints stay thin.
+/// <see cref="FitsPixelDataReader"/>, <see cref="FitsPixelConverter"/>, and
+/// <see cref="CfitsIoTimeSeriesReader"/> into the operations API feature slices actually need:
+/// inspecting every HDU in a staged file, loading the pixel data of the first HDU that matches a
+/// required <see cref="FitsDatasetKind"/>, and loading a time-series table's TIME/FLUX columns
+/// (each validated up front via <see cref="FitsDatasetClassifier.EnsureKind"/>, so an analysis
+/// never runs against the wrong kind of data). Keeping this orchestration here — rather than
+/// duplicated across the Images, Spectroscopy, and TimeSeries feature slices — is what lets those
+/// endpoints stay thin.
 /// </summary>
 public sealed class FitsDatasetReader
 {
@@ -43,6 +45,61 @@ public sealed class FitsDatasetReader
     
     public Task<Result<FitsDataset>> LoadSpectrumImageAsync(string relativeKey, CancellationToken cancellationToken = default) =>
         LoadPixelDataAsync(relativeKey, FitsDatasetKind.Spectrum, cancellationToken);
+
+    public async Task<Result<LightCurveTableData>> LoadLightCurveAsync(string relativeKey, CancellationToken cancellationToken = default)
+    {
+        var pathResult = _fileStore.ResolvePath(relativeKey);
+
+        if (pathResult.IsFailure)
+        {
+            return Result<LightCurveTableData>.Failure(pathResult.Error);
+        }
+
+        var openResult = _fileStore.OpenRead(relativeKey);
+
+        if (openResult.IsFailure)
+        {
+            return Result<LightCurveTableData>.Failure(openResult.Error);
+        }
+
+        ImmutableArray<HduLocation> locations;
+
+        await using (var stream = openResult.Value)
+        {
+            var locationsResult = await FitsHeaderReader.ReadAllHeadersAsync(stream, cancellationToken);
+
+            if (locationsResult.IsFailure)
+            {
+                return Result<LightCurveTableData>.Failure(locationsResult.Error);
+            }
+
+            locations = locationsResult.Value;
+        }
+
+        var kindResult = FitsDatasetClassifier.EnsureKind(new HduLocationDescriptorView(locations), FitsDatasetKind.TimeSeries);
+
+        if (kindResult.IsFailure)
+        {
+            return Result<LightCurveTableData>.Failure(kindResult.Error);
+        }
+
+        var tableLocation = FindMatchingLocation(locations, FitsDatasetKind.TimeSeries);
+
+        if (tableLocation is not { } location)
+        {
+            return Error.Validation("fits.data.no_table", "The file does not contain a time-series table HDU.");
+        }
+
+        var descriptorResult = TimeSeriesTableDescriptor.Resolve(location.Descriptor);
+
+        if (descriptorResult.IsFailure)
+        {
+            return Result<LightCurveTableData>.Failure(descriptorResult.Error);
+        }
+
+        return await CfitsIoTimeSeriesReader.ReadAsync(
+            pathResult.Value, location.Descriptor.Index + 1, descriptorResult.Value, cancellationToken);
+    }
 
     private async Task<Result<FitsDataset>> LoadPixelDataAsync(string relativeKey, FitsDatasetKind requiredKind, CancellationToken cancellationToken)
     {

@@ -83,6 +83,24 @@ public sealed class ExceptionHandlingTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task RequestValidationExceptionHandler_BadHttpRequestException_ReturnsBadRequestWithMessage()
+    {
+        var handler = new RequestValidationExceptionHandler();
+
+        var badHttpRequestException = new BadHttpRequestException("Required parameter \"ArchiveSource archive\" was not provided from query string.");
+
+        var (handled, context) = await InvokeAsync(handler.TryHandleAsync, badHttpRequestException);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+
+        var body = await ReadBodyAsync(context);
+
+        Assert.Equal("invalid_request", body.GetProperty("title").GetString());
+        Assert.Contains("ArchiveSource archive", body.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public async Task RequestValidationExceptionHandler_NonArgumentException_DoesNotHandleIt()
     {
         var handler = new RequestValidationExceptionHandler();

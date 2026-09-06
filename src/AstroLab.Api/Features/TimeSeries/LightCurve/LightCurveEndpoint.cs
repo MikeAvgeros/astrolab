@@ -1,21 +1,25 @@
+using System.Collections.Immutable;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.TimeSeries.LightCurve;
 
-/// <summary>
-/// Roadmap slice: extracting a light curve (flux vs. time) from a staged time-series FITS table.
-/// Response contract is final; the extraction algorithm itself is not yet implemented (see
-/// spec.md §6.5), so this route always returns HTTP 501.
-/// </summary>
+/// <summary>Extracts a light curve (flux vs. time) from a staged time-series FITS table.</summary>
 public static class LightCurveEndpoint
 {
     extension(IEndpointRouteBuilder group)
     {
         public void MapLightCurveEndpoint()
         {
-            group.MapGet("/{fileId}/light-curve", GetLightCurve)
-                .WithSummary("Extracts a light curve (flux vs. time) from a staged time-series FITS table. Not yet implemented.");
+            group.MapGet("/{fileId}/light-curve", GetLightCurveAsync)
+                .WithSummary("Extracts a light curve (flux vs. time) from a staged time-series FITS table.");
         }
     }
 
-    private static IResult GetLightCurve(string fileId) =>
-        NotImplementedResult.Value("timeseries.lightcurve.not_implemented", "Light curve extraction is not yet implemented.");
+    private static async Task<IResult> GetLightCurveAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        var lightCurveResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
+
+        return lightCurveResult.ToApiResult(data => Results.Ok(
+            LightCurveResponse.Create(fileId, data.Time.ToImmutableList(), data.Flux.ToImmutableList())));
+    }
 }

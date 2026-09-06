@@ -39,22 +39,14 @@ public static class FitsDatasetClassifier
         return HasTable(hdus) ? FitsDatasetKind.Table : FitsDatasetKind.Unknown;
     }
     
-    public static bool MatchesKind(HduDescriptor hdu, FitsDatasetKind capability)
+    public static bool MatchesKind(HduDescriptor hdu, FitsDatasetKind capability) => capability switch
     {
-        if (!HasPixelData(hdu))
-        {
-            return false;
-        }
-
-        var isSpectrum = IsSpectrum(hdu);
-
-        return capability switch
-        {
-            FitsDatasetKind.Spectrum => isSpectrum,
-            FitsDatasetKind.Image => !isSpectrum,
-            _ => false
-        };
-    }
+        FitsDatasetKind.Spectrum => HasPixelData(hdu) && IsSpectrum(hdu),
+        FitsDatasetKind.Image => HasPixelData(hdu) && !IsSpectrum(hdu),
+        FitsDatasetKind.TimeSeries => IsTimeSeriesTable(hdu),
+        FitsDatasetKind.Table => IsTable(hdu),
+        _ => false
+    };
 
     public static Result<FitsDatasetKind> EnsureKind(IReadOnlyList<HduDescriptor> hdus, FitsDatasetKind required)
     {
@@ -97,26 +89,36 @@ public static class FitsDatasetClassifier
     {
         foreach (var hdu in hdus)
         {
-            if (hdu.Type is not (HduType.AsciiTable or HduType.BinaryTable))
+            if (IsTimeSeriesTable(hdu))
             {
-                continue;
+                return true;
             }
+        }
 
-            var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
+        return false;
+    }
 
-            if (fieldCount < MinimumTimeSeriesFieldCount)
+    private static bool IsTimeSeriesTable(HduDescriptor hdu)
+    {
+        if (hdu.Type is not (HduType.AsciiTable or HduType.BinaryTable))
+        {
+            return false;
+        }
+
+        var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
+
+        if (fieldCount < MinimumTimeSeriesFieldCount)
+        {
+            return false;
+        }
+
+        for (var field = FirstFieldNumber; field <= fieldCount; field++)
+        {
+            var nameResult = hdu.Header.GetString($"TTYPE{field}");
+
+            if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), TimeColumnName, StringComparison.OrdinalIgnoreCase))
             {
-                continue;
-            }
-
-            for (var field = FirstFieldNumber; field <= fieldCount; field++)
-            {
-                var nameResult = hdu.Header.GetString($"TTYPE{field}");
-
-                if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), TimeColumnName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
@@ -175,7 +177,7 @@ public static class FitsDatasetClassifier
     {
         foreach (var hdu in hdus)
         {
-            if (hdu.Type is HduType.AsciiTable or HduType.BinaryTable)
+            if (IsTable(hdu))
             {
                 return true;
             }
@@ -183,4 +185,6 @@ public static class FitsDatasetClassifier
 
         return false;
     }
+
+    private static bool IsTable(HduDescriptor hdu) => hdu.Type is HduType.AsciiTable or HduType.BinaryTable;
 }

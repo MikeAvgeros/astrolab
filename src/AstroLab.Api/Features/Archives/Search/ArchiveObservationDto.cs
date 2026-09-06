@@ -61,32 +61,30 @@ public sealed record ArchiveObservationDto
 
     public string? DataRights { get; }
 
-    public static ArchiveObservationDto Create(
-        string datasetId, string target, string instrument, DateTimeOffset observationDate, ArchiveSource source,
-        string? collection = null, string? dataProductType = null, int? calibrationLevel = null,
-        double? rightAscension = null, double? declination = null, double? exposureTimeSeconds = null,
-        double? wavelengthMinMicrometres = null, double? wavelengthMaxMicrometres = null,
-        string? proposalId = null, string? proposalPi = null, string? dataRights = null)
+    public static ArchiveObservationDto Create(ArchiveObservation observation)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(datasetId);
-
-        ArgumentException.ThrowIfNullOrWhiteSpace(target);
-
-        ArgumentException.ThrowIfNullOrWhiteSpace(instrument);
+        ArgumentException.ThrowIfNullOrWhiteSpace(observation.DatasetId);
+        
+        ArgumentException.ThrowIfNullOrWhiteSpace(observation.Target);
+        
+        ArgumentException.ThrowIfNullOrWhiteSpace(observation.Instrument);
 
         return new ArchiveObservationDto(
-            datasetId, target, instrument, observationDate, source,
-            collection, dataProductType, calibrationLevel,
-            rightAscension, declination, exposureTimeSeconds,
-            wavelengthMinMicrometres, wavelengthMaxMicrometres,
-            proposalId, proposalPi, dataRights);
+            observation.DatasetId,
+            observation.Target,
+            observation.Instrument,
+            observation.ObservationDate,
+            observation.Source,
+            observation.Collection,
+            observation.DataProductType,
+            observation.CalibrationLevel,
+            observation.RightAscension,
+            observation.Declination,
+            observation.ExposureTimeSeconds,
+            observation.WavelengthMinMicrometres,
+            observation.WavelengthMaxMicrometres,
+            observation.ProposalId,
+            observation.ProposalPi,
+            observation.DataRights);
     }
-
-    public static ArchiveObservationDto Create(ArchiveObservation observation) =>
-        Create(
-            observation.DatasetId, observation.Target, observation.Instrument, observation.ObservationDate, observation.Source,
-            observation.Collection, observation.DataProductType, observation.CalibrationLevel,
-            observation.RightAscension, observation.Declination, observation.ExposureTimeSeconds,
-            observation.WavelengthMinMicrometres, observation.WavelengthMaxMicrometres,
-            observation.ProposalId, observation.ProposalPi, observation.DataRights);
 }

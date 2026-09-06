@@ -25,17 +25,10 @@ public sealed record FitsHeaderResponse
 
     public FitsCommonMetadataDto CommonMetadata { get; }
 
-    public static FitsHeaderResponse Create(string fileId, FitsDatasetKind datasetKind, 
-        ImmutableList<FitsHduSummaryDto> hdus, ImmutableList<FitsKeywordDto> keywords, 
-        FitsCommonMetadataDto commonMetadata)
+    public static FitsHeaderResponse Create(string fileId, ImmutableArray<HduDescriptor> hdus)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 
-        return new FitsHeaderResponse(fileId, datasetKind, hdus, keywords, commonMetadata);
-    }
-
-    public static FitsHeaderResponse Create(string fileId, ImmutableArray<HduDescriptor> hdus)
-    {
         var datasetKind = FitsDatasetClassifier.Classify(hdus);
 
         var hduSummaries = hdus
@@ -52,9 +45,9 @@ public sealed record FitsHeaderResponse
 
         var keywords = ToKeywordDtos(primaryHeader);
 
-        var commonMetadata = FitsCommonMetadataDto.FromHeader(primaryHeader);
+        var commonMetadata = FitsCommonMetadataDto.Create(primaryHeader);
 
-        return Create(fileId, datasetKind, hduSummaries, keywords, commonMetadata);
+        return new FitsHeaderResponse(fileId, datasetKind, hduSummaries, keywords, commonMetadata);
     }
 
     private static string? ExtensionName(FitsHeader header)

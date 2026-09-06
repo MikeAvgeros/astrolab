@@ -54,7 +54,7 @@ public static class SourcesEndpoint
             {
                 var (rightAscension, declination) = ResolveWorldCoordinates(wcs, source);
 
-                return DetectedSourceDto.FromDetectedSource(source, rightAscension, declination);
+                return DetectedSourceDto.Create(source, rightAscension, declination);
             })
             .ToImmutableList();
 

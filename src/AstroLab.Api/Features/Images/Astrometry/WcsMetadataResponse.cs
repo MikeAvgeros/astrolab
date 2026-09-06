@@ -43,23 +43,20 @@ public sealed record WcsMetadataResponse
     
     public double RotationDegrees { get; }
 
-    public static WcsMetadataResponse Create(
-        string fileId, string? coordinateSystem, WcsProjection projection,
-        double referencePixelX, double referencePixelY,
-        double referenceRightAscension, double referenceDeclination,
-        double pixelScaleXDegrees, double pixelScaleYDegrees,
-        double rotationDegrees)
+    public static WcsMetadataResponse Create(string fileId, Wcs wcs)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 
         return new WcsMetadataResponse(
-            fileId, coordinateSystem, projection, referencePixelX, referencePixelY,
-            referenceRightAscension, referenceDeclination, pixelScaleXDegrees, pixelScaleYDegrees, rotationDegrees);
+            fileId,
+            wcs.RadeSys,
+            wcs.Projection,
+            wcs.ReferencePixelX,
+            wcs.ReferencePixelY,
+            wcs.ReferenceRightAscension,
+            wcs.ReferenceDeclination,
+            wcs.PixelScaleXDegrees,
+            wcs.PixelScaleYDegrees,
+            wcs.RotationDegrees);
     }
-
-    public static WcsMetadataResponse FromWcs(string fileId, Wcs wcs) => Create(
-        fileId, wcs.RadeSys, wcs.Projection,
-        wcs.ReferencePixelX, wcs.ReferencePixelY,
-        wcs.ReferenceRightAscension, wcs.ReferenceDeclination,
-        wcs.PixelScaleXDegrees, wcs.PixelScaleYDegrees, wcs.RotationDegrees);
 }

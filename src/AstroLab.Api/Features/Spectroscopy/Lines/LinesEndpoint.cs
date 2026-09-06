@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using AstroLab.Core.Spectroscopy;
 using AstroLab.Infrastructure.Storage;
 

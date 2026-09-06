@@ -82,7 +82,6 @@ public static class MultiPhotometryEndpoint
 
             if (magnitudeResult.IsFailure)
             {
-                // Instrumental magnitude is undefined for a non-positive net flux; omit rather than fabricate one.
                 continue;
             }
 

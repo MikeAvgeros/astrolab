@@ -12,7 +12,7 @@ public sealed record ObservationSearchResponse
 
     public ImmutableList<ArchiveObservationDto> Observations { get; }
 
-    public static ObservationSearchResponse Create(ImmutableList<ArchiveObservationDto> observations) =>
+    private static ObservationSearchResponse Create(ImmutableList<ArchiveObservationDto> observations) =>
         new(observations);
 
     public static ObservationSearchResponse Create(IReadOnlyList<ArchiveObservation> observations) =>

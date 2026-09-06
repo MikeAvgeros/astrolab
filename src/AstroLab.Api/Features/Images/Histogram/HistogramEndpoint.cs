@@ -43,6 +43,6 @@ public static class HistogramEndpoint
 
         var histogramResult = ImageStatistics.ComputeHistogram(pixels, statsResult.Value, request.BinCount);
 
-        return histogramResult.ToApiResult(histogram => Results.Ok(ImageHistogramResponse.FromHistogram(fileId, histogram)));
+        return histogramResult.ToApiResult(histogram => Results.Ok(ImageHistogramResponse.Create(fileId, histogram)));
     }
 }

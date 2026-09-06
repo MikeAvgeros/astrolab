@@ -20,7 +20,7 @@ public sealed record BackgroundModelRequest
         return request;
     }
 
-    public void Validate()
+    private void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MeshSizePixels);
     }

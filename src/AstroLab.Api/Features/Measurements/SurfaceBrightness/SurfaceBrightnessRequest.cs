@@ -24,7 +24,7 @@ public sealed record SurfaceBrightnessRequest
         return request;
     }
 
-    public void Validate()
+    private void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureRadius);
     }

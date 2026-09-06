@@ -40,19 +40,22 @@ public sealed record DetectedSourceDto
 
     public double SignalToNoiseRatio { get; }
 
-    public static DetectedSourceDto Create(
-        int id, double pixelX, double pixelY, double? rightAscension, double? declination,
-        int pixelCount, double peakValue, double totalFlux, double background, double signalToNoiseRatio)
+    public static DetectedSourceDto Create(DetectedSource source, double? rightAscension, double? declination)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.Id);
+        
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(source.PixelCount);
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelCount);
-
-        return new DetectedSourceDto(id, pixelX, pixelY, rightAscension, declination, pixelCount, peakValue, totalFlux, background, signalToNoiseRatio);
+        return new DetectedSourceDto(
+            source.Id,
+            source.PixelX,
+            source.PixelY,
+            rightAscension,
+            declination,
+            source.PixelCount,
+            source.PeakValue,
+            source.TotalFlux,
+            source.Background,
+            source.SignalToNoiseRatio);
     }
-
-    public static DetectedSourceDto FromDetectedSource(DetectedSource source, double? rightAscension, double? declination) =>
-        Create(
-            source.Id, source.PixelX, source.PixelY, rightAscension, declination,
-            source.PixelCount, source.PeakValue, source.TotalFlux, source.Background, source.SignalToNoiseRatio);
 }

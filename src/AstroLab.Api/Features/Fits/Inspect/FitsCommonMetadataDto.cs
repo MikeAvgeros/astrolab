@@ -52,32 +52,23 @@ public sealed record FitsCommonMetadataDto
 
     public string? Bunit { get; }
 
-    public static FitsCommonMetadataDto Create(
-        string? @object,
-        string? dateObs,
-        string? telescope,
-        string? instrument,
-        string? observer,
-        double? exposureTimeSeconds,
-        string? filter,
-        string? rightAscension,
-        string? declination,
-        double? equinox,
-        string? bunit) =>
-        new(@object, dateObs, telescope, instrument, observer, exposureTimeSeconds, filter, rightAscension, declination, equinox, bunit);
+    public static FitsCommonMetadataDto Create(FitsHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
 
-    public static FitsCommonMetadataDto FromHeader(FitsHeader header) => Create(
-        @object: AsText(header, "OBJECT"),
-        dateObs: AsText(header, "DATE-OBS"),
-        telescope: AsText(header, "TELESCOP"),
-        instrument: AsText(header, "INSTRUME"),
-        observer: AsText(header, "OBSERVER"),
-        exposureTimeSeconds: AsNumber(header, "EXPTIME"),
-        filter: AsText(header, "FILTER"),
-        rightAscension: AsText(header, "RA"),
-        declination: AsText(header, "DEC"),
-        equinox: AsNumber(header, "EQUINOX"),
-        bunit: AsText(header, "BUNIT"));
+        return new FitsCommonMetadataDto(
+            @object: AsText(header, "OBJECT"),
+            dateObs: AsText(header, "DATE-OBS"),
+            telescope: AsText(header, "TELESCOP"),
+            instrument: AsText(header, "INSTRUME"),
+            observer: AsText(header, "OBSERVER"),
+            exposureTimeSeconds: AsNumber(header, "EXPTIME"),
+            filter: AsText(header, "FILTER"),
+            rightAscension: AsText(header, "RA"),
+            declination: AsText(header, "DEC"),
+            equinox: AsNumber(header, "EQUINOX"),
+            bunit: AsText(header, "BUNIT"));
+    }
 
     private static string? AsText(FitsHeader header, string keyword) =>
         header.TryGetValue(keyword, out var value) ? value.ToString() : null;

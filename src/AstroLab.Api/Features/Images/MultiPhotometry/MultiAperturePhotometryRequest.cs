@@ -56,7 +56,7 @@ public sealed record MultiAperturePhotometryRequest
         return request;
     }
 
-    public void Validate()
+    private void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureRadius);
 

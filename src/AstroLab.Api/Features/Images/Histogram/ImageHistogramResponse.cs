@@ -24,17 +24,19 @@ public sealed record ImageHistogramResponse
 
     public long ValidPixelCount { get; }
 
-    public static ImageHistogramResponse Create(string fileId, ImmutableList<double> binEdges, ImmutableList<long> counts, int binCount, long validPixelCount)
+    public static ImageHistogramResponse Create(string fileId, ImageHistogram histogram)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
+        
+        ArgumentOutOfRangeException.ThrowIfNegative(histogram.BinCount);
+        
+        ArgumentOutOfRangeException.ThrowIfNegative(histogram.ValidPixelCount);
 
-        ArgumentOutOfRangeException.ThrowIfNegative(binCount);
-
-        ArgumentOutOfRangeException.ThrowIfNegative(validPixelCount);
-
-        return new ImageHistogramResponse(fileId, binEdges, counts, binCount, validPixelCount);
+        return new ImageHistogramResponse(
+            fileId,
+            histogram.BinEdges.ToImmutableList(),
+            histogram.Counts.ToImmutableList(),
+            histogram.BinCount,
+            histogram.ValidPixelCount);
     }
-
-    public static ImageHistogramResponse FromHistogram(string fileId, ImageHistogram histogram) =>
-        Create(fileId, histogram.BinEdges.ToImmutableList(), histogram.Counts.ToImmutableList(), histogram.BinCount, histogram.ValidPixelCount);
 }

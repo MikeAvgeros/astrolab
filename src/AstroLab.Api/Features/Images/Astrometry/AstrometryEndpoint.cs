@@ -26,7 +26,7 @@ public static class AstrometryEndpoint
     {
         var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
 
-        return wcsResult.ToApiResult(wcs => Results.Ok(WcsMetadataResponse.FromWcs(fileId, wcs)));
+        return wcsResult.ToApiResult(wcs => Results.Ok(WcsMetadataResponse.Create(fileId, wcs)));
     }
 
     private static async Task<IResult> ConvertPixelToWorldAsync(

@@ -21,7 +21,7 @@ public sealed record PhysicalSizeRequest
         return request;
     }
 
-    public void Validate()
+    private void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(AngularSizeArcsec);
 

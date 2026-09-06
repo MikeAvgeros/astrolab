@@ -18,6 +18,8 @@ public sealed record FitsKeywordDto
     public static FitsKeywordDto Create(string name, string value, string? comment)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
         return new FitsKeywordDto(name, value, comment);
     }

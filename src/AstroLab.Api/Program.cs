@@ -8,21 +8,21 @@ using AstroLab.Api.Features.Measurements;
 using AstroLab.Api.Features.Spectroscopy;
 using AstroLab.Api.Features.TimeSeries;
 using AstroLab.Infrastructure;
-using Microsoft.AspNetCore.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAstroLabInfrastructure(builder.Configuration);
+
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddOpenApi();
+
 builder.Services.AddProblemDetails();
+
 builder.Services.AddExceptionHandler<RequestValidationExceptionHandler>();
+
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-// RouteHandlerOptions.ThrowOnBadRequest otherwise defaults to IsDevelopment(): a missing required
-// minimal-API parameter throws BadHttpRequestException in Development but silently writes an
-// empty-body 400 in Production. Forcing it on makes RequestValidationExceptionHandler produce a
-// consistent ProblemDetails response for this failure regardless of hosting environment.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -39,11 +39,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapFitsEndpoints();
+
 app.MapImagesEndpoints();
+
 app.MapSpectroscopyEndpoints();
+
 app.MapArchivesEndpoints();
+
 app.MapTimeSeriesEndpoints();
+
 app.MapCataloguesEndpoints();
+
 app.MapMeasurementsEndpoints();
 
 app.Run();

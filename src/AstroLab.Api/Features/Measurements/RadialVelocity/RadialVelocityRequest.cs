@@ -21,7 +21,7 @@ public sealed record RadialVelocityRequest
         return request;
     }
 
-    public void Validate()
+    private void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(RestWavelengthNm);
 

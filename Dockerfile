@@ -43,8 +43,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 WORKDIR /app
 
-COPY --from=cfitsio-build /usr/local/lib/libcfitsio.so* /usr/lib/x86_64-linux-gnu/
-RUN ldconfig
+RUN --mount=type=bind,from=cfitsio-build,source=/usr/local/lib,target=/tmp/cfitsio-lib \
+    cp -a /tmp/cfitsio-lib/libcfitsio.so* /usr/lib/x86_64-linux-gnu/ \
+    && ldconfig
 
 # Prepare storage directory
 RUN mkdir -p /app/storage \

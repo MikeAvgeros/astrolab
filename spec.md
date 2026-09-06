@@ -481,7 +481,7 @@ The runtime stage uses:
 - port `8080`
 - `/app/storage` as the persistent storage volume
 
-The FITS native dependency is installed through the Linux distribution's package manager rather than relying on manually copied native binaries.
+The FITS native dependency is built from a pinned upstream CFITSIO source release (with checksum verification) in a dedicated build stage, rather than installed through the Linux distribution's package manager or relying on manually copied native binaries. This keeps the deployed CFITSIO version under explicit control instead of tracking whatever build happens to ship with the base image's OS release.
 
 CFITSIO remains an Infrastructure implementation detail. The application architecture MUST NOT depend on a particular filesystem location or native deployment mechanism beyond the Infrastructure adapter's documented requirements.
 
@@ -639,7 +639,7 @@ If a future implementation replaces CFITSIO with another FITS reader, Core and A
 - Row/element-count parameters on the table-reading bindings (e.g. `ffgcvd`) are cfitsio's own fixed-width `LONGLONG` (`long long` on every platform, including Windows) and MUST be marshaled as a plain `long`, **not** `CLong` — `CLong` is reserved for the axis-length/pixel-coordinate bindings (`ffgipr`, `ffgpxv`) that use the platform-variant C `long` instead. Getting this distinction wrong silently corrupts marshaling on Windows without a compile-time error.
 - Deciding *which* column/HDU to read (`TimeSeriesTableDescriptor.Resolve`, parsing `TFIELDS`/`NAXIS2`/`TTYPEn`) is pure header interpretation and MUST stay in Core, fully unit-testable without cfitsio present. Only the actual native column-value read crosses into Infrastructure.
 - `TimeSeriesTableDescriptor.Resolve` MUST validate each resolved column's `TFORMn` and reject anything other than a scalar (repeat count = 1) column with `fits.data.unsupported_column_shape`, rather than silently reading a fixed-repeat array column's or a variable-length (`P`/`Q`) column's data as if it were one value per row.
-- Tests that call into real cfitsio (`FitsFileHandleTests`, `CfitsIoTimeSeriesReaderTests`, `TimeSeriesWorkflowTests`) MUST dynamically skip (`Assert.Skip`) when the native library cannot be loaded, rather than fail, since it is installed via apt in the Docker/CI image (§5.5) but not guaranteed on every developer machine.
+- Tests that call into real cfitsio (`FitsFileHandleTests`, `CfitsIoTimeSeriesReaderTests`, `TimeSeriesWorkflowTests`) MUST dynamically skip (`Assert.Skip`) when the native library cannot be loaded, rather than fail, since it is built from pinned source in the Docker/CI image (§5.5) but not guaranteed on every developer machine.
 
 ### 6.4 Pipeline Streaming
 

@@ -616,7 +616,7 @@ Test:
 - cancellation
 - image rendering
 
-Tests that call into the real `cfitsio` native library (currently only the binary/ASCII table-reading path — see `spec.md` §6.3) MUST dynamically skip via `Assert.Skip` when the library cannot be loaded on the current machine, rather than fail. It is installed via apt in the Docker/CI image but is not guaranteed to be present on every developer machine.
+Tests that call into the real `cfitsio` native library (currently only the binary/ASCII table-reading path — see `spec.md` §6.3) MUST dynamically skip via `Assert.Skip` when the library cannot be loaded on the current machine, rather than fail. It is built from a pinned upstream source release in the Docker/CI image but is not guaranteed to be present on every developer machine.
 
 ## API Tests
 

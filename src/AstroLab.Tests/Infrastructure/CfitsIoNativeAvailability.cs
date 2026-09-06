@@ -4,7 +4,7 @@ namespace AstroLab.Tests.Infrastructure;
 
 /// <summary>
 /// Every CFITSIO-backed test needs a real <c>cfitsio</c> shared library on the machine running the
-/// tests. It is installed via apt in the Docker/CI image (see spec.md §5.5) but is not present on
+/// tests. It is built from a pinned upstream source release in the Docker/CI image (see spec.md §5.5) but is not present on
 /// every developer machine, so tests that need it check <see cref="IsAvailable"/> and dynamically
 /// skip (via <see cref="Assert.Skip"/>) rather than fail when it is missing.
 /// </summary>

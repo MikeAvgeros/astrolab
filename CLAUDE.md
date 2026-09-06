@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Keep this file current:** whenever you make a change to this project that affects the project structure, feature slices, architecture, dependency rules, commands, business rule or development workflow, update the relevant section of this file in the same change.
+> **Keep this file current:** whenever you make a change to this project that affects the project structure, feature slices, architecture, dependency rules, commands, or development workflow, update the relevant section of this file in the same change.
 
-The authoritative engineering specification that defines the required architecture, behaviour, domain rules, API contracts, coding standards, and implementation constraints is `spec.md`. This file contains the operational guidance and the rules most relevant to an AI coding agent.
+The authoritative project specification that defines the required architecture, behaviour, domain rules, API contracts, coding standards, and implementation constraints is `spec.md`. This file contains the operational guidance and the rules most relevant to an AI coding agent.
+
+Project-specific skills are located under `.claude/skills/`. Use the relevant skill when its purpose applies to the current task. Do not invoke unrelated skills merely because they are available.
 
 ---
 
@@ -32,13 +34,15 @@ There is currently no database. Metadata and raw datasets are staged on local di
 ### Before Making Changes
 
 1. Read the relevant section of `spec.md` before implementing a new feature or changing architecture.
-2. Inspect the existing implementation before introducing new abstractions or patterns.
-3. Prefer extending an existing pattern over introducing a competing pattern.
-4. Keep changes focused on the requested feature.
-5. Do not introduce speculative abstractions, projects, dependencies, or Core namespaces for functionality that has not been implemented.
-6. Do not change public API contracts unnecessarily.
-7. After making changes, build and run the relevant tests.
-8. Check the final diff against both `spec.md` and this file.
+2. Inspect the relevant existing implementation before introducing new abstractions or patterns.
+3. Identify which requirements in `spec.md` apply to the task.
+4. Determine whether any project skill under `.claude/skills/` applies to the task and use it when appropriate.
+5. Prefer extending an existing pattern over introducing a competing pattern.
+6. Keep changes focused on the requested feature.
+7. Do not introduce speculative abstractions, projects, dependencies, or Core namespaces for functionality that has not been implemented.
+8. Do not change public API contracts unnecessarily.
+9. After making changes, build and run the relevant tests.
+10. Check the final diff against both `spec.md` and this file.
 
 ### Package Dependencies
 

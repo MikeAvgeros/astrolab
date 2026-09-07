@@ -100,6 +100,7 @@ These requirements define the engineering invariants that apply across the repos
 - **MUST:** Every asynchronous operation that can meaningfully be cancelled accepts a `CancellationToken` and propagates it to downstream I/O.
 - **MUST NOT:** Block asynchronous code with `.Result` or `.Wait()`. Restructure callers to remain asynchronous.
 - **SHOULD:** Honour cancellation promptly, particularly during large FITS downloads, file reads, and streaming operations.
+- **MUST:** Suffix asynchronous methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` with `Async`, including interface members.
 
 ### 3.4 Functional Core
 
@@ -157,7 +158,8 @@ Within a class, order methods according to their visibility and usage:
 - **MUST:** Extract numeric literals that encode domain meaning — scaling factors, thresholds, buffer sizes, fallback values, algorithm coefficients, and similar values — into named `private const` fields. Structurally self-evident literals such as `0`, `1`, and `2` used as indices or simple bounds are exempt.
 - **MUST:** Enable nullable reference types in every project with `<Nullable>enable</Nullable>`. Use `T?` for legitimately absent references and perform a real null check rather than using `!` to suppress the compiler.
 - **MUST NOT:** Add redundant parentheses to a mathematical expression — parentheses that restate C#'s existing operator precedence rather than changing evaluation order. Use parentheses only where they are required to produce the correct result, or where a mixed chain of different operator kinds would otherwise be genuinely ambiguous to a reader.
-- **MUST NOT:** Add a trailing comma after the last member of an `enum` declaration.
+
+* **MUST NOT:** Add a trailing comma after the last member, element, argument, parameter, or expression arm when the comma is optional. This applies to `enum` declarations, `switch` expressions, collection/object/array initializers, argument lists, parameter lists, and any other C# construct where a trailing comma is permitted but not required.
 
 ### 4.4 Control Flow and LINQ
 
@@ -168,7 +170,6 @@ Within a class, order methods according to their visibility and usage:
 - **MUST:** Prefer early returns for guard conditions rather than unnecessary `else` blocks or deep nesting.
 - **SHOULD:** Prefer pattern matching (`is`, property patterns, relational patterns, and `switch` expressions) when branching on a value's type, state, or structure, where it improves clarity over equivalent `if`/`else` logic.
 - **SHOULD:** Prefer switch expressions when a value is produced by branching on a discriminant and the branches can be expressed clearly as expressions.
-- **MUST:** Suffix asynchronous methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` with `Async`, including interface members.
 - **SHOULD:** Prefer `var` when the right-hand side makes the type unambiguous at the call site. Use an explicit type when it improves clarity.
 
 ### 4.5 Immutability and Records
@@ -637,8 +638,8 @@ If a future implementation replaces CFITSIO with another FITS reader, Core and A
 
 - `FitsFileHandle` owns a cfitsio `fitsfile*` obtained via `ffopen`, with the same disposal/double-free guarantees as `UnmanagedFitsBuffer`.
 - `CfitsIoErrorMapper` translates a cfitsio `status` code (`ffgerr` plus the `ffgmsg` message stack) into a `Result<TValue>`-friendly `Error`; no cfitsio status code MUST surface as a raw exception or raw native error text to an API client.
-- Row/element-*count* parameters (e.g. `ffgcvd`'s `firstrow`/`firstelem`/`nelem`, and `ffgpxv`'s `nelem`) are cfitsio's own fixed-width `LONGLONG` (`long long` on every platform, including Windows) and MUST be marshaled as a plain `long`, **not** `CLong`. `CLong` is reserved for parameters that are genuinely the platform-variant C `long` — axis-length/pixel-coordinate arrays such as `ffgipr`'s `naxes` and `ffgpxv`'s own `firstpix`. Note that `ffgpxv` itself takes one parameter of each kind (`firstpix` as `CLong[]`, `nelem` as `long`) — getting this distinction wrong silently corrupts marshaling on Windows without a compile-time error.
-- Deciding *which* column/HDU to read (`TimeSeriesTableDescriptor.Resolve`, parsing `TFIELDS`/`NAXIS2`/`TTYPEn`) is pure header interpretation and MUST stay in Core, fully unit-testable without cfitsio present. Only the actual native column-value read crosses into Infrastructure.
+- Row/element-_count_ parameters (e.g. `ffgcvd`'s `firstrow`/`firstelem`/`nelem`, and `ffgpxv`'s `nelem`) are cfitsio's own fixed-width `LONGLONG` (`long long` on every platform, including Windows) and MUST be marshaled as a plain `long`, **not** `CLong`. `CLong` is reserved for parameters that are genuinely the platform-variant C `long` — axis-length/pixel-coordinate arrays such as `ffgipr`'s `naxes` and `ffgpxv`'s own `firstpix`. Note that `ffgpxv` itself takes one parameter of each kind (`firstpix` as `CLong[]`, `nelem` as `long`) — getting this distinction wrong silently corrupts marshaling on Windows without a compile-time error.
+- Deciding _which_ column/HDU to read (`TimeSeriesTableDescriptor.Resolve`, parsing `TFIELDS`/`NAXIS2`/`TTYPEn`) is pure header interpretation and MUST stay in Core, fully unit-testable without cfitsio present. Only the actual native column-value read crosses into Infrastructure.
 - `TimeSeriesTableDescriptor.Resolve` MUST validate each resolved column's `TFORMn` and reject anything other than a scalar (repeat count = 1) column with `fits.data.unsupported_column_shape`, rather than silently reading a fixed-repeat array column's or a variable-length (`P`/`Q`) column's data as if it were one value per row.
 - Tests that call into real cfitsio (`FitsFileHandleTests`, `CfitsIoTimeSeriesReaderTests`, `TimeSeriesWorkflowTests`) MUST dynamically skip (`Assert.Skip`) when the native library cannot be loaded, rather than fail, since it is built from pinned source in the Docker/CI image (§5.5) but not guaranteed on every developer machine.
 

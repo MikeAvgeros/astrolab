@@ -10,7 +10,7 @@ public readonly record struct ImageStatistics
     private const int MaxStackallocHistogramBins = 1024;
     private const double MinPercentile = 0.0;
     private const double MaxPercentile = 100.0;
-    private const double IqrToSigmaFactor = 1.349;
+    internal const double IqrToSigmaFactor = 1.349;
     private const int SkyBackgroundHistogramBins = 65536;
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;

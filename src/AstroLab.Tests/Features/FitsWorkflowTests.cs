@@ -275,6 +275,34 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task GetBackground_MeshLargerThanImage_MatchesWholeImageMedianAndPositiveRms()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/background");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(64, body.GetProperty("meshSizePixels").GetInt32());
+
+        Assert.Equal(45.0, body.GetProperty("medianBackground").GetDouble(), precision: 6);
+
+        Assert.True(body.GetProperty("backgroundRms").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task GetBackground_RejectsNonPositiveMeshSize()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/background?meshSizePixels=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RenderPng_ReturnsValidPngBytes()
     {
         var fileId = await UploadGradientImageAsync();

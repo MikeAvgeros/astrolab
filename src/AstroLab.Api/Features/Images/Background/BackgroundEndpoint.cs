@@ -1,25 +1,42 @@
+using AstroLab.Core.Imaging;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Images.Background;
 
-/// <summary>
-/// Roadmap slice: modelling the 2D sky background of a staged image on a mesh, rather than a
-/// single global estimate. Request/response contract is final; the modelling algorithm itself is
-/// not yet implemented (see spec.md §6.5), so this route always returns HTTP 501.
-/// </summary>
+/// <summary>Models the 2D sky background of a staged image on a mesh, reporting a robust background level and noise floor for source detection.</summary>
 public static class BackgroundEndpoint
 {
     extension(IEndpointRouteBuilder group)
     {
         public void MapBackgroundEndpoint()
         {
-            group.MapGet("/{fileId}/background", ModelBackground)
-                .WithSummary("Models the 2D sky background of a staged image on a mesh. Not yet implemented.");
+            group.MapGet("/{fileId}/background", ModelBackgroundAsync)
+                .WithSummary("Models the 2D sky background of a staged image on a mesh.");
         }
     }
 
-    private static IResult ModelBackground(string fileId, int meshSizePixels = BackgroundModelRequest.DefaultMeshSizePixels)
+    private static async Task<IResult> ModelBackgroundAsync(
+        string fileId,
+        FitsDatasetReader datasetReader,
+        CancellationToken cancellationToken,
+        int meshSizePixels = BackgroundModelRequest.DefaultMeshSizePixels)
     {
-        _ = BackgroundModelRequest.Create(meshSizePixels);
+        var request = BackgroundModelRequest.Create(meshSizePixels);
 
-        return NotImplementedResult.Value("images.background.not_implemented", "Image background modelling is not yet implemented.");
+        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var (width, height) = dataset.Image.Resolve2DDimensions();
+
+        var modelResult = ImageBackgroundModeller.Model(dataset.Pixels, width, height, request.MeshSizePixels);
+
+        return modelResult.ToApiResult(model =>
+            Results.Ok(BackgroundModelResponse.Create(fileId, model.MeshSizePixels, model.MedianBackground, model.BackgroundRms)));
     }
 }

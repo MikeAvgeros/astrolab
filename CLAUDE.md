@@ -2,15 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Keep this file current:** whenever you make a change to this project that affects the project structure, feature slices, architecture, dependency rules, commands, or development workflow, update the relevant section of this file in the same change.
-
-The authoritative project specification that defines the required architecture, behaviour, domain rules, API contracts, coding standards, and implementation constraints is `spec.md`. This file contains the operational guidance and the rules most relevant to an AI coding agent.
+`spec.md` is the authoritative project specification that defines the required architecture, engineering requirements, coding standards, domain rules, API contracts, and implementation constraints. **Do not duplicate the specification here.** Use this file to explain how Claude should approach work in the repository.
 
 Project-specific skills are located under `.claude/skills/`. Use the relevant skill when its purpose applies to the current task. Do not invoke unrelated skills merely because they are available.
 
----
+## How to use the specification
 
-## Project Overview
+- Read the relevant section of `spec.md` before implementing a new feature or changing architecture.
+- Identify which requirements in `spec.md` apply to the task.
+- Treat `MUST` and `MUST NOT` requirements in `spec.md` as hard constraints.
+- Prefer the most specific rule when the specification contains an explicit exception.
+- Inspect the existing implementation before introducing a new pattern, abstraction, dependency, or project.
+- Follow established repository patterns unless the task or specification requires a change.
+- If the requested implementation conflicts with `spec.md`, follow the specification and explain the conflict.
+- Before finishing, review the diff against the applicable parts of `spec.md`.
+
+## Project context
 
 AstroLab is a .NET 10 / C# 14 RESTful API for downloading, storing, parsing, analysing, and visualising FITS (Flexible Image Transport System) astronomical datasets from ESO/MAST archives and direct uploads.
 
@@ -20,674 +27,238 @@ The architecture uses:
 - **Vertical Slice Architecture** in the API
 - **REPR (Request–Endpoint–Response)** endpoint structure
 - `Result<T>` for expected failures
-- native/unmanaged memory where appropriate for large FITS data
-- streaming I/O for large files
 
-See `spec.md` for the complete architectural and coding specification.
+Think of the layers as:
 
-There is currently no database. Metadata and raw datasets are staged on local disk under `storage/`, which is gitignored and configurable through `Storage:RootPath`.
+- **Core** — pure and deterministic scientific/domain logic.
+- **Infrastructure** — I/O, native interop, storage, archive integration, and concrete rendering.
+- **API** — thin vertical slices that coordinate the other layers and expose HTTP contracts.
+- **Tests** — verification of Core, Infrastructure, and API behaviour.
 
----
+Use `spec.md` for the authoritative dependency rules and detailed architecture.
 
-## Working Rules
+## Before implementing a task
 
-### Before Making Changes
+1. **Understand the existing code.**
+   - Locate the relevant feature, Core algorithm, Infrastructure service, tests, and registrations.
+   - Read nearby implementations before designing something new.
+   - Look for an existing abstraction or pattern that already solves most of the problem.
+   - Do not change public API contracts unnecessarily.
 
-1. Read the relevant section of `spec.md` before implementing a new feature or changing architecture.
-2. Inspect the relevant existing implementation before introducing new abstractions or patterns.
-3. Identify which requirements in `spec.md` apply to the task.
-4. Determine whether any project skill under `.claude/skills/` applies to the task and use it when appropriate.
-5. Prefer extending an existing pattern over introducing a competing pattern.
-6. Keep changes focused on the requested feature.
-7. Do not introduce speculative abstractions, projects, dependencies, or Core namespaces for functionality that has not been implemented.
-8. Do not change public API contracts unnecessarily.
-9. After making changes, build and run the relevant tests.
-10. Check the final diff against both `spec.md` and this file.
+2. **Identify the architectural path.**
+   - Determine whether the change belongs in Core, Infrastructure, API, or more than one.
+   - Put scientific/domain decisions in Core.
+   - Keep external concerns at the Infrastructure boundary.
+   - Keep endpoint handlers focused on orchestration and HTTP concerns.
 
-### Package Dependencies
+3. **Check the FITS capability model.**
+   - Do not assume a FITS file has one exclusive scientific type.
+   - Determine which capability the operation actually requires.
+   - Reuse existing capability detection and validation rather than adding endpoint-specific heuristics.
 
-- Always check nuget.org for the latest stable version before adding or changing a NuGet package reference.
-- Never rely on remembered package versions.
-- Avoid adding a package when the BCL or an existing dependency provides the required functionality adequately.
-- Do not introduce a dependency solely for convenience when it creates an unnecessary architectural coupling.
+4. **Choose the simplest implementation that fits.**
+   - Prefer existing types and patterns over new abstractions.
+   - Avoid speculative interfaces, projects, namespaces, dependencies, or extension points.
+   - Do not optimise prematurely.
+   - For performance-sensitive work, measure before introducing complexity.
 
----
+5. **Trace failure handling.**
+   - Decide whether a failure is expected and caller-handleable or genuinely exceptional.
+   - Follow the existing `Result<T>` and HTTP mapping path for expected failures.
+   - Do not introduce a new exception-handling mechanism for a single feature.
 
-## Commands
+6. **Consider data size and ownership.**
+   - FITS files and pixel buffers can be very large.
+   - Avoid whole-file buffering and unnecessary copies.
+   - Make ownership and disposal explicit when working with native or unmanaged memory.
+   - Keep Core algorithms independent of how their input data was obtained.
+
+7. **Check dependencies before changing them.**
+   - If a NuGet package is needed, verify the current stable version on nuget.org before modifying the project file.
+   - Prefer the BCL or an already-used dependency when it provides the required functionality adequately.
+   - Treat third-party libraries as implementation details unless they define an intentional architectural boundary.
+
+## Implementing new scientific functionality
+
+Use this general sequence:
+
+```text
+Required scientific capability
+        ↓
+Core model / algorithm
+        ↓
+Focused Core tests
+        ↓
+Infrastructure data access, if required
+        ↓
+API vertical slice
+        ↓
+API integration tests
+```
+
+Do not start by putting the calculation in an endpoint and plan to extract it later.
+
+For an algorithm:
+
+- First identify its inputs, outputs, invariants, and required FITS capability.
+- Keep the algorithm deterministic and independently testable.
+- Reuse existing Core value types and result/error patterns.
+- For large numerical or pixel workloads, consider allocation behaviour as part of the design, but only introduce spans, unmanaged memory, vectorisation, `stackalloc`, unsafe code, or similar techniques when they have a concrete benefit.
+- Keep rendering/wire-format concerns outside the scientific algorithm.
+
+If the underlying scientific implementation does not exist yet, use the repository's existing roadmap/501 mechanism rather than inventing placeholder results.
+
+## Implementing archive integrations
+
+Treat archive APIs as external contracts, not as predictable URL schemes.
+
+When working with ESO, MAST, or a future archive:
+
+1. Inspect the existing archive client and its tests.
+2. Keep archive-specific wire DTOs inside Infrastructure.
+3. Map external responses into the application's shared models.
+4. Discover real products through the archive's documented product/DataLink mechanisms.
+5. Keep large downloads separate from metadata/query operations.
+6. Preserve optional metadata when supplied and do not invent missing values.
+7. Add deterministic tests for response mapping and product selection.
+8. Do not guess an endpoint or download URL simply because a URL pattern appears plausible.
+
+If the upstream contract for a capability is genuinely unknown, follow the specification's `NotImplemented` approach instead of sending an unverified request.
+
+## Implementing API features
+
+Use the existing vertical-slice structure under `AstroLab.Api/Features`.
+
+For a new endpoint:
+
+1. Find the closest existing slice and follow its structure.
+2. Keep request/response DTOs at the API boundary.
+3. Validate request-bound input using the established request pattern.
+4. Resolve Infrastructure dependencies through the existing registration/dependency-injection approach.
+5. Load or resolve external data in Infrastructure.
+6. Invoke Core for scientific/domain work.
+7. Map the resulting `Result<T>` to the endpoint's API response.
+8. Add the appropriate API integration coverage.
+
+Keep the endpoint readable enough that its role is obvious at a glance. If substantial scientific or data-processing logic starts accumulating in the handler, stop and move that responsibility to the appropriate layer.
+
+## FITS, native code, and performance
+
+CFITSIO is deliberately isolated behind Infrastructure.
+
+When changing FITS/native code:
+
+- Inspect the existing native adapter before adding another P/Invoke surface.
+- Keep native handles, status codes, marshaling details, and ownership inside Infrastructure.
+- Be particularly careful with native integer types and platform-dependent C types; follow the existing bindings rather than assuming C# type equivalence.
+- Ensure native resources have deterministic ownership and disposal.
+- Keep pure FITS metadata interpretation in Core where it does not require I/O.
+- Add or update native-library-dependent tests without making ordinary developer builds depend on a locally installed native library.
+
+For performance work:
+
+- Identify the actual hot path first.
+- Prefer straightforward code until measurement demonstrates a problem.
+- Benchmark meaningful alternatives rather than relying on assumptions such as "LINQ is always slow" or "loops are always faster".
+- Distinguish necessary result allocations from accidental intermediate allocations.
+
+## Working with existing code
+
+Before refactoring:
+
+- Understand why the current code is structured the way it is.
+- Preserve behaviour unless the task explicitly changes it.
+- Avoid unrelated cleanup in the same change.
+- Prefer a small, coherent diff over a broad "improvement".
+- If an existing implementation violates `spec.md`, fix the violation when it is relevant to the task rather than copying the violation into new code.
+- When several nearby implementations differ, identify the intended/current pattern from the specification and the most recent established implementation before choosing one.
+
+When adding a method to an existing class, follow the method-ordering convention defined by `spec.md` rather than reorganising unrelated methods unnecessarily.
+
+## Skills
+
+Project-specific Claude skills live under `.claude/skills/`.
+
+Before implementing a task:
+
+- Check whether a skill clearly applies.
+- Use the relevant skill when it provides task-specific instructions or workflow.
+- Do not invoke unrelated skills merely because they exist.
+- If a skill conflicts with `spec.md`, the specification wins.
+
+## Keeping project guidance current
+
+Update `CLAUDE.md` when a change affects **how Claude should work in the repository**, such as:
+
+- build/test commands,
+- development workflow,
+- important repository-specific tooling,
+- where to find project skills,
+- a recurring implementation workflow that is not already obvious from `spec.md`.
+
+Update `spec.md` when a change affects **what the system is required to be or how code must conform**, such as:
+
+- architecture,
+- dependency rules,
+- coding standards,
+- domain invariants,
+- API contracts,
+- implementation constraints.
+
+If a change affects both, update both — but keep each piece of information in the file where it belongs. Do not mirror the same rule in both files.
+
+## Testing workflow
+
+Use the smallest useful feedback loop first:
+
+```bash
+dotnet test src/AstroLab.Tests --filter "FullyQualifiedName~<relevant test>"
+```
+
+Then run the broader suite:
+
+```bash
+dotnet test src/AstroLab.Tests
+```
+
+For normal validation:
 
 ```bash
 dotnet build AstroLab.slnx
-dotnet test src/AstroLab.Tests
+```
 
-dotnet test src/AstroLab.Tests --filter "FullyQualifiedName~ApertureEngineTests"
-dotnet test src/AstroLab.Tests --filter "DisplayName~<test name>"
+Run the API locally with:
 
+```bash
 dotnet run --project src/AstroLab.Api
+```
 
+Build/run the container when the change affects deployment or native dependencies:
+
+```bash
 docker build -t astrolab-api .
 docker run -p 8080:8080 -v astrolab-storage:/app/storage astrolab-api
 ```
 
-Tests use xUnit v3 (`xunit.v3` package). `AstroLab.Tests` builds as an executable (`OutputType=Exe`, required by xUnit v3's Microsoft.Testing.Platform model) and `dotnet test` runs it via the native MTP mode enabled by the root `global.json`'s `test.runner` setting — do not remove that setting or revert `OutputType` to `Library`.
+The test project uses xUnit v3 and Microsoft Testing Platform. Do not remove the repository's xUnit/MTP configuration merely to make tests behave like a conventional xUnit v2 test project.
 
-`Microsoft.AspNetCore.Mvc.Testing` and `ApiFactory.cs` are used for in-process API integration tests against `Program`.
+When a change affects behaviour, prefer:
 
-When changing behaviour, run the smallest relevant test set first, followed by the complete test suite before considering the work complete.
+1. focused tests,
+2. build,
+3. full test suite,
+4. additional integration/container validation when relevant.
 
----
+Do not claim a task is complete merely because the changed project compiles.
 
-# Architecture
+## Final review
 
-AstroLab uses Functional Core, Imperative Shell combined with Vertical Slice Architecture.
+Before finishing a task:
 
-The dependency direction is:
-
-```text
-AstroLab.Api
-      │
-      ├──────────────► AstroLab.Infrastructure
-      │                       │
-      │                       ▼
-      └──────────────────► AstroLab.Core
-
-AstroLab.Tests ─────────► all production projects
-```
-
-### Non-negotiable dependency rules
-
-- `AstroLab.Core` MUST NOT reference `AstroLab.Infrastructure`.
-- `AstroLab.Core` MUST NOT reference ASP.NET Core.
-- `AstroLab.Core` MUST NOT perform disk, network, filesystem, or native I/O.
-- `AstroLab.Core` MUST NOT contain hidden mutable/global state.
-- Infrastructure owns external side effects.
-- API endpoints orchestrate Infrastructure and Core.
-- Scientific/domain calculations MUST NOT be implemented in API feature endpoints.
-- API DTOs MUST NOT expose Infrastructure or Core models directly.
-
-When implementing a new capability:
-
-```text
-Scientific/domain logic
-        ↓
-AstroLab.Core
-        ↓
-Infrastructure integration
-        ↓
-API vertical slice
-```
-
-Do not implement the feature backwards by putting domain logic in the API and later attempting to extract it into Core.
-
----
-
-# Coding Standards
-
-The complete coding standards are in `spec.md` §4. The following are the rules most likely to affect implementation.
-
-## Structure
-
-- Use file-scoped namespaces.
-- Namespace segments MUST match the directory structure.
-- One primary type per file.
-- Use C# 14 `extension(...)` syntax for new extension members.
-- Do not add `<LangVersion>` to a `.csproj`.
-- Use CRLF line endings.
-- Do not add trailing commas after the final member of an enum.
-
-## Constructors and Records
-
-- Do not use primary constructors on classes, structs, or records.
-- Use explicit constructors.
-- Records use the private-constructor + static `Create(...)` pattern defined in `spec.md`.
-- Record properties use `{ get; }`, not `{ get; init; }`.
-- Concrete record types are sealed by default.
-- `Create(...)` performs validation; constructors do not.
-- Use `Validate()` where a framework can construct a record without going through `Create(...)`, such as request DTO model binding.
-- `ImmutableList<T>` is required for collection-shaped API-boundary record properties.
-- Core hot-path representations are exempt and should use arrays/spans or other appropriate representations.
-
-Do not introduce an alternative record-construction convention without updating `spec.md`.
-
-## Comments
-
-- Do not add `//` comments merely to explain obvious code.
-- Do not add XML documentation to models, DTOs, records, or their properties.
-- Add XML documentation to endpoint classes.
-- Add XML documentation to Core and Infrastructure classes.
-- Comments are appropriate when they explain non-obvious reasoning, scientific assumptions, external protocol behaviour, safety constraints, or deliberately unusual implementation decisions.
-
-## Control Flow
-
-- Prefer early returns over unnecessary nesting.
-- Prefer pattern matching when it makes branching clearer.
-- Prefer switch expressions when producing a value from a discriminant.
-- Prefer `var` when the type is obvious from the right-hand side.
-- Async methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` use the `Async` suffix.
-
-## LINQ
-
-LINQ is **not prohibited** in performance-sensitive code simply because it is LINQ.
-
-Prefer LINQ when it makes collection-oriented code clearer and does not introduce a meaningful performance or allocation cost.
-
-Prefer explicit `for`/`foreach` loops when working on:
-
-- per-pixel operations
-- numerical algorithms
-- large contiguous buffers
-- tight hot loops
-- code requiring precise control over memory access or allocation behaviour
-
-Do not assume loops are automatically faster or LINQ is automatically slower. Benchmark genuinely performance-critical alternatives.
-
-## Magic Numbers
-
-Numeric literals that encode domain meaning MUST be extracted into named `private const` fields.
-
-Examples include:
-
-- scientific thresholds
-- scaling factors
-- algorithm coefficients
-- buffer sizes
-- default fallbacks
-
-Self-evident values such as `0`, `1`, and collection indexes are exempt where their meaning is obvious.
-
----
-
-# Result<T> and Error Handling
-
-Expected failures use `Result<T>`.
-
-Use `Result<T>` for:
-
-- validation failures
-- missing data
-- unsupported capabilities
-- invalid FITS data
-- expected archive failures
-- expected calculation failures
-- explicitly unimplemented capabilities
-
-Do **not** throw exceptions for expected domain/application failures.
-
-Exceptions MAY be used for:
-
-- programmer misuse of an API
-- genuinely unexpected infrastructure failures
-- unrecoverable native/interop failures
-- other genuinely exceptional conditions
-
-Request-boundary validation MAY use `ArgumentException`/`ArgumentOutOfRangeException` where required by the ASP.NET Core binding model. These are converted to HTTP 400 at the API boundary.
-
-Unexpected exceptions are handled by `GlobalExceptionHandler`.
-
-Never expose raw exception messages or stack traces to API clients.
-
-When adding an expected failure:
-
-1. Add an appropriate `Error` category/code.
-2. Return `Result<T>`.
-3. Map it through the existing result-to-HTTP mechanism.
-4. Do not add a scenario-specific global exception handler.
-
----
-
-# Functional Core
-
-`AstroLab.Core` is the pure scientific/domain core.
-
-It contains:
-
-- FITS domain models
-- FITS metadata interpretation
-- scientific algorithms
-- mathematical operations
-- validation
-- value types
-- `Result<T>` / `Error`
-
-It must not contain:
-
-- filesystem access
-- HTTP
-- ASP.NET Core
-- native P/Invoke
-- CFITSIO types
-- PNG/JPEG encoding
-- JSON/API response shaping
-- archive-specific HTTP implementation
-
-## Allocation Awareness
-
-Core algorithms should be allocation-conscious, especially when processing large pixel or numerical datasets.
-
-Do not impose a blanket "zero allocations everywhere" rule.
-
-Instead:
-
-- avoid unnecessary allocations
-- avoid unnecessary intermediate arrays
-- avoid unnecessary materialisation
-- avoid boxing
-- avoid repeated temporary objects inside hot loops
-- use spans when they provide a meaningful benefit
-- benchmark performance-critical algorithms
-
-Natural result allocations are acceptable.
-
-For example, an algorithm returning a collection of detected sources is expected to allocate the result collection.
-
-Do not introduce `ref struct`, `stackalloc`, unsafe code, or other complexity solely to satisfy an arbitrary allocation target.
-
----
-
-# FITS Capabilities
-
-A FITS file should **not** be treated as necessarily belonging to one mutually exclusive scientific type.
-
-A file may contain multiple HDUs and support multiple capabilities.
-
-Think in terms of:
-
-```text
-FITS Dataset
-     │
-     ├── Image data
-     ├── Spectral data
-     ├── Time-series/table data
-     ├── WCS
-     └── Other recognised capabilities
-```
-
-Capability detection belongs in Core.
-
-Do not use simplistic assumptions such as:
-
-- any `TIME` column means the entire dataset is a time series
-- the first pixel HDU is automatically the scientifically relevant image
-- one FITS file can have only one useful scientific interpretation
-
-Analysis endpoints should verify that the required capability exists before performing analysis.
-
-For example:
-
-```text
-Image Photometry     → Image capability
-Astrometry           → Image + WCS
-Spectral Extraction  → Spectral capability
-Time-Series Analysis → Time-Series capability
-```
-
-If a primary `FitsDatasetKind` enum remains useful to the existing API, it may be retained, but it must not prevent the system from representing multiple capabilities.
-
----
-
-# Infrastructure
-
-`AstroLab.Infrastructure` owns side effects and implementation details.
-
-It contains areas such as:
-
-```text
-Infrastructure/
-├── Fits/
-├── Storage/
-├── Archives/
-└── ImageRendering/
-```
-
-## FITS and CFITSIO
-
-CFITSIO is an **implementation detail**.
-
-- Keep P/Invoke declarations inside Infrastructure.
-- Keep CFITSIO-specific handles/types out of Core.
-- Do not make API contracts depend on CFITSIO.
-- Native buffer ownership belongs to Infrastructure.
-- Core should operate on appropriate managed/span-based representations without knowing how the data was obtained.
-
-If CFITSIO is replaced in the future, Core and API code should require minimal or no changes.
-
-## Native Memory
-
-Large FITS pixel buffers MAY use unmanaged memory.
-
-`UnmanagedFitsBuffer` is responsible for:
-
-- ownership
-- allocation
-- disposal
-- preventing double-free
-- exposing data safely to Core
-
-Do not copy multi-gigabyte FITS datasets wholesale into managed arrays.
-
----
-
-# Streaming
-
-Large FITS files MUST be streamed.
-
-Use `System.IO.Pipelines` where appropriate.
-
-Network/file operations should:
-
-- stream incrementally
-- avoid whole-file `byte[]` buffering
-- propagate cancellation
-- respect backpressure
-- dispose resources deterministically
-
-Large downloads should not use generic automatic retries unless resumability/safe retry semantics have explicitly been implemented.
-
----
-
-# API Vertical Slices
-
-API functionality lives under:
-
-```text
-AstroLab.Api/Features/
-```
-
-Each leaf feature represents a self-contained endpoint.
-
-The general structure is:
-
-```text
-Features/
-└── <Feature>/
-    └── <Leaf>/
-        ├── <Leaf>Endpoint.cs
-        ├── <Request>.cs
-        └── <Response>.cs
-```
-
-Endpoints follow REPR:
-
-```text
-Request
-   ↓
-Endpoint
-   ↓
-Infrastructure
-   ↓
-Core
-   ↓
-Result<T>
-   ↓
-Response
-```
-
-Endpoints must remain thin.
-
-They should:
-
-- receive/bind input
-- validate request-bound input
-- resolve Infrastructure dependencies
-- load required data
-- call Core algorithms
-- map `Result<T>` to HTTP responses
-
-They must not contain scientific calculations.
-
-## API DTOs
-
-Every API response gets its own API DTO.
-
-Do not return:
-
-- FITS domain models
-- archive infrastructure models
-- Core measurement models
-- Infrastructure implementation types
-
-directly from an HTTP endpoint.
-
-Map internal models to API response records.
-
-Shared enums such as `StretchMode`, `ColorMap`, `DispersionAxis`, and `ArchiveSource` may cross the API boundary where they are simple discriminators rather than domain models.
-
----
-
-# Roadmap / HTTP 501
-
-Scaffolded roadmap endpoints may return HTTP 501 until their underlying implementation exists.
-
-They MUST NOT:
-
-- return fake scientific results
-- return hard-coded measurements
-- pretend an operation succeeded
-- partially implement an algorithm in the endpoint
-
-Use the existing `NotImplementedResult` mechanism.
-
-When the actual implementation lands, replace the stub with:
-
-```text
-Request
-   ↓
-Infrastructure
-   ↓
-Core
-   ↓
-Result<T>
-   ↓
-Response
-```
-
-Do not create Core namespaces solely to support an endpoint that has no real implementation yet.
-
----
-
-# Archive Integrations
-
-ESO and MAST use separate HTTP clients for metadata/query operations and large FITS downloads.
-
-Conceptually:
-
-```text
-Archive API Client
-    ├── search
-    ├── metadata
-    ├── target resolution
-    └── product discovery
-
-Archive Download Client
-    └── streamed FITS download
-```
-
-Metadata/query clients may use standard HTTP resilience policies.
-
-Download clients must be configured for large streaming transfers and must not inherit inappropriate short-lived request policies.
-
-## Important Rules
-
-- Do not guess archive URLs.
-- Do not construct product download URLs from filenames unless the archive contract explicitly guarantees that convention.
-- Discover actual downloadable products through the archive's product/DataLink APIs.
-- Preserve optional metadata when available.
-- Do not invent missing metadata.
-- Map archive-specific wire DTOs into shared application models.
-- Archive-specific protocols remain inside Infrastructure.
-
-For ESO specifically, do not assume an ObsCore `dp_id` is itself a downloadable URI.
-
-For MAST specifically, resolve targets and discover actual products rather than relying on guessed collection/file paths.
-
----
-
-# Visualisation
-
-Scientific computation and rendering are separate concerns.
-
-Core may calculate:
-
-- pixel statistics
-- scaling
-- stretching
-- colour-map values
-- photometric measurements
-- WCS coordinates
-
-Infrastructure owns:
-
-- PNG encoding
-- image codecs
-- concrete rendering implementations
-- browser/output representations
-
-Core must not depend on PNG, JPEG, HTTP image responses, or browser-specific formats.
-
-The general flow is:
-
-```text
-FITS data
-   ↓
-Infrastructure FITS reader
-   ↓
-Core scientific/image calculations
-   ↓
-Infrastructure renderer
-   ↓
-PNG / other output
-```
-
----
-
-# Testing
-
-Use xUnit v3.
-
-Tests are organised around:
-
-```text
-AstroLab.Tests/
-├── Core/
-├── Infrastructure/
-└── Features/
-```
-
-## Core Tests
-
-Test:
-
-- scientific correctness
-- boundary conditions
-- invalid input
-- NaN/infinite handling where applicable
-- expected `Result<T>` failures
-- FITS capability detection
-- WCS calculations where implemented
-- image/science algorithms
-
-## Performance Tests
-
-Performance tests are for genuinely performance-sensitive algorithms.
-
-Measure:
-
-- managed allocations
-- execution time
-- unnecessary intermediate collections
-- boxing
-- repeated temporary allocations
-
-Use `GC.GetAllocatedBytesForCurrentThread()` or an appropriate benchmarking framework.
-
-Do not classify a natural result allocation as a performance regression merely because the algorithm returns a collection.
-
-## Infrastructure Tests
-
-Test:
-
-- FITS parsing
-- native buffer ownership
-- disposal
-- malformed FITS handling
-- archive response mapping
-- product discovery
-- product-selection policies
-- streaming
-- cancellation
-- image rendering
-
-Tests that call into the real `cfitsio` native library (currently only the binary/ASCII table-reading path — see `spec.md` §6.3) MUST dynamically skip via `Assert.Skip` when the library cannot be loaded on the current machine, rather than fail. It is built from a pinned upstream source release in the Docker/CI image but is not guaranteed to be present on every developer machine.
-
-## API Tests
-
-Test:
-
-- request binding
-- request validation
-- HTTP status codes
-- response mapping
-- `Result<T>` mapping
-- global exception handling (`GlobalExceptionHandler`, `RequestValidationExceptionHandler`)
-- representative end-to-end FITS workflows
-
-Scaffolded HTTP 501 roadmap endpoints do not get dedicated tests — a stub returning `NotImplementedResult` is not yet a real code path, and testing it only pins down a value that changes the moment the real implementation lands. Cover a roadmap endpoint once its Request → Infrastructure → Core → `Result<T>` → Response flow is actually implemented.
-
-External ESO/MAST calls should not be required for normal deterministic application tests.
-
----
-
-# Adding a New Scientific Feature
-
-When adding a new scientific capability:
-
-1. Determine the required FITS capability.
-2. Define the scientific/domain model in Core if needed.
-3. Implement the pure algorithm in Core.
-4. Add focused Core tests.
-5. Add allocation/performance tests if the algorithm is performance-sensitive.
-6. Add or extend the Infrastructure capability needed to supply the data.
-7. Add the API vertical slice.
-8. Define API-specific request/response DTOs.
-9. Map `Result<T>` through the existing API result mechanism.
-10. Add API integration tests.
-11. Update `spec.md` and this file if the architecture, project structure, commands, or development conventions changed.
-
-Do not put scientific logic in the API endpoint merely because it is convenient.
-
----
-
-# Adding a New Archive
-
-When adding a new astronomical archive:
-
-1. Define the archive-specific API client.
-2. Define a separate download client if large file transfers are involved.
-3. Keep archive-specific request/response DTOs inside Infrastructure.
-4. Map archive responses to shared application models.
-5. Implement product discovery using the archive's real API.
-6. Do not guess download URLs.
-7. Add deterministic tests around response parsing and product selection.
-8. Add the API slice only after the underlying capability exists.
-
----
-
-# Before Finishing Any Task
-
-The implementation is not complete until:
-
-- the code follows `spec.md`
-- dependency direction is preserved
-- Core remains free of Infrastructure/ASP.NET dependencies
-- scientific logic remains in Core
-- expected failures use `Result<T>`
-- API contracts remain isolated from internal models
-- large files remain streamed
-- unnecessary allocations are avoided in hot paths
-- LINQ is used or avoided based on clarity and measured performance, not outdated assumptions
-- new dependencies have been checked against current stable NuGet versions
-- relevant tests pass
-- the full test suite passes where practical
-- no fake scientific implementation has been introduced
-- `spec.md` and `CLAUDE.md` are updated if the change affects their documented rules
-
-When uncertain between two implementations, prefer the simpler design that satisfies the specification and existing architectural boundaries.
+- Check the diff for unintended changes.
+- Re-read the relevant `spec.md` requirements.
+- Confirm the implementation follows the existing architectural direction.
+- Run the most relevant tests and the full suite where practical.
+- Check for unnecessary allocations, abstractions, dependencies, and complexity.
+- Confirm no placeholder/fake scientific behaviour was introduced.
+- Update `spec.md` and/or `CLAUDE.md` only if the change genuinely affects the information those files own.

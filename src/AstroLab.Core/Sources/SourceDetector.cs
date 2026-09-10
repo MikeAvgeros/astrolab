@@ -29,11 +29,48 @@ public static class SourceDetector
         int minimumArea = DefaultMinimumArea,
         int maxSources = DefaultMaxSources)
     {
+        var regionSetResult = DetectRegions(pixels, width, height, thresholdSigma, minimumArea, maxSources);
+
+        if (regionSetResult.IsFailure)
+        {
+            return Result<ImmutableArray<DetectedSource>>.Failure(regionSetResult.Error);
+        }
+
+        var regionSet = regionSetResult.Value;
+
+        var builder = ImmutableArray.CreateBuilder<DetectedSource>(regionSet.Candidates.Length);
+
+        for (var i = 0; i < regionSet.Candidates.Length; i++)
+        {
+            var candidate = regionSet.Candidates[i];
+
+            builder.Add(DetectedSource.Create(
+                id: i + 1,
+                pixelX: candidate.WeightedXSum / candidate.WeightSum,
+                pixelY: candidate.WeightedYSum / candidate.WeightSum,
+                pixelCount: candidate.PixelCount,
+                peakValue: candidate.PeakValue,
+                totalFlux: candidate.TotalFlux,
+                background: regionSet.Background,
+                signalToNoiseRatio: candidate.TotalFlux / (regionSet.Sigma * Math.Sqrt(candidate.PixelCount))));
+        }
+
+        return builder.MoveToImmutable();
+    }
+    
+    internal static Result<SourceCandidateSet> DetectRegions(
+        ReadOnlySpan<float> pixels,
+        int width,
+        int height,
+        double thresholdSigma = DefaultThresholdSigma,
+        int minimumArea = DefaultMinimumArea,
+        int maxSources = DefaultMaxSources)
+    {
         var boundsCheck = ValidateImageBounds(pixels.Length, width, height);
 
         if (boundsCheck.IsFailure)
         {
-            return Result<ImmutableArray<DetectedSource>>.Failure(boundsCheck.Error);
+            return Result<SourceCandidateSet>.Failure(boundsCheck.Error);
         }
 
         if (thresholdSigma <= 0.0 || !double.IsFinite(thresholdSigma))
@@ -55,7 +92,7 @@ public static class SourceDetector
 
         if (statsResult.IsFailure)
         {
-            return Result<ImmutableArray<DetectedSource>>.Failure(statsResult.Error);
+            return Result<SourceCandidateSet>.Failure(statsResult.Error);
         }
 
         var stats = statsResult.Value;
@@ -66,7 +103,7 @@ public static class SourceDetector
 
         if (percentileResult.IsFailure)
         {
-            return Result<ImmutableArray<DetectedSource>>.Failure(percentileResult.Error);
+            return Result<SourceCandidateSet>.Failure(percentileResult.Error);
         }
 
         var background = medianSpan[0];
@@ -75,15 +112,15 @@ public static class SourceDetector
 
         if (sigma <= 0.0)
         {
-            return ImmutableArray<DetectedSource>.Empty;
+            return new SourceCandidateSet(ImmutableArray<SourceCandidate>.Empty, background, sigma);
         }
 
         var thresholdValue = background + (thresholdSigma * sigma);
 
-        return DetectAboveThreshold(pixels, width, height, background, sigma, thresholdValue, minimumArea, maxSources);
+        return FindRegions(pixels, width, height, background, sigma, thresholdValue, minimumArea, maxSources);
     }
 
-    private static Result<ImmutableArray<DetectedSource>> DetectAboveThreshold(
+    private static SourceCandidateSet FindRegions(
         ReadOnlySpan<float> pixels, int width, int height,
         double background, double sigma, double thresholdValue, int minimumArea, int maxSources)
     {
@@ -130,24 +167,14 @@ public static class SourceDetector
 
             var resultCount = Math.Min(candidates.Count, maxSources);
 
-            var builder = ImmutableArray.CreateBuilder<DetectedSource>(resultCount);
+            var builder = ImmutableArray.CreateBuilder<SourceCandidate>(resultCount);
 
             for (var i = 0; i < resultCount; i++)
             {
-                var candidate = candidates[i];
-
-                builder.Add(DetectedSource.Create(
-                    id: i + 1,
-                    pixelX: candidate.WeightedXSum / candidate.WeightSum,
-                    pixelY: candidate.WeightedYSum / candidate.WeightSum,
-                    pixelCount: candidate.PixelCount,
-                    peakValue: candidate.PeakValue,
-                    totalFlux: candidate.TotalFlux,
-                    background: background,
-                    signalToNoiseRatio: candidate.TotalFlux / (sigma * Math.Sqrt(candidate.PixelCount))));
+                builder.Add(candidates[i]);
             }
 
-            return builder.MoveToImmutable();
+            return new SourceCandidateSet(builder.MoveToImmutable(), background, sigma);
         }
         finally
         {
@@ -177,6 +204,12 @@ public static class SourceDetector
 
         double weightedYSum = 0.0;
 
+        double weightedXxSum = 0.0;
+
+        double weightedYySum = 0.0;
+
+        double weightedXySum = 0.0;
+
         double weightSum = 0.0;
 
         while (stackTop > 0)
@@ -191,13 +224,23 @@ public static class SourceDetector
 
             var weight = value - background;
 
+            var xCenter = x + PixelCenterOffset;
+
+            var yCenter = y + PixelCenterOffset;
+
             pixelCount++;
 
             totalFlux += weight;
 
-            weightedXSum += (x + PixelCenterOffset) * weight;
+            weightedXSum += xCenter * weight;
 
-            weightedYSum += (y + PixelCenterOffset) * weight;
+            weightedYSum += yCenter * weight;
+
+            weightedXxSum += xCenter * xCenter * weight;
+
+            weightedYySum += yCenter * yCenter * weight;
+
+            weightedXySum += xCenter * yCenter * weight;
 
             weightSum += weight;
 
@@ -229,7 +272,7 @@ public static class SourceDetector
                         continue;
                     }
 
-                    var neighborIndex = (neighborY * width) + neighborX;
+                    var neighborIndex = neighborY * width + neighborX;
 
                     if (regionId[neighborIndex] != Unassigned)
                     {
@@ -250,7 +293,7 @@ public static class SourceDetector
             }
         }
 
-        return SourceCandidate.Create(startIndex, pixelCount, peakValue, totalFlux, weightedXSum, weightedYSum, weightSum);
+        return SourceCandidate.Create(startIndex, pixelCount, peakValue, totalFlux, weightedXSum, weightedYSum, weightedXxSum, weightedYySum, weightedXySum, weightSum);
     }
 
     private static Result<Unit> ValidateImageBounds(int pixelLength, int width, int height) =>

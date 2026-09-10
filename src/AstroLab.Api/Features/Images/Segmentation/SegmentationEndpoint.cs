@@ -1,30 +1,49 @@
+using System.Collections.Immutable;
 using AstroLab.Core.Sources;
+using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.Images.Segmentation;
 
-/// <summary>
-/// Roadmap slice: segmenting a staged image into per-source pixel masks for source isolation and
-/// masking. Request/response contract is final; the segmentation algorithm itself is not yet
-/// implemented (see spec.md §6.5), so this route always returns HTTP 501.
-/// </summary>
+/// <summary>Segments a staged image into per-source pixel regions using a mesh-based 2D background model, deblending regions with multiple significant peaks.</summary>
 public static class SegmentationEndpoint
 {
     extension(IEndpointRouteBuilder group)
     {
         public void MapSegmentationEndpoint()
         {
-            group.MapGet("/{fileId}/segmentation", SegmentImage)
-                .WithSummary("Segments a staged image into per-source pixel masks. Not yet implemented.");
+            group.MapGet("/{fileId}/segmentation", SegmentImageAsync)
+                .WithSummary("Segments a staged image into per-source pixel regions using a 2D background model.");
         }
     }
 
-    private static IResult SegmentImage(
+    private static async Task<IResult> SegmentImageAsync(
         string fileId,
+        FitsDatasetReader datasetReader,
+        CancellationToken cancellationToken,
         double thresholdSigma = SourceDetector.DefaultThresholdSigma,
         int minimumArea = SourceDetector.DefaultMinimumArea)
     {
-        _ = SegmentationRequest.Create(thresholdSigma, minimumArea);
+        var request = SegmentationRequest.Create(thresholdSigma, minimumArea);
 
-        return NotImplementedResult.Value("images.segmentation.not_implemented", "Image segmentation is not yet implemented.");
+        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var (width, height) = dataset.Image.Resolve2DDimensions();
+
+        var segmentationResult = ImageSegmenter.Segment(dataset.Pixels, width, height, request.ThresholdSigma, request.MinimumArea);
+
+        return segmentationResult.ToApiResult(segments => Results.Ok(SegmentationResponse.Create(
+            fileId,
+            segments
+                .Select(segment => SegmentDto.Create(
+                    segment.SegmentId, segment.PixelCount, segment.CentroidX, segment.CentroidY,
+                    segment.MinX, segment.MinY, segment.MaxX, segment.MaxY))
+                .ToImmutableList())));
     }
 }

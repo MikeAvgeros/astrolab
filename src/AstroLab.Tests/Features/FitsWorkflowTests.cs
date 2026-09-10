@@ -1012,4 +1012,97 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task SegmentImage_FindsOneSegmentAtExpectedCentroidAndPixelCount()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/segmentation");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var segments = body.GetProperty("segments").EnumerateArray().ToArray();
+
+        var segment = Assert.Single(segments);
+
+        Assert.Equal(1, segment.GetProperty("segmentId").GetInt32());
+
+        Assert.Equal(9, segment.GetProperty("pixelCount").GetInt32());
+
+        Assert.Equal(5.5, segment.GetProperty("centroidX").GetDouble(), precision: 6);
+
+        Assert.Equal(5.5, segment.GetProperty("centroidY").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task SegmentImage_WithMinimumAreaAboveBlockSize_ReturnsNoSegments()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/segmentation?minimumArea=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Empty(body.GetProperty("segments").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SegmentImage_RejectsNonPositiveThreshold()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/segmentation?thresholdSigma=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CharacterizeSources_OnSymmetricSquareBlock_ReportsNearZeroEllipticity()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources/characterization");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var source = body.GetProperty("sources").EnumerateArray().Single();
+
+        Assert.Equal(1, source.GetProperty("sourceId").GetInt32());
+
+        Assert.Equal(
+            source.GetProperty("semiMajorAxisPixels").GetDouble(),
+            source.GetProperty("semiMinorAxisPixels").GetDouble(),
+            precision: 6);
+
+        Assert.Equal(0.0, source.GetProperty("ellipticity").GetDouble(), precision: 6);
+
+        Assert.True(source.GetProperty("semiMajorAxisPixels").GetDouble() > 0.0);
+    }
+
+    [Fact]
+    public async Task CharacterizeSources_RejectsNonPositiveThreshold()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources/characterization?thresholdSigma=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CharacterizeSources_OnSpectrumFrame_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/sources/characterization");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

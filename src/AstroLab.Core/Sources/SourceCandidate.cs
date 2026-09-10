@@ -2,7 +2,9 @@ namespace AstroLab.Core.Sources;
 
 internal readonly record struct SourceCandidate
 {
-    private SourceCandidate(int firstPixelIndex, int pixelCount, double peakValue, double totalFlux, double weightedXSum, double weightedYSum, double weightSum)
+    private SourceCandidate(
+        int firstPixelIndex, int pixelCount, double peakValue, double totalFlux,
+        double weightedXSum, double weightedYSum, double weightedXxSum, double weightedYySum, double weightedXySum, double weightSum)
     {
         FirstPixelIndex = firstPixelIndex;
         PixelCount = pixelCount;
@@ -10,6 +12,9 @@ internal readonly record struct SourceCandidate
         TotalFlux = totalFlux;
         WeightedXSum = weightedXSum;
         WeightedYSum = weightedYSum;
+        WeightedXxSum = weightedXxSum;
+        WeightedYySum = weightedYySum;
+        WeightedXySum = weightedXySum;
         WeightSum = weightSum;
     }
 
@@ -24,9 +29,17 @@ internal readonly record struct SourceCandidate
     public double WeightedXSum { get; }
 
     public double WeightedYSum { get; }
+    
+    public double WeightedXxSum { get; }
+    
+    public double WeightedYySum { get; }
+    
+    public double WeightedXySum { get; }
 
     public double WeightSum { get; }
 
-    public static SourceCandidate Create(int firstPixelIndex, int pixelCount, double peakValue, double totalFlux, double weightedXSum, double weightedYSum, double weightSum) =>
-        new(firstPixelIndex, pixelCount, peakValue, totalFlux, weightedXSum, weightedYSum, weightSum);
+    public static SourceCandidate Create(
+        int firstPixelIndex, int pixelCount, double peakValue, double totalFlux,
+        double weightedXSum, double weightedYSum, double weightedXxSum, double weightedYySum, double weightedXySum, double weightSum) =>
+        new(firstPixelIndex, pixelCount, peakValue, totalFlux, weightedXSum, weightedYSum, weightedXxSum, weightedYySum, weightedXySum, weightSum);
 }

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
+using AstroLab.Core.Imaging;
 
 namespace AstroLab.Api.Features.Images.Stack;
 

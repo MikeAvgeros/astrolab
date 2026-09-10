@@ -1,10 +1,14 @@
+using AstroLab.Core.Astrometry;
+using AstroLab.Core.Result;
+using AstroLab.Core.Sources;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Images.Align;
 
 /// <summary>
-/// Roadmap slice: computing the geometric transform (offset, rotation, scale) needed to register
-/// one staged image onto another's pixel grid. Request/response contract is final; the alignment
-/// algorithm itself is not yet implemented (see spec.md §6.5), so this route always returns
-/// HTTP 501.
+/// Computes the geometric transform (offset, rotation, scale) needed to register a target staged
+/// image onto a reference staged image's pixel grid, using each image's WCS solution when both are
+/// available, otherwise falling back to matching their detected source centroids.
 /// </summary>
 public static class AlignEndpoint
 {
@@ -12,15 +16,68 @@ public static class AlignEndpoint
     {
         public void MapAlignEndpoint()
         {
-            group.MapPost("/align", AlignImages)
-                .WithSummary("Computes the geometric transform to register one staged image onto another's pixel grid. Not yet implemented.");
+            group.MapPost("/align", AlignImagesAsync)
+                .WithSummary("Computes the geometric transform to register one staged image onto another's pixel grid.");
         }
     }
 
-    private static IResult AlignImages(ImageAlignRequest request)
+    private static async Task<IResult> AlignImagesAsync(ImageAlignRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return NotImplementedResult.Value("images.align.not_implemented", "Image alignment is not yet implemented.");
+        var targetResult = await datasetReader.LoadImageAsync(request.FileId, cancellationToken);
+
+        if (targetResult.IsFailure)
+        {
+            return targetResult.Error.ToProblem();
+        }
+
+        using var target = targetResult.Value;
+
+        var referenceResult = await datasetReader.LoadImageAsync(request.ReferenceFileId, cancellationToken);
+
+        if (referenceResult.IsFailure)
+        {
+            return referenceResult.Error.ToProblem();
+        }
+
+        using var reference = referenceResult.Value;
+
+        var transformResult = ComputeTransform(target, reference);
+
+        return transformResult.ToApiResult(transform => Results.Ok(ImageAlignResponse.Create(
+            request.FileId, request.ReferenceFileId, transform.OffsetX, transform.OffsetY, transform.RotationDegrees, transform.Scale)));
+    }
+
+    private static Result<AlignmentTransform> ComputeTransform(FitsDataset target, FitsDataset reference)
+    {
+        var targetWcsResult = Wcs.FromHeader(target.Hdu.Header);
+
+        var referenceWcsResult = Wcs.FromHeader(reference.Hdu.Header);
+
+        if (targetWcsResult.IsSuccess && referenceWcsResult.IsSuccess)
+        {
+            return ImageAligner.AlignByWcs(targetWcsResult.Value, referenceWcsResult.Value);
+        }
+
+        var (targetWidth, targetHeight) = target.Image.Resolve2DDimensions();
+
+        var (referenceWidth, referenceHeight) = reference.Image.Resolve2DDimensions();
+
+        var targetSourcesResult = SourceDetector.Detect(target.Pixels, targetWidth, targetHeight);
+
+        if (targetSourcesResult.IsFailure)
+        {
+            return Result<AlignmentTransform>.Failure(targetSourcesResult.Error);
+        }
+
+        var referenceSourcesResult = SourceDetector.Detect(reference.Pixels, referenceWidth, referenceHeight);
+
+        if (referenceSourcesResult.IsFailure)
+        {
+            return Result<AlignmentTransform>.Failure(referenceSourcesResult.Error);
+        }
+
+        return ImageAligner.AlignBySourceCentroids(targetSourcesResult.Value, referenceSourcesResult.Value);
     }
 }

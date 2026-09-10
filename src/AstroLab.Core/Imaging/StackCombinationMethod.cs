@@ -1,8 +1,9 @@
-namespace AstroLab.Api.Features.Images.Stack;
+namespace AstroLab.Core.Imaging;
 
 public enum StackCombinationMethod
 {
     Mean,
     Median,
-    Sum
+    Sum,
+    SigmaClipped
 }

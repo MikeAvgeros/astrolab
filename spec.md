@@ -240,6 +240,7 @@ The following are architectural **MUST** constraints. A change that violates one
 11. **CFITSIO is an implementation detail.** The architecture MUST NOT depend on CFITSIO-specific types or APIs outside the Infrastructure boundary that owns the native adapter.
 12. Scientific analysis and visualisation MUST remain separate concerns. PNG encoding and colour mapping MUST NOT be mixed with scientific computation in the same method or call frame.
 13. FITS read/write round-trip preservation is **not** a repository-wide architectural requirement. If FITS writing is introduced, the writing capability MUST explicitly define which metadata and provenance must be preserved.
+    - `AstroLab.Infrastructure/Storage/FitsImageWriter` is the one FITS-writing capability in the codebase, encoding a 2D float32 array (e.g. `Images/Stack`'s composite) as a minimal single-HDU file (`SIMPLE`/`BITPIX`/`NAXIS`/`NAXIS1`/`NAXIS2` only) so it can be staged and re-read through the normal `FitsDatasetReader` pipeline. Per this item, it explicitly preserves only pixel dimensions and values — no WCS, provenance, or other source metadata is carried over from the input frames.
 
 ### 5.1 Solution Structure
 

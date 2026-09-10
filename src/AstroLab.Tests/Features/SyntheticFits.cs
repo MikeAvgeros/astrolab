@@ -200,6 +200,51 @@ internal static class SyntheticFits
     ]);
 
     /// <summary>
+    /// The same 4x2 gradient pixel data and WCS solution as <see cref="SmallGradientImageWithWcs"/>,
+    /// but with the reference pixel shifted by (+2, +3), so its pixel grid represents the same sky
+    /// but offset from the other file's grid by a known, hand-checkable amount — for alignment
+    /// tests.
+    /// </summary>
+    public static byte[] SmallGradientImageWithShiftedWcs() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    4",
+        "NAXIS2  =                    2",
+        "CTYPE1  = 'RA---TAN'",
+        "CTYPE2  = 'DEC--TAN'",
+        "CRPIX1  =                  3.0",
+        "CRPIX2  =                  4.0",
+        "CRVAL1  =                180.0",
+        "CRVAL2  =                  0.0",
+        "CDELT1  =            -0.0002778",
+        "CDELT2  =             0.0002778",
+        "RADESYS = 'ICRS    '",
+        "END",
+    ]);
+
+    /// <summary>
+    /// The same 12x12 background field as <see cref="SmallImageWithSource"/>, but with the bright
+    /// 3x3 source block moved from rows/columns 4-6 to rows/columns 7-9 — a known, hand-checkable
+    /// (+3, +3) pixel shift from the other file's source centroid — for source-centroid-based
+    /// alignment tests.
+    /// </summary>
+    public static byte[] SmallImageWithSourceShifted() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                   12",
+                "NAXIS2  =                   12",
+                "END",
+            ],
+            BuildSourcePixelData(blockMin: 7, blockMax: 9))
+    ]);
+
+    /// <summary>
     /// A 2-HDU file whose extension HDU is a BINTABLE with a TIME and a FLUX column (both 1D,
     /// 8-byte doubles, big-endian per the FITS standard), for exercising real cfitsio binary
     /// table reads end-to-end.
@@ -261,7 +306,7 @@ internal static class SyntheticFits
         return data;
     }
 
-    private static byte[] BuildSourcePixelData()
+    private static byte[] BuildSourcePixelData(int blockMin = 4, int blockMax = 6)
     {
         const int width = 12;
         const int height = 12;
@@ -273,9 +318,9 @@ internal static class SyntheticFits
             pixels[i] = (byte)(5 + (i % 11));
         }
 
-        for (var y = 4; y <= 6; y++)
+        for (var y = blockMin; y <= blockMax; y++)
         {
-            for (var x = 4; x <= 6; x++)
+            for (var x = blockMin; x <= blockMax; x++)
             {
                 pixels[(y * width) + x] = 200;
             }

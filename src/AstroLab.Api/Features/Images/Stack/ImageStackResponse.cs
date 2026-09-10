@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using AstroLab.Core.Imaging;
 
 namespace AstroLab.Api.Features.Images.Stack;
 

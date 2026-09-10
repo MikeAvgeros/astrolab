@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using AstroLab.Core.Astrometry;
 
 namespace AstroLab.Tests.Features;
 
@@ -24,7 +25,11 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
     private async Task<string> UploadGradientImageWithWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithWcs());
 
+    private async Task<string> UploadGradientImageWithShiftedWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithShiftedWcs());
+
     private async Task<string> UploadImageWithSourceAsync() => await UploadAsync(SyntheticFits.SmallImageWithSource());
+
+    private async Task<string> UploadImageWithSourceShiftedAsync() => await UploadAsync(SyntheticFits.SmallImageWithSourceShifted());
 
     private async Task<string> UploadImageWithSourceAndWcsAsync() => await UploadAsync(SyntheticFits.SmallImageWithSourceAndWcs());
 
@@ -1104,5 +1109,286 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var response = await _client.GetAsync($"/api/images/{fileId}/sources/characterization");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ComputeSeparation_BetweenIdenticalPixelPositions_ReturnsZero()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/astrometry/separation?firstPixelX=1&firstPixelY=1&secondPixelX=1&secondPixelY=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0.0, body.GetProperty("separationArcsec").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task ComputeSeparation_MatchesIndependentlyComputedAngularSeparation()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var firstWorld = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=0&pixelY=0");
+
+        var secondWorld = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=3&pixelY=1");
+
+        var expected = AngularSeparation.ComputeArcseconds(
+            firstWorld.GetProperty("rightAscension").GetDouble(), firstWorld.GetProperty("declination").GetDouble(),
+            secondWorld.GetProperty("rightAscension").GetDouble(), secondWorld.GetProperty("declination").GetDouble());
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/astrometry/separation?firstPixelX=0&firstPixelY=0&secondPixelX=3&secondPixelY=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(expected.IsSuccess);
+
+        Assert.Equal(expected.Value, body.GetProperty("separationArcsec").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task ComputeSeparation_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/astrometry/separation?firstPixelX=0&firstPixelY=0&secondPixelX=1&secondPixelY=1");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompareImages_OnIdenticalFile_ReturnsZeroDifferenceStatistics()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { FileId = fileId, ComparisonFileId = fileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/compare", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0.0, body.GetProperty("meanDifference").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("standardDeviationDifference").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("maxAbsoluteDifference").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task CompareImages_OnMismatchedDimensions_ReturnsBadRequest()
+    {
+        var smallFileId = await UploadGradientImageAsync();
+
+        var largeFileId = await UploadImageWithSourceAsync();
+
+        var request = new { FileId = smallFileId, ComparisonFileId = largeFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/compare", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("imaging.compare.invalid_image_bounds", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task AlignImages_WithWcsOnBothFiles_ReturnsExpectedTransform()
+    {
+        var targetFileId = await UploadGradientImageWithWcsAsync();
+
+        var referenceFileId = await UploadGradientImageWithShiftedWcsAsync();
+
+        var request = new { FileId = targetFileId, ReferenceFileId = referenceFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/align", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(2.0, body.GetProperty("offsetX").GetDouble(), precision: 6);
+
+        Assert.Equal(3.0, body.GetProperty("offsetY").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("rotationDegrees").GetDouble(), precision: 6);
+
+        Assert.Equal(1.0, body.GetProperty("scale").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task AlignImages_WithoutWcs_FallsBackToSourceCentroids()
+    {
+        var targetFileId = await UploadImageWithSourceAsync();
+
+        var referenceFileId = await UploadImageWithSourceShiftedAsync();
+
+        var request = new { FileId = targetFileId, ReferenceFileId = referenceFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/align", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(3.0, body.GetProperty("offsetX").GetDouble(), precision: 6);
+
+        Assert.Equal(3.0, body.GetProperty("offsetY").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task AlignImages_WithoutWcsOrDetectableSources_ReturnsBadRequest()
+    {
+        var targetFileId = await UploadGradientImageAsync();
+
+        var referenceFileId = await UploadGradientImageAsync();
+
+        var request = new { FileId = targetFileId, ReferenceFileId = referenceFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/align", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("images.align.no_reference_points", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task StackImages_WithMeanMethod_ProducesFileWithUnchangedStatistics()
+    {
+        var firstFileId = await UploadGradientImageAsync();
+
+        var secondFileId = await UploadGradientImageAsync();
+
+        var request = new { FileIds = new[] { firstFileId, secondFileId }, Method = "Mean" };
+
+        var response = await _client.PostAsJsonAsync("/api/images/stack", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var resultFileId = body.GetProperty("resultFileId").GetString();
+
+        Assert.False(string.IsNullOrWhiteSpace(resultFileId));
+
+        var statisticsResponse = await _client.GetAsync($"/api/images/{resultFileId}/statistics");
+
+        Assert.Equal(HttpStatusCode.OK, statisticsResponse.StatusCode);
+
+        var statistics = await statisticsResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(10.0, statistics.GetProperty("min").GetDouble(), precision: 3);
+
+        Assert.Equal(80.0, statistics.GetProperty("max").GetDouble(), precision: 3);
+
+        Assert.Equal(45.0, statistics.GetProperty("mean").GetDouble(), precision: 3);
+    }
+
+    [Fact]
+    public async Task StackImages_WithSumMethod_DoublesEachPixel()
+    {
+        var firstFileId = await UploadGradientImageAsync();
+
+        var secondFileId = await UploadGradientImageAsync();
+
+        var request = new { FileIds = new[] { firstFileId, secondFileId }, Method = "Sum" };
+
+        var response = await _client.PostAsJsonAsync("/api/images/stack", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var resultFileId = body.GetProperty("resultFileId").GetString();
+
+        var statisticsResponse = await _client.GetAsync($"/api/images/{resultFileId}/statistics");
+
+        var statistics = await statisticsResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(20.0, statistics.GetProperty("min").GetDouble(), precision: 3);
+
+        Assert.Equal(160.0, statistics.GetProperty("max").GetDouble(), precision: 3);
+    }
+
+    [Fact]
+    public async Task StackImages_OnMismatchedDimensions_ReturnsBadRequest()
+    {
+        var smallFileId = await UploadGradientImageAsync();
+
+        var largeFileId = await UploadImageWithSourceAsync();
+
+        var request = new { FileIds = new[] { smallFileId, largeFileId }, Method = "Mean" };
+
+        var response = await _client.PostAsJsonAsync("/api/images/stack", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("images.stack.dimension_mismatch", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task StackImages_WithFewerThanTwoFiles_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { FileIds = new[] { fileId }, Method = "Mean" };
+
+        var response = await _client.PostAsJsonAsync("/api/images/stack", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RenderOverlay_ReturnsPngWithMarkersDrawnOverBaseRender()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var overlayResponse = await _client.GetAsync($"/api/images/{fileId}/render/overlay");
+
+        Assert.Equal(HttpStatusCode.OK, overlayResponse.StatusCode);
+
+        Assert.Equal("image/png", overlayResponse.Content.Headers.ContentType?.MediaType);
+
+        var overlayBytes = await overlayResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal([137, 80, 78, 71, 13, 10, 26, 10], overlayBytes[..8]);
+
+        var plainResponse = await _client.GetAsync($"/api/images/{fileId}/render");
+
+        var plainBytes = await plainResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.NotEqual(plainBytes, overlayBytes);
+    }
+
+    [Fact]
+    public async Task RenderOverlay_OnImageWithNoSources_ReturnsPngIdenticalToPlainRender()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var overlayResponse = await _client.GetAsync($"/api/images/{fileId}/render/overlay");
+
+        Assert.Equal(HttpStatusCode.OK, overlayResponse.StatusCode);
+
+        var overlayBytes = await overlayResponse.Content.ReadAsByteArrayAsync();
+
+        var plainResponse = await _client.GetAsync($"/api/images/{fileId}/render");
+
+        var plainBytes = await plainResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(plainBytes, overlayBytes);
     }
 }

@@ -1,25 +1,44 @@
+using AstroLab.Core.TimeSeries;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.TimeSeries.PeriodSearch;
 
-/// <summary>
-/// Roadmap slice: periodicity search (e.g. Lomb-Scargle) over a light curve. Request/response
-/// contract is final; the search algorithm itself is not yet implemented (see spec.md §6.5), so
-/// this route always returns HTTP 501.
-/// </summary>
+/// <summary>Searches a detrended light curve for periodic signals using a Lomb-Scargle periodogram.</summary>
 public static class PeriodSearchEndpoint
 {
     extension(IEndpointRouteBuilder group)
     {
         public void MapPeriodSearchEndpoint()
         {
-            group.MapGet("/{fileId}/period-search", SearchForPeriod)
-                .WithSummary("Searches a light curve for periodic signals. Not yet implemented.");
+            group.MapGet("/{fileId}/period-search", SearchForPeriodAsync)
+                .WithSummary("Searches a light curve for periodic signals using a Lomb-Scargle periodogram.");
         }
     }
 
-    private static IResult SearchForPeriod(string fileId, double minPeriod, double maxPeriod)
+    private static async Task<IResult> SearchForPeriodAsync(
+        string fileId, double minPeriod, double maxPeriod, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        _ = PeriodSearchRequest.Create(minPeriod, maxPeriod);
+        var request = PeriodSearchRequest.Create(minPeriod, maxPeriod);
 
-        return NotImplementedResult.Value("timeseries.periodsearch.not_implemented", "Periodicity search is not yet implemented.");
+        var lightCurveResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
+
+        if (lightCurveResult.IsFailure)
+        {
+            return lightCurveResult.Error.ToProblem();
+        }
+
+        var data = lightCurveResult.Value;
+
+        var detrendResult = LightCurveDetrender.Detrend(data.Time, data.Flux, "linear");
+
+        if (detrendResult.IsFailure)
+        {
+            return detrendResult.Error.ToProblem();
+        }
+
+        var searchResult = LombScarglePeriodogram.Search(data.Time, detrendResult.Value, request.MinPeriod, request.MaxPeriod);
+
+        return searchResult.ToApiResult(search =>
+            Results.Ok(PeriodSearchResponse.Create(fileId, search.BestPeriod, search.Power)));
     }
 }

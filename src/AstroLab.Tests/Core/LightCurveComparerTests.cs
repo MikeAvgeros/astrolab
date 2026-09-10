@@ -20,6 +20,24 @@ public class LightCurveComparerTests
         var expectedMagnitudeDifference = -2.5 * Math.Log10(2.0);
 
         Assert.Equal(expectedMagnitudeDifference, result.Value.MeanMagnitudeDifference, precision: 9);
+
+        Assert.Equal(2.0, result.Value.FluxRatio, precision: 9);
+
+        Assert.Equal(2.0, result.Value.VariabilityRatio, precision: 9);
+    }
+
+    [Fact]
+    public void Compare_RejectsZeroMeanComparisonFlux()
+    {
+        ReadOnlySpan<double> fluxA = [1.0, 2.0, 3.0];
+
+        ReadOnlySpan<double> fluxB = [-1.0, 0.0, 1.0];
+
+        var result = LightCurveComparer.Compare(fluxA, fluxB);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("timeseries.compare.zero_mean_flux", result.Error.Code);
     }
 
     [Fact]

@@ -101,6 +101,32 @@ public static class SpectrumExtractor
 
         return Result<Unit>.Success(Unit.Value);
     }
+    
+    public static Result<Unit> ApplyFluxCalibration(Span<double> spectrum, ReadOnlySpan<double> sensitivity)
+    {
+        if (spectrum.Length != sensitivity.Length)
+        {
+            return Error.Validation(
+                "spectroscopy.flux_calibration.length_mismatch",
+                $"sensitivity length ({sensitivity.Length}) must equal spectrum length ({spectrum.Length}).");
+        }
+
+        for (var i = 0; i < sensitivity.Length; i++)
+        {
+            if (sensitivity[i] <= 0.0 || !double.IsFinite(sensitivity[i]))
+            {
+                return Error.Validation(
+                    "spectroscopy.flux_calibration.invalid_sensitivity", "Every sensitivity value must be finite and positive.");
+            }
+        }
+
+        for (var i = 0; i < spectrum.Length; i++)
+        {
+            spectrum[i] /= sensitivity[i];
+        }
+
+        return Result<Unit>.Success(Unit.Value);
+    }
 
     public static Result<Unit> SubtractBackground(Span<double> spectrum, ReadOnlySpan<double> background)
     {

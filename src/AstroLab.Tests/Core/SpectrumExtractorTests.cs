@@ -101,6 +101,48 @@ public class SpectrumExtractorTests
     }
 
     [Fact]
+    public void ApplyFluxCalibration_DividesElementwise()
+    {
+        Span<double> spectrum = [100.0, 200.0, 300.0];
+
+        ReadOnlySpan<double> sensitivity = [2.0, 4.0, 5.0];
+
+        var result = SpectrumExtractor.ApplyFluxCalibration(spectrum, sensitivity);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal([50.0, 50.0, 60.0], spectrum.ToArray());
+    }
+
+    [Fact]
+    public void ApplyFluxCalibration_RejectsLengthMismatch()
+    {
+        Span<double> spectrum = [1.0, 2.0];
+
+        ReadOnlySpan<double> sensitivity = [1.0];
+
+        var result = SpectrumExtractor.ApplyFluxCalibration(spectrum, sensitivity);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("spectroscopy.flux_calibration.length_mismatch", result.Error.Code);
+    }
+
+    [Fact]
+    public void ApplyFluxCalibration_RejectsNonPositiveSensitivity()
+    {
+        Span<double> spectrum = [1.0, 2.0];
+
+        ReadOnlySpan<double> sensitivity = [1.0, 0.0];
+
+        var result = SpectrumExtractor.ApplyFluxCalibration(spectrum, sensitivity);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("spectroscopy.flux_calibration.invalid_sensitivity", result.Error.Code);
+    }
+
+    [Fact]
     public void EvaluateWavelength_AppliesLinearDispersionSolution()
     {
         ReadOnlySpan<double> coefficients = [500.0, 2.0];

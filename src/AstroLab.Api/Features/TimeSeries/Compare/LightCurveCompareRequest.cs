@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 
 namespace AstroLab.Api.Features.TimeSeries.Compare;
@@ -5,16 +6,16 @@ namespace AstroLab.Api.Features.TimeSeries.Compare;
 public sealed record LightCurveCompareRequest
 {
     [JsonConstructor]
-    private LightCurveCompareRequest(string comparisonFileId)
+    private LightCurveCompareRequest(ImmutableList<string> comparisonFileIds)
     {
-        ComparisonFileId = comparisonFileId;
+        ComparisonFileIds = comparisonFileIds;
     }
 
-    public string ComparisonFileId { get; }
+    public ImmutableList<string> ComparisonFileIds { get; }
 
-    public static LightCurveCompareRequest Create(string comparisonFileId)
+    public static LightCurveCompareRequest Create(ImmutableList<string> comparisonFileIds)
     {
-        var request = new LightCurveCompareRequest(comparisonFileId);
+        var request = new LightCurveCompareRequest(comparisonFileIds);
 
         request.Validate();
 
@@ -23,6 +24,16 @@ public sealed record LightCurveCompareRequest
 
     public void Validate()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ComparisonFileId);
+        ArgumentNullException.ThrowIfNull(ComparisonFileIds);
+
+        if (ComparisonFileIds.IsEmpty)
+        {
+            throw new ArgumentException("At least one comparison file id is required.", nameof(ComparisonFileIds));
+        }
+
+        foreach (var comparisonFileId in ComparisonFileIds)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(comparisonFileId);
+        }
     }
 }

@@ -1,9 +1,14 @@
+using System.Collections.Immutable;
 using AstroLab.Core.TimeSeries;
 using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.TimeSeries.Compare;
 
-/// <summary>Compares two staged light curves (from different dates or instruments) via their correlation and mean magnitude offset.</summary>
+/// <summary>
+/// Compares a staged light curve against one or more other staged light curves (from different
+/// dates, instruments, or targets), reporting their correlation, mean magnitude offset, flux and
+/// variability ratios, and (where the sampling allows it) a comparison of their best-fit periods.
+/// </summary>
 public static class CompareEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -11,7 +16,7 @@ public static class CompareEndpoint
         public void MapCompareEndpoint()
         {
             group.MapPost("/{fileId}/compare", CompareLightCurvesAsync)
-                .WithSummary("Compares two staged light curves from different dates or instruments.");
+                .WithSummary("Compares a staged light curve against one or more other staged light curves.");
         }
     }
 
@@ -27,16 +32,58 @@ public static class CompareEndpoint
             return primaryResult.Error.ToProblem();
         }
 
-        var comparisonResult = await datasetReader.LoadLightCurveAsync(request.ComparisonFileId, cancellationToken);
+        var primary = primaryResult.Value;
 
-        if (comparisonResult.IsFailure)
+        var primaryBestPeriod = TryFindBestPeriod(primary.Time, primary.Flux);
+
+        var entries = ImmutableList.CreateBuilder<LightCurveComparisonEntry>();
+
+        foreach (var comparisonFileId in request.ComparisonFileIds)
         {
-            return comparisonResult.Error.ToProblem();
+            var comparisonResult = await datasetReader.LoadLightCurveAsync(comparisonFileId, cancellationToken);
+
+            if (comparisonResult.IsFailure)
+            {
+                return comparisonResult.Error.ToProblem();
+            }
+
+            var comparison = comparisonResult.Value;
+
+            var compareResult = LightCurveComparer.Compare(primary.Flux, comparison.Flux);
+
+            if (compareResult.IsFailure)
+            {
+                return compareResult.Error.ToProblem();
+            }
+
+            var comparisonBestPeriod = TryFindBestPeriod(comparison.Time, comparison.Flux);
+
+            var compare = compareResult.Value;
+
+            entries.Add(LightCurveComparisonEntry.Create(
+                comparisonFileId,
+                compare.CorrelationCoefficient,
+                compare.MeanMagnitudeDifference,
+                compare.FluxRatio,
+                compare.VariabilityRatio,
+                primaryBestPeriod,
+                comparisonBestPeriod));
         }
 
-        var compareResult = LightCurveComparer.Compare(primaryResult.Value.Flux, comparisonResult.Value.Flux);
+        return Results.Ok(LightCurveCompareResponse.Create(fileId, entries.ToImmutable()));
+    }
 
-        return compareResult.ToApiResult(compare => Results.Ok(LightCurveCompareResponse.Create(
-            fileId, request.ComparisonFileId, compare.CorrelationCoefficient, compare.MeanMagnitudeDifference)));
+    private static double? TryFindBestPeriod(ReadOnlySpan<double> time, ReadOnlySpan<double> flux)
+    {
+        var rangeResult = LombScarglePeriodogram.SuggestPeriodRange(time);
+
+        if (rangeResult.IsFailure)
+        {
+            return null;
+        }
+
+        var searchResult = LombScarglePeriodogram.Search(time, flux, rangeResult.Value.MinPeriod, rangeResult.Value.MaxPeriod);
+
+        return searchResult.IsSuccess ? searchResult.Value.BestPeriod : null;
     }
 }

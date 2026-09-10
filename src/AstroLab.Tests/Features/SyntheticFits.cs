@@ -87,6 +87,28 @@ internal static class SyntheticFits
     ]);
 
     /// <summary>
+    /// The same 9x3, single-emission-spike spectroscopic frame as
+    /// <see cref="SmallSpectrumWithEmissionLine"/>, but also carrying a linear dispersion WCS
+    /// solution (<c>CRVAL1</c>/<c>CDELT1</c>), for cross-correlation velocity-shift tests.
+    /// </summary>
+    public static byte[] SmallSpectrumWithEmissionLineAndDispersionWcs() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                    9",
+                "NAXIS2  =                    3",
+                "DISPAXIS=                    1",
+                "CRVAL1  =               5000.0",
+                "CDELT1  =                  2.0",
+                "END",
+            ],
+            BuildEmissionLinePixelData())
+    ]);
+
+    /// <summary>
     /// A 3-HDU file where the ONLY HDU with pixel data (extension 1, a plain 4x2 gradient image)
     /// carries no spectral marker of its own, but an unrelated, dataless extension (2) carries a
     /// stray <c>DISPAXIS</c> card. Regression fixture for the classify/load HDU-selection mismatch:

@@ -548,6 +548,31 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task DetectLines_WithDispersionCoefficients_ReportsPhysicalWavelengthAndEmissionFlag()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync(
+            $"/api/spectroscopy/{fileId}/lines?significanceThreshold=3&dispersionCoefficients=500&dispersionCoefficients=2");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var line = body.GetProperty("lines").EnumerateArray().Single();
+
+        Assert.Equal(508.0, line.GetProperty("wavelength").GetDouble(), precision: 6);
+
+        Assert.Equal(2.0, line.GetProperty("fwhm").GetDouble(), precision: 6);
+
+        Assert.Equal(4.0, line.GetProperty("binPosition").GetDouble(), precision: 6);
+
+        Assert.True(line.GetProperty("isWavelengthCalibrated").GetBoolean());
+
+        Assert.True(line.GetProperty("isEmission").GetBoolean());
+    }
+
+    [Fact]
     public async Task DetectLines_RejectsNonPositiveSignificanceThreshold()
     {
         var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
@@ -596,15 +621,47 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task CalibrateWavelengths_TwoPixelWavelengthPairs_FitsExactLinearDispersionSolution()
+    public async Task EstimateRedshift_ByCrossCorrelation_RecoversKnownRedshiftFromShiftedTemplate()
     {
+        var wavelengths = Enumerable.Range(0, 201).Select(i => 4900.0 + i).ToArray();
+
+        double RestFrameProfile(double wavelength) => 1.0 - (0.5 * Math.Exp(-Math.Pow(wavelength - 5000.0, 2) / 50.0));
+
+        const double trueRedshift = 0.01;
+
         var request = new
         {
-            PixelPositions = new[] { 0.0, 10.0 },
-            KnownWavelengths = new[] { 500.0, 520.0 },
+            ObservedSpectrumWavelengths = wavelengths,
+            ObservedFlux = wavelengths.Select(w => RestFrameProfile(w / (1.0 + trueRedshift))).ToArray(),
+            TemplateWavelengths = wavelengths,
+            TemplateFlux = wavelengths.Select(RestFrameProfile).ToArray(),
+            MinRedshift = 0.0,
+            MaxRedshift = 0.05,
         };
 
-        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/calibrate", request);
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/redshift", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(trueRedshift, body.GetProperty("redshift").GetDouble(), precision: 3);
+
+        Assert.Equal("cross_correlation", body.GetProperty("method").GetString());
+    }
+
+    [Fact]
+    public async Task CalibrateWavelengths_TwoPixelWavelengthPairs_FitsExactLinearDispersionSolutionAndAppliesItToTheExtractedSpectrum()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new
+        {
+            PixelPositions = new[] { 0.0, 3.0 },
+            KnownWavelengths = new[] { 500.0, 506.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/calibrate", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -615,6 +672,41 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal([500.0, 2.0], coefficients.Select(c => Math.Round(c, 6)).ToArray());
 
         Assert.Equal(0.0, body.GetProperty("residualRms").GetDouble(), precision: 6);
+
+        var wavelengths = body.GetProperty("wavelengths").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([500.0, 502.0, 504.0, 506.0], wavelengths);
+
+        var flux = body.GetProperty("flux").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([60.0, 80.0, 100.0, 120.0], flux);
+
+        Assert.False(body.GetProperty("fluxCalibrated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task CalibrateWavelengths_WithFluxSensitivityCurve_DividesExtractedFluxBySensitivity()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new
+        {
+            PixelPositions = new[] { 0.0, 3.0 },
+            KnownWavelengths = new[] { 500.0, 506.0 },
+            FluxSensitivity = new[] { 2.0, 2.0, 2.0, 2.0 },
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/calibrate", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var flux = body.GetProperty("flux").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([30.0, 40.0, 50.0, 60.0], flux);
+
+        Assert.True(body.GetProperty("fluxCalibrated").GetBoolean());
     }
 
     [Fact]
@@ -633,6 +725,46 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("spectroscopy.calibration_insufficient_points", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task CompareSpectra_IdenticalSpectra_ReturnsUnitCorrelationAndZeroShift()
+    {
+        var primaryFileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var comparisonFileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/spectroscopy/{primaryFileId}/compare", new { ComparisonFileId = comparisonFileId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(1.0, body.GetProperty("crossCorrelationPeak").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("velocityShiftKmPerSec").GetDouble(), precision: 6);
+
+        Assert.Equal(1.0, body.GetProperty("meanFluxRatio").GetDouble(), precision: 6);
+
+        Assert.Equal(0.0, body.GetProperty("rmsFluxDifference").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task CompareSpectra_NoDispersionWcs_ReturnsBadRequest()
+    {
+        var primaryFileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var comparisonFileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/spectroscopy/{primaryFileId}/compare", new { ComparisonFileId = comparisonFileId });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.compare.no_wavelength_solution", body.GetProperty("title").GetString());
     }
 
     [Fact]

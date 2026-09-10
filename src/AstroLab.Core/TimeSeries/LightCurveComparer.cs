@@ -4,15 +4,16 @@ namespace AstroLab.Core.TimeSeries;
 
 /// <summary>
 /// Pure comparison of two paired flux series (assumed already time-aligned sample-for-sample):
-/// their Pearson correlation coefficient, and the mean instrumental-magnitude offset between them
+/// their Pearson correlation coefficient, the mean instrumental-magnitude offset between them
 /// (using <see cref="Photometry.InstrumentalPhotometry.DefaultZeroPoint"/>, which cancels out in
-/// the pairwise difference regardless of its value).
+/// the pairwise difference regardless of its value), the ratio of their mean flux levels, and the
+/// ratio of their flux standard deviations (a simple variability comparison).
 /// </summary>
 public static class LightCurveComparer
 {
     private const double MagnitudeScaleFactor = 2.5;
 
-    public static Result<(double CorrelationCoefficient, double MeanMagnitudeDifference)> Compare(
+    public static Result<(double CorrelationCoefficient, double MeanMagnitudeDifference, double FluxRatio, double VariabilityRatio)> Compare(
         ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
     {
         if (fluxA.Length != fluxB.Length)
@@ -27,24 +28,27 @@ public static class LightCurveComparer
             return Error.Validation("timeseries.compare.empty_series", "The light curves contain no points to compare.");
         }
 
-        var correlationResult = ComputePearsonCorrelation(fluxA, fluxB);
+        var momentsResult = ComputeMoments(fluxA, fluxB);
 
-        if (correlationResult.IsFailure)
+        if (momentsResult.IsFailure)
         {
-            return Result<(double, double)>.Failure(correlationResult.Error);
+            return Result<(double, double, double, double)>.Failure(momentsResult.Error);
         }
+
+        var (correlation, fluxRatio, variabilityRatio) = momentsResult.Value;
 
         var magnitudeDifferenceResult = ComputeMeanMagnitudeDifference(fluxA, fluxB);
 
         if (magnitudeDifferenceResult.IsFailure)
         {
-            return Result<(double, double)>.Failure(magnitudeDifferenceResult.Error);
+            return Result<(double, double, double, double)>.Failure(magnitudeDifferenceResult.Error);
         }
 
-        return (correlationResult.Value, magnitudeDifferenceResult.Value);
+        return (correlation, magnitudeDifferenceResult.Value, fluxRatio, variabilityRatio);
     }
 
-    private static Result<double> ComputePearsonCorrelation(ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
+    private static Result<(double Correlation, double FluxRatio, double VariabilityRatio)> ComputeMoments(
+        ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
     {
         var meanA = Mean(fluxA);
 
@@ -75,7 +79,19 @@ public static class LightCurveComparer
                 "timeseries.compare.zero_variance", "One of the light curves is constant, so a correlation coefficient is undefined.");
         }
 
-        return covariance / Math.Sqrt(varianceA * varianceB);
+        if (meanB == 0.0)
+        {
+            return Error.Validation(
+                "timeseries.compare.zero_mean_flux", "The comparison light curve has zero mean flux, so a flux ratio is undefined.");
+        }
+
+        var correlation = covariance / Math.Sqrt(varianceA * varianceB);
+
+        var fluxRatio = meanA / meanB;
+
+        var variabilityRatio = Math.Sqrt(varianceA / varianceB);
+
+        return (correlation, fluxRatio, variabilityRatio);
     }
 
     private static Result<double> ComputeMeanMagnitudeDifference(ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)

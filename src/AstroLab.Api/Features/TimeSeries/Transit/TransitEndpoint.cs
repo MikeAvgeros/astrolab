@@ -1,9 +1,11 @@
+using AstroLab.Core.TimeSeries;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.TimeSeries.Transit;
 
 /// <summary>
-/// Roadmap slice: periodic transit (brightness-dip) search over a light curve, e.g. for exoplanet
-/// detection. Request/response contract is final; the search algorithm itself is not yet
-/// implemented (see spec.md §6.5), so this route always returns HTTP 501.
+/// Searches a light curve for periodic transit (brightness-dip) signals using a Box Least Squares
+/// search, characterising a detected candidate's period, depth, duration, and epoch.
 /// </summary>
 public static class TransitEndpoint
 {
@@ -11,15 +13,28 @@ public static class TransitEndpoint
     {
         public void MapTransitEndpoint()
         {
-            group.MapGet("/{fileId}/transit", SearchForTransits)
-                .WithSummary("Searches a light curve for periodic transit (brightness-dip) signals. Not yet implemented.");
+            group.MapGet("/{fileId}/transit", SearchForTransitsAsync)
+                .WithSummary("Searches a light curve for periodic transit (brightness-dip) signals using a Box Least Squares search.");
         }
     }
 
-    private static IResult SearchForTransits(string fileId, double minPeriod, double maxPeriod, double minTransitDepth)
+    private static async Task<IResult> SearchForTransitsAsync(
+        string fileId, double minPeriod, double maxPeriod, double minTransitDepth, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        _ = TransitRequest.Create(minPeriod, maxPeriod, minTransitDepth);
+        var request = TransitRequest.Create(minPeriod, maxPeriod, minTransitDepth);
 
-        return NotImplementedResult.Value("timeseries.transit.not_implemented", "Transit search is not yet implemented.");
+        var lightCurveResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
+
+        if (lightCurveResult.IsFailure)
+        {
+            return lightCurveResult.Error.ToProblem();
+        }
+
+        var data = lightCurveResult.Value;
+
+        var searchResult = TransitSearch.Search(data.Time, data.Flux, request.MinPeriod, request.MaxPeriod, request.MinTransitDepth);
+
+        return searchResult.ToApiResult(search => Results.Ok(
+            TransitResponse.Create(fileId, search.Period, search.Depth, search.Duration, search.Epoch)));
     }
 }

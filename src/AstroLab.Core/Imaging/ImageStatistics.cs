@@ -15,7 +15,7 @@ public readonly record struct ImageStatistics
     private const double SkyBackgroundLowerPercentile = 25.0;
     private const double SkyBackgroundUpperPercentile = 75.0;
     private const double PercentageScale = 100.0;
-    private const double Epsilon = 1e-9;
+    private const double Epsilon = 1e-12;
 
     public const int DefaultDisplayHistogramBinCount = 256;
 

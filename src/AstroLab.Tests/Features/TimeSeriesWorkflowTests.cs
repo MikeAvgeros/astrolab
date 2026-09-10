@@ -115,6 +115,79 @@ public class TimeSeriesWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task PeriodSearch_SinusoidalLightCurve_RecoversKnownPeriod()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        const double truePeriod = 5.0;
+
+        var time = Enumerable.Range(0, 200).Select(i => i * 0.25).ToArray();
+
+        var flux = time.Select(t => Math.Sin(2.0 * Math.PI * t / truePeriod)).ToArray();
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, flux));
+
+        var response = await _client.GetAsync($"/api/timeseries/{fileId}/period-search?minPeriod=1&maxPeriod=20");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(truePeriod, body.GetProperty("bestPeriod").GetDouble(), precision: 1);
+    }
+
+    [Fact]
+    public async Task Transit_BoxShapedDips_RecoversPeriodDepthAndDuration()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        const double truePeriod = 10.0;
+
+        const double trueDepth = 0.05;
+
+        var time = Enumerable.Range(0, 500).Select(i => i * 0.1).ToArray();
+
+        var flux = time.Select(t => (t / truePeriod % 1.0) < 0.05 ? 1.0 - trueDepth : 1.0).ToArray();
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, flux));
+
+        var response = await _client.GetAsync($"/api/timeseries/{fileId}/transit?minPeriod=5&maxPeriod=15&minTransitDepth=0.01");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(truePeriod, body.GetProperty("bestPeriod").GetDouble(), precision: 0);
+
+        Assert.True(body.GetProperty("transitDepth").GetDouble() is > 0.02 and < 0.08);
+    }
+
+    [Fact]
+    public async Task Transit_NoDipsAboveThreshold_ReturnsNotFound()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        var time = Enumerable.Range(0, 100).Select(i => i * 0.1).ToArray();
+
+        var flux = Enumerable.Repeat(1.0, 100).ToArray();
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, flux));
+
+        var response = await _client.GetAsync($"/api/timeseries/{fileId}/transit?minPeriod=1&maxPeriod=5&minTransitDepth=0.01");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Compare_PerfectlyCorrelatedLightCurves_ReturnsUnitCorrelation()
     {
         if (!CfitsIoNativeAvailability.IsAvailable)
@@ -129,15 +202,19 @@ public class TimeSeriesWorkflowTests : IClassFixture<ApiFactory>
         var comparisonFileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, [50.0, 100.0, 150.0, 200.0]));
 
         var response = await _client.PostAsJsonAsync(
-            $"/api/timeseries/{primaryFileId}/compare", new { ComparisonFileId = comparisonFileId });
+            $"/api/timeseries/{primaryFileId}/compare", new { ComparisonFileIds = new[] { comparisonFileId } });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal(1.0, body.GetProperty("correlationCoefficient").GetDouble(), precision: 6);
+        var entry = body.GetProperty("comparisons").EnumerateArray().Single();
 
-        Assert.Equal(-2.5 * Math.Log10(2.0), body.GetProperty("meanMagnitudeDifference").GetDouble(), precision: 6);
+        Assert.Equal(1.0, entry.GetProperty("correlationCoefficient").GetDouble(), precision: 6);
+
+        Assert.Equal(-2.5 * Math.Log10(2.0), entry.GetProperty("meanMagnitudeDifference").GetDouble(), precision: 6);
+
+        Assert.Equal(2.0, entry.GetProperty("fluxRatio").GetDouble(), precision: 6);
     }
 
     [Fact]
@@ -153,7 +230,7 @@ public class TimeSeriesWorkflowTests : IClassFixture<ApiFactory>
         var comparisonFileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable([0.0, 1.0], [1.0, 2.0]));
 
         var response = await _client.PostAsJsonAsync(
-            $"/api/timeseries/{primaryFileId}/compare", new { ComparisonFileId = comparisonFileId });
+            $"/api/timeseries/{primaryFileId}/compare", new { ComparisonFileIds = new[] { comparisonFileId } });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 

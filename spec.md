@@ -154,12 +154,10 @@ Within a class, order methods according to their visibility and usage:
 - **MUST:** Add a `///` XML documentation comment to:
   - Every endpoint class (`{Leaf}Endpoint.cs`), describing the endpoint's purpose and behaviour.
   - Every class in `AstroLab.Core` and `AstroLab.Infrastructure`, describing the class's responsibility.
-- **SHOULD:** Add comments when they explain non-obvious reasoning, scientific assumptions, external protocol behaviour, safety requirements, or intentionally unusual implementation decisions.
 - **MUST:** Extract numeric literals that encode domain meaning — scaling factors, thresholds, buffer sizes, fallback values, algorithm coefficients, and similar values — into named `private const` fields. Structurally self-evident literals such as `0`, `1`, and `2` used as indices or simple bounds are exempt.
 - **MUST:** Enable nullable reference types in every project with `<Nullable>enable</Nullable>`. Use `T?` for legitimately absent references and perform a real null check rather than using `!` to suppress the compiler.
 - **MUST NOT:** Add redundant parentheses to a mathematical expression — parentheses that restate C#'s existing operator precedence rather than changing evaluation order. Use parentheses only where they are required to produce the correct result, or where a mixed chain of different operator kinds would otherwise be genuinely ambiguous to a reader.
-
-* **MUST NOT:** Add a trailing comma after the last member, element, argument, parameter, or expression arm when the comma is optional. This applies to `enum` declarations, `switch` expressions, collection/object/array initializers, argument lists, parameter lists, and any other C# construct where a trailing comma is permitted but not required.
+- **MUST NOT:** Add a trailing comma after the last member, element, argument, parameter, or expression arm when the comma is optional. This applies to `enum` declarations, `switch` expressions, collection/object/array initializers, argument lists, parameter lists, and any other C# construct where a trailing comma is permitted but not required.
 
 ### 4.4 Control Flow and LINQ
 

@@ -341,6 +341,20 @@ The current four-project arrangement is the preferred default, not an immutable 
 
 Roadmap features remain explicitly represented at the API boundary where they have been intentionally scaffolded. They MUST return HTTP 501 until their corresponding implementation exists and MUST NOT return fake scientific results.
 
+#### Roadmap endpoints (HTTP 501)
+
+The following endpoints are currently scaffolded at the API boundary but not implemented. They return HTTP 501 via the shared `NotImplementedResult` helper (§6.5) and MUST NOT return fake success responses, hard-coded results, or partial scientific implementations:
+
+- `Catalogues/Query` — cone-search query against an external catalogue
+- `Catalogues/CrossMatch` — source cross-match against an external catalogue
+- `Measurements/StellarColour` — two-band colour index
+- `Measurements/StellarTemperature` — colour → estimated temperature
+- `Measurements/SpectralClassification` — estimated spectral type
+- `Measurements/RadialVelocity` — Doppler shift → radial velocity
+- `Measurements/GalaxyMorphology` — size/ellipticity/morphology estimate
+- `Measurements/SurfaceBrightness` — magnitude per square arcsecond
+- `Measurements/PhysicalSize` — angular size + distance → physical size
+
 ### 5.2 Dependency Rules
 
 Dependencies flow inward toward Core:

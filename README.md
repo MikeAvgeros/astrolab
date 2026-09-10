@@ -163,6 +163,14 @@ Everything below takes the `fileId` from step 1.
 | `GET /astrometry/pixel-to-world` | Converts `pixelX`/`pixelY` to RA/Dec via the WCS.                                                                                                                                                                                                      |
 | `GET /astrometry/world-to-pixel` | Converts `rightAscension`/`declination` to a pixel position via the WCS.                                                                                                                                                                               |
 | `GET /astrometry/footprint`      | Reports the sky footprint (corner RA/Dec) of the image, derived from its WCS and pixel dimensions.                                                                                                                                                     |
+| `GET /astrometry/separation`     | Angular separation (arcsec) between two pixel positions in the same image, via its WCS. Query: `firstPixelX`/`Y`, `secondPixelX`/`Y`.                                                                                                                  |
+| `GET /background`                | Mesh-based background model: median background and RMS. Query: `meshSizePixels`.                                                                                                                                                                       |
+| `GET /segmentation`              | Per-source pixel segments from threshold-based detection. Query: `thresholdSigma`, `minimumArea`.                                                                                                                                                      |
+| `GET /sources/characterization`  | Shape/ellipticity measurements (semi-major/minor axis, orientation) per detected source. Query: `thresholdSigma`, `minimumArea`, `maxSources`.                                                                                                         |
+| `GET /render/overlay`            | Renders the image to PNG with detected sources overlaid as markers. Query: `thresholdSigma`, `minimumArea`, `maxSources`.                                                                                                                              |
+| `POST /compare`                  | Pixel-difference statistics (mean/stddev/max absolute difference) between two staged images of the same dimensions. Body: `fileId`, `comparisonFileId`.                                                                                                |
+| `POST /align`                    | Registration transform (offset, rotation, scale) aligning one staged image to a reference image. Body: `fileId`, `referenceFileId`.                                                                                                                    |
+| `POST /stack`                    | Combines multiple staged images (mean/median) into a new staged FITS file. Body: `fileIds`, `method`.                                                                                                                                                  |
 
 ### Spectroscopy (`/api/spectroscopy/{fileId}/...`)
 
@@ -172,14 +180,17 @@ Everything below takes the `fileId` from step 1.
 | `POST /calibrate` | Fits a polynomial wavelength-dispersion solution (least squares) from known pixel/wavelength pairs. Body: `pixelPositions`, `knownWavelengths`. Returns `dispersionCoefficients` and `residualRms`.                                                               |
 | `GET /lines`      | Detects spectral lines in a 1D spectrum collapsed across the full spatial extent of a spectroscopic frame. Query: optional `significanceThreshold`.                                                                                                               |
 | `POST /redshift`  | Estimates redshift from paired observed/rest-frame spectral line wavelengths. Body: `observedWavelengths`, `restWavelengths`.                                                                                                                                     |
+| `POST /compare`   | Cross-correlates this spectrum against another staged spectrum. Body: `comparisonFileId`.                                                                                                                                                                         |
 
 ### Time series (`/api/timeseries/{fileId}/...`)
 
-| Method & route     | Description                                                                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /light-curve` | Extracts flux-vs-time from a staged time-series FITS table. Requires a native CFITSIO library — see [Native dependency: CFITSIO](#native-dependency-cfitsio). |
-| `POST /detrend`    | Removes a long-term trend from a light curve. Body: `method` (`linear`\|`median`). Requires a native CFITSIO library.                                         |
-| `POST /compare`    | Compares two staged light curves via Pearson correlation and mean instrumental-magnitude offset. Body: `comparisonFileId`. Requires a native CFITSIO library. |
+| Method & route       | Description                                                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /light-curve`   | Extracts flux-vs-time from a staged time-series FITS table. Requires a native CFITSIO library — see [Native dependency: CFITSIO](#native-dependency-cfitsio).                             |
+| `POST /detrend`      | Removes a long-term trend from a light curve. Body: `method` (`linear`\|`median`). Requires a native CFITSIO library.                                                                     |
+| `POST /compare`      | Compares two staged light curves via Pearson correlation and mean instrumental-magnitude offset. Body: `comparisonFileId`. Requires a native CFITSIO library.                             |
+| `GET /period-search` | Finds the best-fit periodicity (Lomb-Scargle) in a light curve. Query: `minPeriod`, `maxPeriod`. Requires a native CFITSIO library.                                                       |
+| `GET /transit`       | Searches for periodic transit (brightness-dip) signals: best period, transit depth/duration/epoch. Query: `minPeriod`, `maxPeriod`, `minTransitDepth`. Requires a native CFITSIO library. |
 
 ### Catalogues (`/api/catalogues/...`)
 
@@ -193,13 +204,8 @@ The following slices are scaffolded with a final request/response contract but n
 implementation yet — they always return HTTP 501 rather than a fake or partial result. Do not build
 against their response bodies expecting real numbers yet:
 
-- `GET/POST /api/images/{fileId}/background`, `/sources/characterization`, `/segmentation`,
-  `/render/overlay`, `/astrometry/separation`
-- `POST /api/images/align`, `/compare`, `/stack`
 - `GET/POST /api/measurements/*` — galaxy morphology, physical size, radial velocity, spectral
   classification, stellar colour, stellar temperature, surface brightness
-- `POST /api/spectroscopy/{fileId}/compare`
-- `GET /api/timeseries/{fileId}/period-search`, `/transit`
 - `GET /api/catalogues/query`; `POST /api/catalogues/cross-match`
 
 ---

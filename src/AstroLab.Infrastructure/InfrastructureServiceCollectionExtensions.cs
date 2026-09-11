@@ -1,5 +1,6 @@
 using System.Net;
 using AstroLab.Infrastructure.Archives;
+using AstroLab.Infrastructure.Catalogues;
 using AstroLab.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,8 @@ public static class InfrastructureServiceCollectionExtensions
 
             services.Configure<MastArchiveOptions>(configuration.GetSection(MastArchiveOptions.SectionName));
 
+            services.Configure<VizierOptions>(configuration.GetSection(VizierOptions.SectionName));
+
             services.TryAddSingleton<ILocalFileStore, LocalFileStore>();
 
             services.TryAddSingleton<FitsDatasetReader>();
@@ -47,6 +50,8 @@ public static class InfrastructureServiceCollectionExtensions
             AddEsoArchiveClients(services, configuration);
 
             AddMastArchiveClients(services, configuration);
+
+            AddVizierCatalogueClient(services, configuration);
         }
     }
 
@@ -86,6 +91,17 @@ public static class InfrastructureServiceCollectionExtensions
         });
 
         services.TryAddTransient<IMastArchiveClient, MastArchiveClient>();
+    }
+
+    private static void AddVizierCatalogueClient(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = configuration.GetSection(VizierOptions.SectionName).Get<VizierOptions>() ?? new VizierOptions();
+
+        var baseAddress = new Uri(options.BaseAddress);
+
+        services
+            .AddHttpClient<ICatalogueClient, VizierTapClient>(client => client.BaseAddress = baseAddress)
+            .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
     }
 
     private static void ConfigureArchiveApiResilience(HttpStandardResilienceOptions options)

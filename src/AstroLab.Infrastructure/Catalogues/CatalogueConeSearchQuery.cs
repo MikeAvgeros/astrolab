@@ -1,10 +1,11 @@
-namespace AstroLab.Api.Features.Catalogues.Query;
+namespace AstroLab.Infrastructure.Catalogues;
 
-public sealed record CatalogueQueryRequest
+/// <summary>A spatial cone-search request against a named external catalogue (e.g. a VizieR table identifier such as "I/355/gaiadr3").</summary>
+public readonly record struct CatalogueConeSearchQuery
 {
-    internal const int DefaultMaxResults = 50;
+    private const int DefaultMaxResults = 50;
 
-    private CatalogueQueryRequest(string catalogueId, double rightAscension, double declination, double radiusArcsec, int maxResults)
+    private CatalogueConeSearchQuery(string catalogueId, double rightAscension, double declination, double radiusArcsec, int maxResults)
     {
         CatalogueId = catalogueId;
         RightAscension = rightAscension;
@@ -23,7 +24,7 @@ public sealed record CatalogueQueryRequest
 
     public int MaxResults { get; }
 
-    public static CatalogueQueryRequest Create(
+    public static CatalogueConeSearchQuery Create(
         string catalogueId, double rightAscension, double declination, double radiusArcsec, int maxResults = DefaultMaxResults)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalogueId);
@@ -32,6 +33,6 @@ public sealed record CatalogueQueryRequest
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
 
-        return new CatalogueQueryRequest(catalogueId, rightAscension, declination, radiusArcsec, maxResults);
+        return new CatalogueConeSearchQuery(catalogueId, rightAscension, declination, radiusArcsec, maxResults);
     }
 }

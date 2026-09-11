@@ -35,8 +35,9 @@ For day-to-day operational details such as build/test commands, the current repo
    - 6.4 [Pipeline Streaming](#64-pipeline-streaming)
    - 6.5 [Vertical Slice API Endpoints (REPR Pattern)](#65-vertical-slice-api-endpoints-repr-pattern)
    - 6.6 [Archive Clients: ESO and MAST](#66-archive-clients-eso-and-mast)
-   - 6.7 [Visualisation as a Separate Capability](#67-visualisation-as-a-separate-capability)
-   - 6.8 [Global Exception Handling](#68-global-exception-handling)
+   - 6.7 [Catalogue Client: VizieR](#67-catalogue-client-vizier)
+   - 6.8 [Visualisation as a Separate Capability](#68-visualisation-as-a-separate-capability)
+   - 6.9 [Global Exception Handling](#69-global-exception-handling)
 7. [Testing Standards](#7-testing-standards)
 8. [Appendix: Original Build Sequence (Historical)](#8-appendix-original-build-sequence-historical)
 
@@ -268,12 +269,15 @@ AstroLab.slnx
 │   │   │   └── SourceDetector.cs
 │   │   ├── Spectroscopy/                       # Spectral algorithms
 │   │   ├── TimeSeries/                         # Light-curve algorithms (detrend, compare)
+│   │   ├── Catalogues/                         # Pure catalogue cross-match algorithm
+│   │   │   └── CatalogueCrossMatcher.cs
 │   │   └── Result/                             # Result<T> / Error
 │   │
 │   ├── AstroLab.Infrastructure/                # Imperative Shell
 │   │   ├── Fits/                               # FITS adapter / native interop
 │   │   ├── Storage/                            # Local storage and streaming
 │   │   ├── Archives/                           # ESO and MAST clients
+│   │   ├── Catalogues/                         # VizieR TAP catalogue client
 │   │   └── ImageRendering/                     # FITS → browser image rendering
 │   │
 │   ├── AstroLab.Api/                           # API Host & Vertical Slices
@@ -340,13 +344,6 @@ The exact folder layout MAY evolve as the system grows. A new project or major s
 The current four-project arrangement is the preferred default, not an immutable requirement.
 
 Roadmap features remain explicitly represented at the API boundary where they have been intentionally scaffolded. They MUST return HTTP 501 until their corresponding implementation exists and MUST NOT return fake scientific results.
-
-#### Roadmap endpoints (HTTP 501)
-
-The following endpoints are currently scaffolded at the API boundary but not implemented. They return HTTP 501 via the shared `NotImplementedResult` helper (§6.5) and MUST NOT return fake success responses, hard-coded results, or partial scientific implementations:
-
-- `Catalogues/Query` — cone-search query against an external catalogue
-- `Catalogues/CrossMatch` — source cross-match against an external catalogue
 
 ### 5.2 Dependency Rules
 
@@ -858,7 +855,21 @@ rather than assuming that `t_min` alone must fall inside the requested window.
 
 If an archive's real query/download contract is genuinely not yet known for a capability, `SearchAsync`/`DownloadAsync` MUST return `Error.NotImplemented(...)` rather than sending requests to a guessed URL.
 
-### 6.7 Visualisation as a Separate Capability
+### 6.7 Catalogue Client: VizieR
+
+**Location:** `AstroLab.Infrastructure/Catalogues`, `AstroLab.Api/Features/Catalogues`
+
+`ICatalogueClient` (`ConeSearchAsync`) is the catalogue-integration counterpart to `IArchiveClient` (§6.6): a single HTTP client abstraction, `VizierTapClient`, over VizieR's real IVOA TAP service, backing both `Catalogues/Query` (a direct cone search) and `Catalogues/CrossMatch` (a cone search over the sky field a staged image's detected sources span, followed by the pure `AstroLab.Core.Catalogues.CatalogueCrossMatcher` nearest-neighbour match).
+
+A VizieR table (e.g. `I/355/gaiadr3`) is identified by its catalogue-native table name, and its RA/Dec/identifier/magnitude column *names* vary per catalogue. `VizierTapClient` MUST NOT assume a fixed column name for any of these roles. Instead, it discovers them per catalogue from the TAP service's mandatory `TAP_SCHEMA.columns` description, matching each role by its IVOA UCD1+ tag (`pos.eq.ra`, `pos.eq.dec`, `meta.id`/`meta.record`, `phot.mag`), preferring a column additionally tagged `meta.main` when more than one candidate matches. This mirrors how `EsoArchiveApiClient` discovers real downloadable products through DataLink rather than guessing a URL (§6.6) — column-name guessing is the equivalent mistake for a catalogue query.
+
+A magnitude column is optional metadata: when a catalogue exposes none, the cone-search ADQL selects a literal `NULL` for it rather than omitting the column or inventing a value, and `CatalogueRecord.Magnitude` is `null`.
+
+Responses use the IVOA VOTable XML format (`FORMAT=votable`) — the one output format every compliant TAP service is required to support — parsed by `VoTableParser` matching elements by local name so it tolerates the VOTable namespace differing across service versions. A DALI/TAP `QUERY_STATUS=ERROR` `INFO` element MUST be treated as a failure (`ErrorCategory.Infrastructure`) even inside an HTTP 200 response, and a response with no recognizable `TABLE` element MUST fail closed rather than being read as an empty successful result.
+
+`CatalogueCrossMatcher.Match` is pure Core logic: for each detected source it finds the nearest `CatalogueMatchCandidate` (across every catalogue requested) within the requested radius via `AngularSeparation`, omitting sources with no candidate in range rather than reporting a null match.
+
+### 6.8 Visualisation as a Separate Capability
 
 **Location:** `AstroLab.Infrastructure/ImageRendering`, `AstroLab.Api/Features/Images/Render`
 
@@ -922,7 +933,7 @@ Core supplies scientific values. Infrastructure/API mapping turns those values i
 
 A Core algorithm MUST NOT know or care whether its output becomes a PNG, JSON response, FITS file, chart, or another representation.
 
-### 6.8 Global Exception Handling
+### 6.9 Global Exception Handling
 
 **Location:** `AstroLab.Api/RequestValidationExceptionHandler.cs`, `AstroLab.Api/GlobalExceptionHandler.cs`, `Program.cs`
 

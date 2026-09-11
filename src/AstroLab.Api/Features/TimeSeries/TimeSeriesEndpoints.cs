@@ -2,7 +2,9 @@ using AstroLab.Api.Features.TimeSeries.Compare;
 using AstroLab.Api.Features.TimeSeries.Detrend;
 using AstroLab.Api.Features.TimeSeries.LightCurve;
 using AstroLab.Api.Features.TimeSeries.PeriodSearch;
+using AstroLab.Api.Features.TimeSeries.PhaseFold;
 using AstroLab.Api.Features.TimeSeries.Transit;
+using AstroLab.Api.Features.TimeSeries.Variability;
 
 namespace AstroLab.Api.Features.TimeSeries;
 
@@ -23,6 +25,10 @@ public static class TimeSeriesEndpoints
             group.MapTransitEndpoint();
 
             group.MapCompareEndpoint();
+
+            group.MapPhaseFoldEndpoint();
+
+            group.MapVariabilityEndpoint();
         }
     }
 }

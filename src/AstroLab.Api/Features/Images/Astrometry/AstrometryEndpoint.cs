@@ -19,6 +19,18 @@ public static class AstrometryEndpoint
 
             group.MapGet("/{fileId}/astrometry/world-to-pixel", ConvertWorldToPixelAsync)
                 .WithSummary("Converts world (RA/Dec) coordinates to a pixel position via the image's WCS.");
+
+            group.MapGet("/{fileId}/astrometry/pixel-scale", GetPixelScaleAsync)
+                .WithSummary("Roadmap: reports the angular pixel scale (and per-axis scales) derived from the image's WCS. Not yet implemented (HTTP 501).");
+
+            group.MapGet("/{fileId}/astrometry/orientation", GetOrientationAsync)
+                .WithSummary("Roadmap: reports the image's position angle relative to celestial north, derived from the image's WCS. Not yet implemented (HTTP 501).");
+
+            group.MapPost("/{fileId}/astrometry/pixel-to-world", ConvertPixelToWorldBatchAsync)
+                .WithSummary("Roadmap: converts multiple pixel positions to world (RA/Dec) coordinates in one request. Not yet implemented (HTTP 501).");
+
+            group.MapPost("/{fileId}/astrometry/world-to-pixel", ConvertWorldToPixelBatchAsync)
+                .WithSummary("Roadmap: converts multiple world (RA/Dec) coordinates to pixel positions in one request. Not yet implemented (HTTP 501).");
         }
     }
 
@@ -61,6 +73,36 @@ public static class AstrometryEndpoint
         var pixelResult = wcsResult.Value.WorldToPixel(request.RightAscension, request.Declination);
 
         return pixelResult.ToApiResult(pixel => Results.Ok(PixelCoordinateResponse.Create(fileId, pixel.PixelX, pixel.PixelY)));
+    }
+
+    private static Task<IResult> GetPixelScaleAsync(string fileId, CancellationToken cancellationToken) =>
+        Task.FromResult(NotImplementedResult.Value(
+            "astrometry.pixel_scale.not_implemented",
+            "Pixel scale calculation is not yet implemented."));
+
+    private static Task<IResult> GetOrientationAsync(string fileId, CancellationToken cancellationToken) =>
+        Task.FromResult(NotImplementedResult.Value(
+            "astrometry.orientation.not_implemented",
+            "Image orientation calculation is not yet implemented."));
+
+    private static Task<IResult> ConvertPixelToWorldBatchAsync(
+        string fileId, PixelToWorldBatchRequest request, CancellationToken cancellationToken)
+    {
+        request.Validate();
+
+        return Task.FromResult(NotImplementedResult.Value(
+            "astrometry.pixel_to_world_batch.not_implemented",
+            "Multi-point pixel-to-world conversion is not yet implemented."));
+    }
+
+    private static Task<IResult> ConvertWorldToPixelBatchAsync(
+        string fileId, WorldToPixelBatchRequest request, CancellationToken cancellationToken)
+    {
+        request.Validate();
+
+        return Task.FromResult(NotImplementedResult.Value(
+            "astrometry.world_to_pixel_batch.not_implemented",
+            "Multi-point world-to-pixel conversion is not yet implemented."));
     }
 
     private static async Task<Result<Wcs>> LoadWcsAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)

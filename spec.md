@@ -10,6 +10,7 @@ For day-to-day operational details such as build/test commands, the current repo
 > - **AI agents:** Treat the **MUST** requirements in §3–§6 as hard constraints. Before completing a task, check the resulting diff against the applicable requirements.
 > - **Specific rules override general rules.** Where a section explicitly defines an exception to an earlier rule, the more specific rule applies.
 > - **Historical information:** §8 describes the original build sequence and is not an outstanding task list.
+> - **Roadmap information:** §9 lists endpoints already scaffolded to return HTTP 501 pending their Core implementation. It *is* an outstanding task list — do not implement its scientific behaviour without also removing the corresponding entry.
 
 ## Contents
 
@@ -40,6 +41,7 @@ For day-to-day operational details such as build/test commands, the current repo
    - 6.9 [Global Exception Handling](#69-global-exception-handling)
 7. [Testing Standards](#7-testing-standards)
 8. [Appendix: Original Build Sequence (Historical)](#8-appendix-original-build-sequence-historical)
+9. [Not Implemented Roadmap](#9-not-implemented-roadmap)
 
 ---
 
@@ -1115,3 +1117,61 @@ This appendix is **historical**. It is retained as a reference for extending the
 At each stage, the implementation compiled and its tests remained passing before proceeding to the next stage.
 
 The same discipline applies to future work that extends this architectural pattern.
+
+---
+
+## 9. Not Implemented Roadmap
+
+The endpoints below have been scaffolded under the **Roadmap Endpoint Rule** (§6.5): each has a real route, a real request DTO where the request has a body, and a handler that returns HTTP 501 via `AstroLab.Api.Features.NotImplementedResult.Value(code, message)`.
+
+No Infrastructure or Core work has been performed for these endpoints. They MUST NOT be treated as implemented, and they MUST continue to return HTTP 501 with the stable error code listed below until their Request → Infrastructure → Core → `Result<T>` → Response flow is genuinely implemented, at which point this table entry should be removed.
+
+These endpoints extend the six scientific areas — astrometry, photometry, spectroscopy, time-series analysis, image visualisation, and scientific measurements/data quality — beyond the Phase 1 capabilities already implemented (existing WCS conversion, aperture/differential/multi-source photometry, spectral extraction/calibration/lines/redshift/comparison, light-curve/detrend/period-search/transit/comparison, stellar colour/temperature/classification, radial velocity, galaxy morphology, surface brightness, and image render/overlay/align/compare/stack all remain supported and are unaffected by this section).
+
+### 9.1 Astrometry
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `GET /api/images/{fileId}/astrometry/pixel-scale` | ImageData + WCS | `astrometry.pixel_scale.not_implemented` |
+| `GET /api/images/{fileId}/astrometry/orientation` | ImageData + WCS | `astrometry.orientation.not_implemented` |
+| `POST /api/images/{fileId}/astrometry/pixel-to-world` (multi-point) | ImageData + WCS | `astrometry.pixel_to_world_batch.not_implemented` |
+| `POST /api/images/{fileId}/astrometry/world-to-pixel` (multi-point) | ImageData + WCS | `astrometry.world_to_pixel_batch.not_implemented` |
+
+### 9.2 Photometry
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `POST /api/images/{fileId}/photometry/aperture-correction` | ImageData | `photometry.aperture_correction.not_implemented` |
+
+### 9.3 Spectroscopy
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `POST /api/spectroscopy/{fileId}/continuum` | SpectralData | `spectroscopy.continuum_fit.not_implemented` |
+| `POST /api/spectroscopy/{fileId}/continuum/subtract` | SpectralData | `spectroscopy.continuum_subtract.not_implemented` |
+| `POST /api/spectroscopy/{fileId}/lines/fit` | SpectralData | `spectroscopy.line_fit.not_implemented` |
+| `POST /api/spectroscopy/{fileId}/equivalent-width` | SpectralData | `spectroscopy.equivalent_width.not_implemented` |
+| `GET /api/spectroscopy/{fileId}/snr` | SpectralData | `spectroscopy.snr.not_implemented` |
+
+### 9.4 Time Series
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `POST /api/timeseries/{fileId}/phase-fold` | TimeSeriesData | `timeseries.phase_fold.not_implemented` |
+| `GET /api/timeseries/{fileId}/variability` | TimeSeriesData | `timeseries.variability.not_implemented` |
+
+The existing `GET /api/timeseries/{fileId}/period-search` endpoint remains implemented as-is. Expanding its response to expose the full periodogram (frequencies, powers, false-alarm probability) is deferred future work on an *existing* endpoint, not a new roadmap stub, and is not covered by this section.
+
+### 9.5 Image Visualisation
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `GET /api/images/{fileId}/cutout` | ImageData (WCS optional, for sky-based cutouts) | `image.cutout.not_implemented` |
+| `GET /api/images/{fileId}/contours` | ImageData | `image.contours.not_implemented` |
+| `POST /api/images/composite` | ImageData (per channel) | `image.composite.not_implemented` |
+
+### 9.6 Data Quality
+
+| Route | Required capability | Roadmap error code |
+| --- | --- | --- |
+| `GET /api/fits/{fileId}/quality` | any FITS dataset capability | `fits.quality.not_implemented` |

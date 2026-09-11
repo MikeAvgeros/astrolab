@@ -1373,9 +1373,12 @@ Appropriate HTTP status codes are used, such as:
 400 Bad Request
 404 Not Found
 422 Unprocessable Entity
+501 Not Implemented
 ```
 
 Raw exception messages and stack traces are not returned to API consumers.
+
+`501 Not Implemented` is returned by roadmap endpoints that have been scaffolded with a real route and request contract but do not yet have a scientific implementation behind them — see [Not implemented: roadmap endpoints](#not-implemented-roadmap-endpoints) below.
 
 ---
 
@@ -2259,3 +2262,51 @@ In other words, AstroLab takes you from:
 to:
 
 > **"I can inspect it, see what it contains, locate objects on the sky, measure their light, analyse their spectra or variability, and compare them with astronomical catalogues."**
+
+---
+
+# Not implemented: roadmap endpoints
+
+The endpoints below have been scaffolded with a real route and, where the request has a body, a real validated request contract. They are wired into the API today, but each one currently returns:
+
+```text
+HTTP 501 Not Implemented
+```
+
+with a stable error code identifying which capability is pending. No scientific calculation, Infrastructure access, or Core algorithm has been implemented for them yet — they exist so the eventual routes and request shapes are already stable. See `spec.md` §9 for the authoritative list and required FITS capability per endpoint.
+
+## Astrometry
+
+- `GET /api/images/{fileId}/astrometry/pixel-scale` — angular pixel scale (and per-axis scales) derived from the WCS.
+- `GET /api/images/{fileId}/astrometry/orientation` — image orientation (position angle) relative to celestial north.
+- `POST /api/images/{fileId}/astrometry/pixel-to-world` — converts multiple pixel positions to RA/Dec in one request.
+- `POST /api/images/{fileId}/astrometry/world-to-pixel` — converts multiple RA/Dec coordinates to pixel positions in one request.
+
+## Photometry
+
+- `POST /api/images/{fileId}/photometry/aperture-correction` — corrects an aperture flux measurement using a supplied correction factor, propagating uncertainty where possible.
+
+## Spectroscopy
+
+- `POST /api/spectroscopy/{fileId}/continuum` — fits a polynomial continuum model to a spectrum.
+- `POST /api/spectroscopy/{fileId}/continuum/subtract` — subtracts a fitted continuum from a spectrum.
+- `POST /api/spectroscopy/{fileId}/lines/fit` — fits a Gaussian profile to a spectral line.
+- `POST /api/spectroscopy/{fileId}/equivalent-width` — calculates equivalent width over a wavelength interval.
+- `GET /api/spectroscopy/{fileId}/snr` — reports overall and per-sample spectral signal-to-noise ratio.
+
+## Time series
+
+- `POST /api/timeseries/{fileId}/phase-fold` — folds a light curve around a supplied period and reference epoch.
+- `GET /api/timeseries/{fileId}/variability` — variability statistics (mean, median, standard deviation, amplitude, RMS, MAD).
+
+The existing period-search endpoint (`GET /api/timeseries/{fileId}/period-search`) already works today; expanding its response to expose the full periodogram is future work on that existing endpoint, not a new roadmap stub.
+
+## Image visualisation
+
+- `GET /api/images/{fileId}/cutout` — extracts a rectangular pixel region, or a WCS-based sky region, from a staged image.
+- `GET /api/images/{fileId}/contours` — generates scientific contour geometry from an image's pixel data.
+- `POST /api/images/composite` — combines separate red/green/blue staged images into an RGB composite.
+
+## Data quality
+
+- `GET /api/fits/{fileId}/quality` — cross-cutting data-quality statistics (invalid pixel counts, saturation, dynamic range, usable-pixel fraction) for a staged FITS dataset.

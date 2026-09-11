@@ -1,7 +1,11 @@
 using AstroLab.Api.Features.Images.Align;
+using AstroLab.Api.Features.Images.ApertureCorrection;
 using AstroLab.Api.Features.Images.Astrometry;
 using AstroLab.Api.Features.Images.Background;
 using AstroLab.Api.Features.Images.Compare;
+using AstroLab.Api.Features.Images.Composite;
+using AstroLab.Api.Features.Images.Contours;
+using AstroLab.Api.Features.Images.Cutout;
 using AstroLab.Api.Features.Images.DifferentialPhotometry;
 using AstroLab.Api.Features.Images.Footprint;
 using AstroLab.Api.Features.Images.Histogram;
@@ -59,6 +63,14 @@ public static class ImagesEndpoints
             group.MapFootprintEndpoint();
 
             group.MapOverlayEndpoint();
+
+            group.MapApertureCorrectionEndpoint();
+
+            group.MapCutoutEndpoint();
+
+            group.MapContoursEndpoint();
+
+            group.MapCompositeEndpoint();
         }
     }
 }

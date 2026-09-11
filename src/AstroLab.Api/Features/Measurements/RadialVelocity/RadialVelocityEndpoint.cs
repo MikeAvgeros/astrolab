@@ -1,10 +1,11 @@
+using AstroLab.Core.Spectroscopy;
+
 namespace AstroLab.Api.Features.Measurements.RadialVelocity;
 
 /// <summary>
-/// Roadmap slice: measuring radial velocity from the Doppler shift between a spectral line's rest
-/// and observed wavelength in a staged spectrum. Request/response contract is final; the
-/// calculation itself is not yet implemented (see spec.md §6.5), so this route always returns
-/// HTTP 501.
+/// Measures radial velocity from the classical (non-relativistic) Doppler shift between a spectral
+/// line's rest wavelength and its observed wavelength, as identified in file <c>fileId</c>'s staged
+/// spectrum by the caller.
 /// </summary>
 public static class RadialVelocityEndpoint
 {
@@ -13,14 +14,17 @@ public static class RadialVelocityEndpoint
         public void MapRadialVelocityEndpoint()
         {
             group.MapGet("/{fileId}/radial-velocity", MeasureRadialVelocity)
-                .WithSummary("Measures radial velocity from a spectral line's Doppler shift. Not yet implemented.");
+                .WithSummary("Measures radial velocity from a spectral line's Doppler shift.");
         }
     }
 
     private static IResult MeasureRadialVelocity(string fileId, double restWavelengthNm, double observedWavelengthNm)
     {
-        _ = RadialVelocityRequest.Create(restWavelengthNm, observedWavelengthNm);
+        var request = RadialVelocityRequest.Create(restWavelengthNm, observedWavelengthNm);
 
-        return NotImplementedResult.Value("measurements.radialvelocity.not_implemented", "Radial velocity measurement is not yet implemented.");
+        var velocityResult = RadialVelocityEstimator.EstimateKilometersPerSecond(request.ObservedWavelengthNm, request.RestWavelengthNm);
+
+        return velocityResult.ToApiResult(radialVelocityKmPerSec =>
+            Results.Ok(RadialVelocityResponse.Create(fileId, radialVelocityKmPerSec)));
     }
 }

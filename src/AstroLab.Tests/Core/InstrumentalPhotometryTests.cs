@@ -58,4 +58,52 @@ public class InstrumentalPhotometryTests
 
         Assert.Equal(0.05, uncertainty, precision: 9);
     }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_OneArcsecSquareAperture_AddsNothingToMagnitude()
+    {
+        var pixelScaleDegrees = 1.0 / 3600.0;
+
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, apertureAreaPixels: 1.0, pixelScaleXDegrees: pixelScaleDegrees, pixelScaleYDegrees: pixelScaleDegrees);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(15.0, result.Value, precision: 9);
+    }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_LargerArea_IncreasesSurfaceBrightnessMagnitude()
+    {
+        var pixelScaleDegrees = 1.0 / 3600.0;
+
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, apertureAreaPixels: 100.0, pixelScaleXDegrees: pixelScaleDegrees, pixelScaleYDegrees: pixelScaleDegrees);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(15.0 + (2.5 * Math.Log10(100.0)), result.Value, precision: 9);
+    }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_RejectsNonPositiveArea()
+    {
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, apertureAreaPixels: 0.0, pixelScaleXDegrees: 0.001, pixelScaleYDegrees: 0.001);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.surfacebrightness.invalid_area", result.Error.Code);
+    }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_RejectsNonPositivePixelScale()
+    {
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, apertureAreaPixels: 10.0, pixelScaleXDegrees: 0.0, pixelScaleYDegrees: 0.001);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.surfacebrightness.invalid_pixel_scale", result.Error.Code);
+    }
 }

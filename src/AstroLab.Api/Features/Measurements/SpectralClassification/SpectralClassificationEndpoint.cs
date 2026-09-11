@@ -1,10 +1,14 @@
+using AstroLab.Api.Features.Spectroscopy;
+using AstroLab.Core.Spectroscopy;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Measurements.SpectralClassification;
 
 /// <summary>
-/// Roadmap slice: estimating a spectral classification (e.g. OBAFGKM type) from a staged
-/// spectrum's overall shape and features. Response contract is final; the classification
-/// algorithm itself is not yet implemented (see spec.md §6.5), so this route always returns
-/// HTTP 501. The response is always a model-derived estimate, never a direct measurement.
+/// Estimates a coarse spectral classification (OBAFGKM) from the absorption/emission-line density
+/// of a 1D spectrum collapsed from the full spatial extent of a staged spectroscopic frame (no
+/// trace/aperture is requested here, unlike <c>Extract</c>). The response is always a model-derived
+/// estimate, never a precise spectral subtype (see spec.md §6.5).
 /// </summary>
 public static class SpectralClassificationEndpoint
 {
@@ -12,11 +16,33 @@ public static class SpectralClassificationEndpoint
     {
         public void MapSpectralClassificationEndpoint()
         {
-            group.MapGet("/{fileId}/spectral-classification", ClassifySpectrum)
-                .WithSummary("Estimates a spectral classification from a staged spectrum. Not yet implemented.");
+            group.MapGet("/{fileId}/spectral-classification", ClassifySpectrumAsync)
+                .WithSummary("Estimates a coarse spectral classification from a staged spectrum's absorption/emission line density.");
         }
     }
 
-    private static IResult ClassifySpectrum(string fileId) =>
-        NotImplementedResult.Value("measurements.spectralclassification.not_implemented", "Spectral classification is not yet implemented.");
+    private static async Task<IResult> ClassifySpectrumAsync(
+        string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var extractResult = SpectrumFrameExtraction.ExtractFullFrame(dataset);
+
+        if (extractResult.IsFailure)
+        {
+            return extractResult.Error.ToProblem();
+        }
+
+        var classifyResult = SpectralTypeClassifier.Classify(extractResult.Value);
+
+        return classifyResult.ToApiResult(estimate =>
+            Results.Ok(SpectralClassificationResponse.Create(fileId, estimate.SpectralType, estimate.Confidence)));
+    }
 }

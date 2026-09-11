@@ -14,6 +14,8 @@ public static class InstrumentalPhotometry
 
     private const double MagnitudeScaleFactor = 2.5;
 
+    private const double ArcsecondsPerDegree = 3600.0;
+
     public static double EstimateFluxUncertainty(double skyBackgroundSigma, double apertureArea) =>
         skyBackgroundSigma * Math.Sqrt(apertureArea);
 
@@ -48,5 +50,25 @@ public static class InstrumentalPhotometry
             targetMagnitudeUncertainty * targetMagnitudeUncertainty + comparisonMagnitudeUncertainty * comparisonMagnitudeUncertainty);
 
         return (differential, uncertainty);
+    }
+
+    public static Result<double> ComputeSurfaceBrightness(
+        double magnitude, double apertureAreaPixels, double pixelScaleXDegrees, double pixelScaleYDegrees)
+    {
+        if (apertureAreaPixels <= 0.0 || !double.IsFinite(apertureAreaPixels))
+        {
+            return Error.Validation(
+                "photometry.surfacebrightness.invalid_area", "apertureAreaPixels must be a finite, positive value.");
+        }
+
+        if (pixelScaleXDegrees <= 0.0 || pixelScaleYDegrees <= 0.0 || !double.IsFinite(pixelScaleXDegrees) || !double.IsFinite(pixelScaleYDegrees))
+        {
+            return Error.Validation(
+                "photometry.surfacebrightness.invalid_pixel_scale", "pixelScaleXDegrees and pixelScaleYDegrees must be finite, positive values.");
+        }
+
+        var areaArcsec2 = apertureAreaPixels * (pixelScaleXDegrees * ArcsecondsPerDegree) * (pixelScaleYDegrees * ArcsecondsPerDegree);
+
+        return magnitude + (MagnitudeScaleFactor * Math.Log10(areaArcsec2));
     }
 }

@@ -192,6 +192,18 @@ Everything below takes the `fileId` from step 1.
 | `GET /period-search` | Finds the best-fit periodicity (Lomb-Scargle) in a light curve. Query: `minPeriod`, `maxPeriod`. Requires a native CFITSIO library.                                                       |
 | `GET /transit`       | Searches for periodic transit (brightness-dip) signals: best period, transit depth/duration/epoch. Query: `minPeriod`, `maxPeriod`, `minTransitDepth`. Requires a native CFITSIO library. |
 
+### Measurements (`/api/measurements/...`)
+
+| Method & route                          | Description                                                                                                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /{fileId}/stellar-colour`          | Aperture-photometry colour index between `fileId` and a comparison image in a different band. Body: `comparisonFileId`, `centerX`, `centerY`, `apertureRadius`.  |
+| `GET /stellar-temperature`               | Estimates effective temperature (Kelvin) from a B-V colour index via the Ballesteros (2012) relation. Query: `colourIndex`.                                      |
+| `GET /{fileId}/spectral-classification`  | Estimates a coarse OBAFGKM spectral type from a staged spectrum's absorption/emission line density.                                                              |
+| `GET /{fileId}/radial-velocity`          | Classical Doppler radial velocity from a spectral line's rest/observed wavelengths. Query: `restWavelengthNm`, `observedWavelengthNm`.                           |
+| `GET /{fileId}/galaxy-morphology`        | Effective radius, ellipticity, and a concentration-index-based morphological type (Elliptical/Spiral/Irregular) for the source nearest a pixel position. Query: `centerX`, `centerY`. |
+| `GET /{fileId}/surface-brightness`       | Surface brightness (mag/arcsec²) within an aperture, using the image's WCS pixel scale. Query: `centerX`, `centerY`, `apertureRadius`.                           |
+| `GET /physical-size`                     | Converts an angular size and an assumed distance into a physical size (AU). Query: `angularSizeArcsec`, `distanceParsecs`.                                       |
+
 ### Catalogues (`/api/catalogues/...`)
 
 Roadmap only at present (see below).
@@ -204,8 +216,6 @@ The following slices are scaffolded with a final request/response contract but n
 implementation yet — they always return HTTP 501 rather than a fake or partial result. Do not build
 against their response bodies expecting real numbers yet:
 
-- `GET/POST /api/measurements/*` — galaxy morphology, physical size, radial velocity, spectral
-  classification, stellar colour, stellar temperature, surface brightness
 - `GET /api/catalogues/query`; `POST /api/catalogues/cross-match`
 
 ---

@@ -42,7 +42,7 @@ public static class SourceShapeAnalyzer
         return builder.MoveToImmutable();
     }
 
-    private static (double SemiMajorAxisPixels, double SemiMinorAxisPixels, double Ellipticity, double PositionAngleDegrees) ComputeShape(SourceCandidate candidate)
+    internal static (double SemiMajorAxisPixels, double SemiMinorAxisPixels, double Ellipticity, double PositionAngleDegrees) ComputeShape(SourceCandidate candidate)
     {
         var meanX = candidate.WeightedXSum / candidate.WeightSum;
 

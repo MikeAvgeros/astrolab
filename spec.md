@@ -347,13 +347,6 @@ The following endpoints are currently scaffolded at the API boundary but not imp
 
 - `Catalogues/Query` — cone-search query against an external catalogue
 - `Catalogues/CrossMatch` — source cross-match against an external catalogue
-- `Measurements/StellarColour` — two-band colour index
-- `Measurements/StellarTemperature` — colour → estimated temperature
-- `Measurements/SpectralClassification` — estimated spectral type
-- `Measurements/RadialVelocity` — Doppler shift → radial velocity
-- `Measurements/GalaxyMorphology` — size/ellipticity/morphology estimate
-- `Measurements/SurfaceBrightness` — magnitude per square arcsecond
-- `Measurements/PhysicalSize` — angular size + distance → physical size
 
 ### 5.2 Dependency Rules
 

@@ -1391,4 +1391,126 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
         Assert.Equal(plainBytes, overlayBytes);
     }
+
+    [Fact]
+    public async Task MeasureStellarColour_IdenticalImages_ReturnsZeroColourIndex()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var comparisonFileId = await UploadImageWithSourceAsync();
+
+        var request = new
+        {
+            ComparisonFileId = comparisonFileId,
+            CenterX = 5.5,
+            CenterY = 5.5,
+            ApertureRadius = 2.0,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/measurements/{fileId}/stellar-colour", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0.0, body.GetProperty("colourIndex").GetDouble(), precision: 9);
+    }
+
+    [Fact]
+    public async Task EstimateStellarTemperature_MatchesBallesterosFormula()
+    {
+        var response = await _client.GetAsync("/api/measurements/stellar-temperature?colourIndex=0.65");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var expected = 4600.0 * ((1.0 / ((0.92 * 0.65) + 1.7)) + (1.0 / ((0.92 * 0.65) + 0.62)));
+
+        Assert.Equal(expected, body.GetProperty("estimatedTemperatureKelvin").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task MeasureRadialVelocity_MatchesClassicalDopplerFormula()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/measurements/{fileId}/radial-velocity?restWavelengthNm=500&observedWavelengthNm=505");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0.01 * 299792.458, body.GetProperty("radialVelocityKmPerSec").GetDouble(), precision: 3);
+    }
+
+    [Fact]
+    public async Task ClassifySpectrum_SingleEmissionSpike_ClassifiesAsLateType()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/measurements/{fileId}/spectral-classification");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("M", body.GetProperty("estimatedSpectralType").GetString());
+    }
+
+    [Fact]
+    public async Task EstimateGalaxyMorphology_ReturnsPositiveEffectiveRadiusAndValidMorphologicalType()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync($"/api/measurements/{fileId}/galaxy-morphology?centerX=5.5&centerY=5.5");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("effectiveRadiusPixels").GetDouble() > 0.0);
+
+        Assert.Contains(
+            body.GetProperty("estimatedMorphologicalType").GetString(), new[] { "Elliptical", "Spiral", "Irregular" });
+    }
+
+    [Fact]
+    public async Task MeasureSurfaceBrightness_ReturnsFiniteValue()
+    {
+        var fileId = await UploadImageWithSourceAndWcsAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(double.IsFinite(body.GetProperty("surfaceBrightnessMagPerArcsec2").GetDouble()));
+    }
+
+    [Fact]
+    public async Task MeasureSurfaceBrightness_WithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CalculatePhysicalSize_OneArcsecAtOneParsec_ReturnsOneAu()
+    {
+        var response = await _client.GetAsync("/api/measurements/physical-size?angularSizeArcsec=1&distanceParsecs=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(1.0, body.GetProperty("physicalSizeAu").GetDouble(), precision: 9);
+    }
 }

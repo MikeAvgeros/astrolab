@@ -1,10 +1,13 @@
+using AstroLab.Core.Sources;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Measurements.GalaxyMorphology;
 
 /// <summary>
-/// Roadmap slice: estimating a galaxy's size, ellipticity, and morphological type from a staged
-/// image. Request/response contract is final; the estimation algorithm itself is not yet
-/// implemented (see spec.md §6.5), so this route always returns HTTP 501. The response is always
-/// a model-derived estimate, never a direct measurement.
+/// Estimates a galaxy's size, ellipticity, and coarse morphological type from the detected source
+/// nearest a requested pixel position in a staged image, using a concentration-index proxy for a
+/// Sersic profile fit (see <c>GalaxyMorphologyAnalyzer</c>). The response is always a model-derived
+/// estimate, never a direct measurement (see spec.md §6.5).
 /// </summary>
 public static class GalaxyMorphologyEndpoint
 {
@@ -12,15 +15,30 @@ public static class GalaxyMorphologyEndpoint
     {
         public void MapGalaxyMorphologyEndpoint()
         {
-            group.MapGet("/{fileId}/galaxy-morphology", EstimateMorphology)
-                .WithSummary("Estimates a galaxy's size, ellipticity, and morphological type. Not yet implemented.");
+            group.MapGet("/{fileId}/galaxy-morphology", EstimateMorphologyAsync)
+                .WithSummary("Estimates a galaxy's size, ellipticity, and coarse morphological type from the source nearest a pixel position.");
         }
     }
 
-    private static IResult EstimateMorphology(string fileId, double centerX, double centerY)
+    private static async Task<IResult> EstimateMorphologyAsync(
+        string fileId, double centerX, double centerY, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        _ = GalaxyMorphologyRequest.Create(centerX, centerY);
+        var request = GalaxyMorphologyRequest.Create(centerX, centerY);
 
-        return NotImplementedResult.Value("measurements.galaxymorphology.not_implemented", "Galaxy morphology estimation is not yet implemented.");
+        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var (width, height) = dataset.Image.Resolve2DDimensions();
+
+        var estimateResult = GalaxyMorphologyAnalyzer.Analyze(dataset.Pixels, width, height, request.CenterX, request.CenterY);
+
+        return estimateResult.ToApiResult(estimate => Results.Ok(GalaxyMorphologyResponse.Create(
+            fileId, estimate.EffectiveRadiusPixels, estimate.Ellipticity, estimate.MorphologicalType)));
     }
 }

@@ -1130,29 +1130,10 @@ These endpoints extend the six scientific areas — astrometry, photometry, spec
 
 The astrometry, photometry, and data-quality roadmap items originally listed here are now fully implemented: WCS pixel scale (`GET /api/images/{fileId}/astrometry/pixel-scale`), orientation (`GET /api/images/{fileId}/astrometry/orientation`), WCS validation (`GET /api/images/{fileId}/astrometry/validate`), multi-point pixel-to-world and world-to-pixel conversion (`POST /api/images/{fileId}/astrometry/pixel-to-world` / `world-to-pixel`), aperture correction (`POST /api/images/{fileId}/photometry/aperture-correction`), photometric flux uncertainty and signal-to-noise ratio (`POST /api/images/{fileId}/photometry/uncertainty` / `snr`, also surfaced on the existing aperture, differential, and multi-source photometry responses), cross-cutting data-quality analysis (`GET /api/fits/{fileId}/quality`), and observation metadata/provenance (`GET /api/fits/{fileId}/observation`, distinguishing FITS-header-sourced values from AstroLab-derived ones). None of those routes remain in this roadmap.
 
-### 9.1 Spectroscopy
+The time-series roadmap items originally listed here are now fully implemented: phase folding (`POST /api/timeseries/{fileId}/phase-fold`) and variability statistics — mean, median, standard deviation, amplitude, RMS, and median absolute deviation (`GET /api/timeseries/{fileId}/variability`). The existing `GET /api/timeseries/{fileId}/period-search` endpoint has also been enhanced to expose the full periodogram (every trial period and its power) and a false-alarm probability for the best-fit peak, in addition to the best period and power it already reported. None of those routes remain in this roadmap.
 
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `POST /api/spectroscopy/{fileId}/continuum` | SpectralData | `spectroscopy.continuum_fit.not_implemented` |
-| `POST /api/spectroscopy/{fileId}/continuum/subtract` | SpectralData | `spectroscopy.continuum_subtract.not_implemented` |
-| `POST /api/spectroscopy/{fileId}/lines/fit` | SpectralData | `spectroscopy.line_fit.not_implemented` |
-| `POST /api/spectroscopy/{fileId}/equivalent-width` | SpectralData | `spectroscopy.equivalent_width.not_implemented` |
-| `GET /api/spectroscopy/{fileId}/snr` | SpectralData | `spectroscopy.snr.not_implemented` |
+The spectroscopy roadmap items originally listed here are now fully implemented: polynomial continuum fitting with optional excluded wavelength ranges and iterative sigma-clipping (`POST /api/spectroscopy/{fileId}/continuum`), continuum subtraction (`POST /api/spectroscopy/{fileId}/continuum/subtract`), Gaussian spectral line fitting exposing fitted parameters, linearized-covariance uncertainties, and fit quality (`POST /api/spectroscopy/{fileId}/lines/fit`), equivalent width calculation over a wavelength interval (`POST /api/spectroscopy/{fileId}/equivalent-width`), and spectral signal-to-noise ratio, overall and per-sample (`GET /api/spectroscopy/{fileId}/snr`). None of those routes remain in this roadmap.
 
-### 9.2 Time Series
+The image-visualisation roadmap items originally listed here are now fully implemented: pixel-region or WCS-based sky-region image cutouts rendered as PNG (`GET /api/images/{fileId}/cutout`), marching-squares contour level geometry at explicit or automatically-percentile-derived levels (`GET /api/images/{fileId}/contours`), and RGB composites combining three independently auto-scaled channel images (`POST /api/images/composite`). None of those routes remain in this roadmap.
 
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `POST /api/timeseries/{fileId}/phase-fold` | TimeSeriesData | `timeseries.phase_fold.not_implemented` |
-| `GET /api/timeseries/{fileId}/variability` | TimeSeriesData | `timeseries.variability.not_implemented` |
-
-The existing `GET /api/timeseries/{fileId}/period-search` endpoint remains implemented as-is. Expanding its response to expose the full periodogram (frequencies, powers, false-alarm probability) is deferred future work on an *existing* endpoint, not a new roadmap stub, and is not covered by this section.
-
-### 9.3 Image Visualisation
-
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `GET /api/images/{fileId}/cutout` | ImageData (WCS optional, for sky-based cutouts) | `image.cutout.not_implemented` |
-| `GET /api/images/{fileId}/contours` | ImageData | `image.contours.not_implemented` |
-| `POST /api/images/composite` | ImageData (per channel) | `image.composite.not_implemented` |
+A further image-visualisation capability, not originally listed in this roadmap, has also been added: `GET /api/images/{fileId}/render/wcs-grid` renders a staged image to PNG with a right-ascension/declination coordinate grid overlaid, derived from the image's WCS, and reports pixel scale, orientation, and mirroring via `X-Pixel-Scale-Arcsec-X`/`X-Pixel-Scale-Arcsec-Y`/`X-Orientation-Degrees`/`X-Is-Mirrored` response headers, following the same Core-computes/Infrastructure-renders separation as `render`/`render/overlay` (§6.8).

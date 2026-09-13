@@ -1,12 +1,15 @@
+using System.Collections.Immutable;
+using AstroLab.Core.Astrometry;
 using AstroLab.Core.Sources;
 
 namespace AstroLab.Infrastructure.ImageRendering;
 
 /// <summary>
-/// Draws source-position markers directly into an already-rendered image's RGB buffer,
-/// compositing Core detection results onto a browser-displayable overlay. Pixel byte manipulation
-/// for a concrete visual representation is a rendering concern, not a scientific one, which is why
-/// it lives alongside <see cref="FitsImageRenderer"/> in Infrastructure rather than Core.
+/// Draws source-position markers and WCS coordinate grids directly into an already-rendered
+/// image's RGB buffer, compositing Core detection/geometry results onto a browser-displayable
+/// overlay. Pixel byte manipulation for a concrete visual representation is a rendering concern,
+/// not a scientific one, which is why it lives alongside <see cref="FitsImageRenderer"/> in
+/// Infrastructure rather than Core.
 /// </summary>
 public static class OverlayRenderer
 {
@@ -16,6 +19,9 @@ public static class OverlayRenderer
     private const byte MarkerGreen = 40;
     private const byte MarkerBlue = 40;
     private const int RgbChannelCount = 3;
+    private const byte GridLineRed = 60;
+    private const byte GridLineGreen = 220;
+    private const byte GridLineBlue = 220;
 
     public static RenderedImage DrawSourceMarkers(RenderedImage image, IReadOnlyList<DetectedSource> sources)
     {
@@ -25,6 +31,72 @@ public static class OverlayRenderer
         }
 
         return image;
+    }
+
+    public static RenderedImage DrawGridLines(RenderedImage image, WcsGridLines grid)
+    {
+        foreach (var line in grid.RightAscensionLines)
+        {
+            DrawPolyline(image, line);
+        }
+
+        foreach (var line in grid.DeclinationLines)
+        {
+            DrawPolyline(image, line);
+        }
+
+        return image;
+    }
+
+    private static void DrawPolyline(RenderedImage image, ImmutableArray<(double X, double Y)> points)
+    {
+        for (var i = 1; i < points.Length; i++)
+        {
+            DrawLine(image, points[i - 1], points[i]);
+        }
+    }
+
+    private static void DrawLine(RenderedImage image, (double X, double Y) start, (double X, double Y) end)
+    {
+        var deltaX = end.X - start.X;
+
+        var deltaY = end.Y - start.Y;
+
+        var stepCount = (int)Math.Ceiling(Math.Max(Math.Abs(deltaX), Math.Abs(deltaY)));
+
+        if (stepCount <= 0)
+        {
+            PlotPixel(image, (int)Math.Round(start.X), (int)Math.Round(start.Y));
+
+            return;
+        }
+
+        for (var step = 0; step <= stepCount; step++)
+        {
+            var t = (double)step / stepCount;
+
+            var x = start.X + (t * deltaX);
+
+            var y = start.Y + (t * deltaY);
+
+            PlotPixel(image, (int)Math.Round(x), (int)Math.Round(y));
+        }
+    }
+
+    private static void PlotPixel(RenderedImage image, int x, int y)
+    {
+        if (x < 0 || x >= image.Width || y < 0 || y >= image.Height)
+        {
+            return;
+        }
+
+        var pixelOffset = ((y * image.Width) + x) * RgbChannelCount;
+
+        image.Rgb[pixelOffset] = GridLineRed;
+
+        image.Rgb[pixelOffset + 1] = GridLineGreen;
+
+        image.Rgb[pixelOffset + 2] = GridLineBlue;
     }
 
     private static void DrawMarkerRing(RenderedImage image, int centerX, int centerY)

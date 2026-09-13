@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace AstroLab.Api.Features.Spectroscopy.ContinuumSubtract;
 
 public sealed record WavelengthRangeDto
 {
+    [JsonConstructor]
     private WavelengthRangeDto(double minWavelength, double maxWavelength)
     {
         MinWavelength = minWavelength;

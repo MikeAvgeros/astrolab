@@ -109,6 +109,30 @@ internal static class SyntheticFits
     ]);
 
     /// <summary>
+    /// A 9x3, 8-bit spectroscopic frame (<c>DISPAXIS=1</c>) carrying a linear dispersion WCS
+    /// (<c>CRVAL1</c>/<c>CDELT1</c>) whose collapsed spectrum is a smooth multi-bin bump rather than
+    /// a single-bin spike (flux 30, 30, 36, 60, 120, 60, 36, 30, 30 across the 9 dispersion bins) —
+    /// unlike <see cref="SmallSpectrumWithEmissionLineAndDispersionWcs"/>, more than one bin carries
+    /// genuine curvature information, so a 4-parameter Gaussian-plus-baseline fit is well-posed.
+    /// </summary>
+    public static byte[] SmallSpectrumWithGaussianBumpAndDispersionWcs() => BuildMultiHdu(
+    [
+        (
+            [
+                "SIMPLE  =                    T",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                    9",
+                "NAXIS2  =                    3",
+                "DISPAXIS=                    1",
+                "CRVAL1  =               5000.0",
+                "CDELT1  =                  2.0",
+                "END",
+            ],
+            BuildGaussianBumpPixelData())
+    ]);
+
+    /// <summary>
     /// A 3-HDU file where the ONLY HDU with pixel data (extension 1, a plain 4x2 gradient image)
     /// carries no spectral marker of its own, but an unrelated, dataless extension (2) carries a
     /// stray <c>DISPAXIS</c> card. Regression fixture for the classify/load HDU-selection mismatch:
@@ -342,6 +366,26 @@ internal static class SyntheticFits
             for (var x = 0; x < width; x++)
             {
                 pixels[(y * width) + x] = (byte)(x == lineColumn ? 100 : 10);
+            }
+        }
+
+        return pixels;
+    }
+
+    private static byte[] BuildGaussianBumpPixelData()
+    {
+        const int width = 9;
+        const int height = 3;
+
+        byte[] columnValues = [10, 10, 12, 20, 40, 20, 12, 10, 10];
+
+        var pixels = new byte[width * height];
+
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                pixels[(y * width) + x] = columnValues[x];
             }
         }
 

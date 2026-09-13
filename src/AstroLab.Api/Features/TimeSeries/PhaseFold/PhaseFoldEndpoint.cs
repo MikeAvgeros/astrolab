@@ -1,6 +1,10 @@
+using System.Collections.Immutable;
+using AstroLab.Core.TimeSeries;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.TimeSeries.PhaseFold;
 
-/// <summary>Roadmap: folds a time series around a supplied period and reference epoch. Not yet implemented (HTTP 501).</summary>
+/// <summary>Folds a staged light curve around a supplied period and reference epoch.</summary>
 public static class PhaseFoldEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -8,16 +12,29 @@ public static class PhaseFoldEndpoint
         public void MapPhaseFoldEndpoint()
         {
             group.MapPost("/{fileId}/phase-fold", FoldPhaseAsync)
-                .WithSummary("Roadmap: folds a light curve around a supplied period and reference epoch, preserving uncertainty and original time where available. Not yet implemented (HTTP 501).");
+                .WithSummary("Folds a light curve around a supplied period and reference epoch, preserving original time.");
         }
     }
 
-    private static Task<IResult> FoldPhaseAsync(string fileId, PhaseFoldRequest request, CancellationToken cancellationToken)
+    private static async Task<IResult> FoldPhaseAsync(
+        string fileId, PhaseFoldRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "timeseries.phase_fold.not_implemented",
-            "Phase folding is not yet implemented."));
+        var lightCurveResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
+
+        if (lightCurveResult.IsFailure)
+        {
+            return lightCurveResult.Error.ToProblem();
+        }
+
+        var data = lightCurveResult.Value;
+
+        var phase = new double[data.Time.Length];
+
+        var foldResult = LightCurvePhaseFolder.Fold(data.Time, data.Flux, request.Period, request.ReferenceEpoch, phase);
+
+        return foldResult.ToApiResult(_ => Results.Ok(
+            PhaseFoldResponse.Create(fileId, [.. data.Time], [.. phase], [.. data.Flux])));
     }
 }

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -773,6 +774,190 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task FitContinuum_ConstantSpectrumWithExcludedSpike_RecoversFlatContinuum()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var request = new
+        {
+            PolynomialDegree = 0,
+            ExcludedRanges = new[] { new { MinWavelength = 5007.0, MaxWavelength = 5009.0 } },
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/continuum", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var continuum = body.GetProperty("continuum").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.All(continuum, value => Assert.Equal(30.0, value, precision: 6));
+
+        var coefficients = body.GetProperty("coefficients").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal(30.0, coefficients[0], precision: 6);
+    }
+
+    [Fact]
+    public async Task FitContinuum_SigmaClipThresholdWithoutIterations_ReturnsBadRequest()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var request = new { PolynomialDegree = 0, SigmaClipThreshold = 3.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/continuum", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task FitContinuum_OnFrameWithNoDispersionWcs_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new { PolynomialDegree = 0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/continuum", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.continuum_fit.no_wavelength_solution", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task SubtractContinuum_ConstantSpectrumWithExcludedSpike_LeavesOnlyTheSpikeAboveZero()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var request = new
+        {
+            PolynomialDegree = 0,
+            ExcludedRanges = new[] { new { MinWavelength = 5007.0, MaxWavelength = 5009.0 } },
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/continuum/subtract", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var subtracted = body.GetProperty("continuumSubtractedFlux").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([0.0, 0.0, 0.0, 0.0, 270.0, 0.0, 0.0, 0.0, 0.0], subtracted.Select(v => Math.Round(v, 6)).ToArray());
+    }
+
+    [Fact]
+    public async Task FitLine_OnGaussianBump_RecoversCenterNearThePeakWavelength()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithGaussianBumpAndDispersionWcs());
+
+        var request = new { MinWavelength = 5000.0, MaxWavelength = 5016.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/lines/fit", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.InRange(body.GetProperty("center").GetDouble(), 5006.0, 5010.0);
+
+        Assert.True(body.GetProperty("amplitude").GetDouble() > 0.0);
+
+        Assert.True(body.GetProperty("fwhm").GetDouble() > 0.0);
+
+        Assert.True(body.GetProperty("isWavelengthCalibrated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task FitLine_OnFrameWithNoDispersionWcs_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new { MinWavelength = 0.0, MaxWavelength = 3.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/lines/fit", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.line_fit.no_wavelength_solution", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task CalculateEquivalentWidth_OnEmissionSpike_ReturnsExactNegativeEquivalentWidth()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var request = new { MinWavelength = 5000.0, MaxWavelength = 5016.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/equivalent-width", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(-18.0, body.GetProperty("equivalentWidth").GetDouble(), precision: 6);
+
+        Assert.True(body.GetProperty("isWavelengthCalibrated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task CalculateEquivalentWidth_OnFrameWithNoDispersionWcs_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new { MinWavelength = 0.0, MaxWavelength = 3.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/equivalent-width", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.equivalent_width.no_wavelength_solution", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task ComputeSpectralSnr_OnGradientSpectrum_ReportsMedianOverIqrSigma()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/snr");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var expectedSigma = 30.0 / 1.349;
+
+        Assert.Equal(90.0 / expectedSigma, body.GetProperty("overallSnr").GetDouble(), precision: 3);
+
+        var perSample = body.GetProperty("perSampleSnr").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal(60.0 / expectedSigma, perSample[0], precision: 3);
+
+        Assert.Equal(120.0 / expectedSigma, perSample[3], precision: 3);
+    }
+
+    [Fact]
+    public async Task ComputeSpectralSnr_OnNearlyConstantSpectrum_ReturnsIndeterminateNoiseBadRequest()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/snr");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("spectroscopy.snr.indeterminate_noise", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task SearchObservations_MissingRequiredArchiveParameter_ReturnsBadRequest()
     {
         var response = await _client.GetAsync("/api/archives/search?target=M31");
@@ -1390,6 +1575,169 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var plainBytes = await plainResponse.Content.ReadAsByteArrayAsync();
 
         Assert.Equal(plainBytes, overlayBytes);
+    }
+
+    private static (int Width, int Height) ReadPngDimensions(byte[] png) =>
+        (
+            (int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(16, 4)),
+            (int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(20, 4))
+        );
+
+    [Fact]
+    public async Task GetCutout_PixelRegion_ReturnsPngOfRequestedDimensions()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/cutout?x=1&y=0&width=2&height=2");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal([137, 80, 78, 71, 13, 10, 26, 10], bytes[..8]);
+
+        Assert.Equal((2, 2), ReadPngDimensions(bytes));
+    }
+
+    [Fact]
+    public async Task GetCutout_SkyRegion_ReturnsPng()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/cutout?rightAscension=180&declination=0&radiusArcseconds=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task GetCutout_SkyRegionNearImageEdge_ClipsToImageBoundsInsteadOfFailing()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync(
+            $"/api/images/{fileId}/cutout?rightAscension=180&declination=0&radiusArcseconds=100");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task GetCutout_PixelRegionExtendsPastImageEdge_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/cutout?x=3&y=0&width=5&height=2");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCutout_OriginBeyondImageWithNoExplicitWidth_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/cutout?x=100&y=0&height=2");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetContours_ReturnsRequestedNumberOfLevels()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/contours?levelCount=3");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(3, body.GetProperty("levels").GetArrayLength());
+
+        foreach (var level in body.GetProperty("levels").EnumerateArray())
+        {
+            Assert.True(level.TryGetProperty("level", out _));
+
+            Assert.True(level.TryGetProperty("polylines", out _));
+        }
+    }
+
+    [Fact]
+    public async Task CreateComposite_ReturnsPngMatchingChannelDimensions()
+    {
+        var redFileId = await UploadGradientImageAsync();
+
+        var greenFileId = await UploadGradientImageAsync();
+
+        var blueFileId = await UploadGradientImageAsync();
+
+        var request = new { RedFileId = redFileId, GreenFileId = greenFileId, BlueFileId = blueFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/composite", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal((4, 2), ReadPngDimensions(bytes));
+    }
+
+    [Fact]
+    public async Task CreateComposite_DimensionMismatch_ReturnsBadRequest()
+    {
+        var redFileId = await UploadGradientImageAsync();
+
+        var greenFileId = await UploadGradientImageAsync();
+
+        var blueFileId = await UploadImageWithSourceAsync();
+
+        var request = new { RedFileId = redFileId, GreenFileId = greenFileId, BlueFileId = blueFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/composite", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetWcsGrid_ReturnsPngWithScaleAndOrientationHeaders()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/render/wcs-grid");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal([137, 80, 78, 71, 13, 10, 26, 10], bytes[..8]);
+
+        Assert.True(response.Headers.TryGetValues("X-Pixel-Scale-Arcsec-X", out var pixelScaleXValues));
+
+        Assert.Equal(1.00008, double.Parse(pixelScaleXValues.Single()), precision: 3);
+
+        Assert.True(response.Headers.TryGetValues("X-Orientation-Degrees", out _));
+
+        Assert.True(response.Headers.TryGetValues("X-Is-Mirrored", out _));
+    }
+
+    [Fact]
+    public async Task GetWcsGrid_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/render/wcs-grid");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

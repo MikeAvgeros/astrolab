@@ -189,7 +189,7 @@ public static class ApertureEngine
             {
                 var dx = px + PixelCenterOffset - centerX;
 
-                var distanceSquared = (dx * dx) + dySquared;
+                var distanceSquared = dx * dx + dySquared;
 
                 if (distanceSquared < innerRadiusSquared || distanceSquared > outerRadiusSquared)
                 {

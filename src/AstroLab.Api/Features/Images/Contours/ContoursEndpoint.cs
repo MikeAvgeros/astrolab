@@ -1,24 +1,70 @@
+using System.Collections.Immutable;
+using AstroLab.Core.Imaging;
+using AstroLab.Core.Result;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Images.Contours;
 
-/// <summary>Roadmap: generates contour level geometry from a staged image's pixel data. Not yet implemented (HTTP 501).</summary>
+/// <summary>Generates contour level geometry (marching-squares polyline segments) from a staged image's pixel data.</summary>
 public static class ContoursEndpoint
 {
+    private const int DefaultLevelCount = 5;
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapContoursEndpoint()
         {
             group.MapGet("/{fileId}/contours", GetContoursAsync)
-                .WithSummary("Roadmap: generates scientific contour geometry from an image's pixel data, at configurable or automatically calculated levels. Not yet implemented (HTTP 501).");
+                .WithSummary("Generates scientific contour geometry from an image's pixel data, at configurable or automatically calculated levels.");
         }
     }
 
-    private static Task<IResult> GetContoursAsync(
-        string fileId, double[]? levels, int? levelCount, CancellationToken cancellationToken)
+    private static async Task<IResult> GetContoursAsync(
+        string fileId, double[]? levels, int? levelCount, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        _ = ContoursRequest.Create(levels, levelCount);
+        var request = ContoursRequest.Create(levels, levelCount);
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "image.contours.not_implemented",
-            "Contour generation is not yet implemented."));
+        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var (width, height) = dataset.Image.Resolve2DDimensions();
+
+        var levelsResult = ResolveLevels(request, dataset.Pixels);
+
+        if (levelsResult.IsFailure)
+        {
+            return levelsResult.Error.ToProblem();
+        }
+
+        var levelDtos = ImmutableList.CreateBuilder<ContourLevelDto>();
+
+        foreach (var level in levelsResult.Value)
+        {
+            var traceResult = ImageContourGenerator.Trace(dataset.Pixels, width, height, level);
+
+            if (traceResult.IsFailure)
+            {
+                return traceResult.Error.ToProblem();
+            }
+
+            var polylines = traceResult.Value
+                .Select(polyline => polyline.Select(point => ContourPointDto.Create(point.X, point.Y)).ToImmutableList())
+                .ToImmutableList();
+
+            levelDtos.Add(ContourLevelDto.Create(level, polylines));
+        }
+
+        return Results.Ok(ContoursResponse.Create(fileId, levelDtos.ToImmutable()));
     }
+
+    private static Result<double[]> ResolveLevels(ContoursRequest request, ReadOnlySpan<float> pixels) =>
+        request.Levels is { Length: > 0 } explicitLevels
+            ? explicitLevels
+            : ImageContourGenerator.SuggestLevels(pixels, request.LevelCount ?? DefaultLevelCount);
 }

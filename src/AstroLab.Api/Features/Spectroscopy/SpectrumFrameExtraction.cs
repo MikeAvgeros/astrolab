@@ -1,3 +1,4 @@
+using AstroLab.Core.Fits;
 using AstroLab.Core.Result;
 using AstroLab.Core.Spectroscopy;
 using AstroLab.Infrastructure.Storage;
@@ -11,6 +12,8 @@ namespace AstroLab.Api.Features.Spectroscopy;
 /// </summary>
 internal static class SpectrumFrameExtraction
 {
+    private const double DefaultReferencePixel = 1.0;
+
     public static Result<double[]> ExtractFullFrame(FitsDataset dataset)
     {
         var (width, height) = dataset.Image.Resolve2DDimensions();
@@ -31,5 +34,33 @@ internal static class SpectrumFrameExtraction
             dataset.Pixels, width, height, axis, traceCenters, spatialExtent / 2.0, spectrum);
 
         return extractResult.IsFailure ? Result<double[]>.Failure(extractResult.Error) : spectrum;
+    }
+    
+    public static Result<double[]> ResolveWavelengths(FitsHeader header, int dispersionBins, string errorCode)
+    {
+        var crVal1Result = header.GetReal("CRVAL1");
+
+        if (crVal1Result.IsFailure)
+        {
+            return Error.Validation(errorCode, "The file's header carries no CRVAL1 dispersion reference wavelength; a wavelength axis cannot be resolved.");
+        }
+
+        var cDelt1Result = header.GetReal("CDELT1");
+
+        if (cDelt1Result.IsFailure)
+        {
+            return Error.Validation(errorCode, "The file's header carries no CDELT1 dispersion scale; a wavelength axis cannot be resolved.");
+        }
+
+        var referencePixel = header.GetReal("CRPIX1").GetValueOrDefault(DefaultReferencePixel);
+
+        var wavelengths = new double[dispersionBins];
+
+        for (var i = 0; i < dispersionBins; i++)
+        {
+            wavelengths[i] = crVal1Result.Value + (i - (referencePixel - 1.0)) * cDelt1Result.Value;
+        }
+
+        return wavelengths;
     }
 }

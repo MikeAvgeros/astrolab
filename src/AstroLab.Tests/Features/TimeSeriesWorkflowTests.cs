@@ -137,6 +137,91 @@ public class TimeSeriesWorkflowTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(truePeriod, body.GetProperty("bestPeriod").GetDouble(), precision: 1);
+
+        var periods = body.GetProperty("periods").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        var powers = body.GetProperty("powers").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal(periods.Length, powers.Length);
+
+        Assert.True(periods.Length > 1);
+
+        var falseAlarmProbability = body.GetProperty("falseAlarmProbability").GetDouble();
+
+        Assert.True(falseAlarmProbability is >= 0.0 and <= 1.0);
+    }
+
+    [Fact]
+    public async Task PhaseFold_FoldsLightCurveAroundSuppliedPeriod()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        double[] time = [0.0, 1.0, 2.0, 3.0];
+
+        double[] flux = [10.0, 20.0, 30.0, 40.0];
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, flux));
+
+        var response = await _client.PostAsJsonAsync($"/api/timeseries/{fileId}/phase-fold", new { Period = 2.0, ReferenceEpoch = 0.0 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var phase = body.GetProperty("phase").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal([0.0, 0.5, 0.0, 0.5], phase);
+
+        var returnedFlux = body.GetProperty("flux").EnumerateArray().Select(e => e.GetDouble()).ToArray();
+
+        Assert.Equal(flux, returnedFlux);
+    }
+
+    [Fact]
+    public async Task PhaseFold_RejectsNonPositivePeriod()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable([0.0, 1.0], [1.0, 2.0]));
+
+        var response = await _client.PostAsJsonAsync($"/api/timeseries/{fileId}/phase-fold", new { Period = 0.0 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Variability_ReturnsExpectedSummaryStatistics()
+    {
+        if (!CfitsIoNativeAvailability.IsAvailable)
+        {
+            Assert.Skip("cfitsio native library is not available on this machine.");
+        }
+
+        double[] time = [0.0, 1.0, 2.0, 3.0, 4.0];
+
+        double[] flux = [1.0, 2.0, 3.0, 4.0, 5.0];
+
+        var fileId = await UploadAsync(SyntheticFits.TimeSeriesBinaryTable(time, flux));
+
+        var response = await _client.GetAsync($"/api/timeseries/{fileId}/variability");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(3.0, body.GetProperty("mean").GetDouble(), precision: 6);
+
+        Assert.Equal(3.0, body.GetProperty("median").GetDouble(), precision: 6);
+
+        Assert.Equal(4.0, body.GetProperty("amplitude").GetDouble(), precision: 6);
+
+        Assert.Equal(Math.Sqrt(2.0), body.GetProperty("standardDeviation").GetDouble(), precision: 6);
     }
 
     [Fact]

@@ -1,6 +1,9 @@
+using AstroLab.Core.Spectroscopy;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Spectroscopy.EquivalentWidth;
 
-/// <summary>Roadmap: calculates the equivalent width of a spectral feature over a supplied wavelength interval. Not yet implemented (HTTP 501).</summary>
+/// <summary>Calculates the equivalent width of a spectral feature over a supplied wavelength interval.</summary>
 public static class EquivalentWidthEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -8,16 +11,60 @@ public static class EquivalentWidthEndpoint
         public void MapEquivalentWidthEndpoint()
         {
             group.MapPost("/{fileId}/equivalent-width", CalculateEquivalentWidthAsync)
-                .WithSummary("Roadmap: calculates the equivalent width (absorption or emission, per the documented sign convention) over a wavelength interval. Not yet implemented (HTTP 501).");
+                .WithSummary("Calculates the equivalent width (absorption or emission, per the documented sign convention) over a wavelength interval.");
         }
     }
 
-    private static Task<IResult> CalculateEquivalentWidthAsync(string fileId, EquivalentWidthRequest request, CancellationToken cancellationToken)
+    private static async Task<IResult> CalculateEquivalentWidthAsync(
+        string fileId, EquivalentWidthRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "spectroscopy.equivalent_width.not_implemented",
-            "Equivalent width calculation is not yet implemented."));
+        var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var spectrumResult = SpectrumFrameExtraction.ExtractFullFrame(dataset);
+
+        if (spectrumResult.IsFailure)
+        {
+            return spectrumResult.Error.ToProblem();
+        }
+
+        var spectrum = spectrumResult.Value;
+
+        var wavelengthsResult = SpectrumFrameExtraction.ResolveWavelengths(
+            dataset.Hdu.Header, spectrum.Length, "spectroscopy.equivalent_width.no_wavelength_solution");
+
+        if (wavelengthsResult.IsFailure)
+        {
+            return wavelengthsResult.Error.ToProblem();
+        }
+
+        var wavelengths = wavelengthsResult.Value;
+
+        var windowWavelengths = new List<double>();
+
+        var windowFlux = new List<double>();
+
+        for (var i = 0; i < wavelengths.Length; i++)
+        {
+            if (wavelengths[i] >= request.MinWavelength && wavelengths[i] <= request.MaxWavelength)
+            {
+                windowWavelengths.Add(wavelengths[i]);
+
+                windowFlux.Add(spectrum[i]);
+            }
+        }
+
+        var equivalentWidthResult = EquivalentWidthCalculator.Calculate([.. windowWavelengths], [.. windowFlux]);
+
+        return equivalentWidthResult.ToApiResult(equivalentWidth => Results.Ok(EquivalentWidthResponse.Create(
+            fileId, equivalentWidth, request.MinWavelength, request.MaxWavelength, isWavelengthCalibrated: true)));
     }
 }

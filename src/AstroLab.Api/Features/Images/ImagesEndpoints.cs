@@ -21,6 +21,7 @@ using AstroLab.Api.Features.Images.Sources;
 using AstroLab.Api.Features.Images.Stack;
 using AstroLab.Api.Features.Images.Statistics;
 using AstroLab.Api.Features.Images.Uncertainty;
+using AstroLab.Api.Features.Images.WcsGrid;
 
 namespace AstroLab.Api.Features.Images;
 
@@ -77,6 +78,8 @@ public static class ImagesEndpoints
             group.MapUncertaintyEndpoint();
 
             group.MapSnrEndpoint();
+
+            group.MapWcsGridEndpoint();
         }
     }
 }

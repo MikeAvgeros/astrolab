@@ -14,11 +14,8 @@ namespace AstroLab.Core.Spectroscopy;
 public static class SpectralLineDetector
 {
     public const double DefaultSignificanceSigma = 5.0;
-
-    private const double LowerPercentile = 25.0;
-    private const double UpperPercentile = 75.0;
-    private const double IqrToSigmaFactor = 1.349;
     private const double HalfMaximumFraction = 0.5;
+    private const double Epsilon = 1e-12;
 
     public static Result<ImmutableArray<DetectedSpectralLine>> Detect(
         ReadOnlySpan<double> spectrum, double significanceSigma = DefaultSignificanceSigma)
@@ -33,7 +30,7 @@ public static class SpectralLineDetector
             return Error.Validation("spectroscopy.lines.invalid_threshold", "significanceSigma must be a finite, positive value.");
         }
 
-        var (continuum, sigma) = ComputeRobustStatistics(spectrum);
+        var (continuum, sigma) = RobustSpectrumStatistics.Compute(spectrum);
 
         var thresholdValue = significanceSigma * sigma;
 
@@ -83,39 +80,6 @@ public static class SpectralLineDetector
         return ImmutableArray.Create(lines);
     }
 
-    private static (double Continuum, double Sigma) ComputeRobustStatistics(ReadOnlySpan<double> spectrum)
-    {
-        var sorted = spectrum.ToArray();
-
-        Array.Sort(sorted);
-
-        var median = Percentile(sorted, 50.0);
-
-        var q1 = Percentile(sorted, LowerPercentile);
-
-        var q3 = Percentile(sorted, UpperPercentile);
-
-        return (median, (q3 - q1) / IqrToSigmaFactor);
-    }
-
-    private static double Percentile(double[] sorted, double percentile)
-    {
-        var rank = (percentile / 100.0) * (sorted.Length - 1);
-
-        var lowerIndex = (int)Math.Floor(rank);
-
-        var upperIndex = (int)Math.Ceiling(rank);
-
-        if (lowerIndex == upperIndex)
-        {
-            return sorted[lowerIndex];
-        }
-
-        var fraction = rank - lowerIndex;
-
-        return sorted[lowerIndex] + (fraction * (sorted[upperIndex] - sorted[lowerIndex]));
-    }
-
     private static double EstimateFwhm(ReadOnlySpan<double> spectrum, int peakIndex, double continuum, double lineFlux)
     {
         var halfLevel = continuum + (HalfMaximumFraction * lineFlux);
@@ -147,7 +111,7 @@ public static class SpectralLineDetector
 
                 var currentValue = spectrum[currentIndex];
 
-                var fraction = currentValue == previousValue ? 0.0 : (halfLevel - previousValue) / (currentValue - previousValue);
+                var fraction = Math.Abs(currentValue - previousValue) < Epsilon ? 0.0 : (halfLevel - previousValue) / (currentValue - previousValue);
 
                 return previousIndex + (step * fraction);
             }

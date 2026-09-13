@@ -89,6 +89,93 @@ public static class LombScarglePeriodogram
         return (bestPeriod, Math.Max(bestPower, 0.0));
     }
     
+    public static Result<(double BestPeriod, double Power, double[] Periods, double[] Powers, double FalseAlarmProbability)> SearchFull(
+        ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double minPeriod, double maxPeriod, int gridSize = DefaultGridSize)
+    {
+        if (time.Length != flux.Length)
+        {
+            return Error.Validation(
+                "timeseries.periodsearch.length_mismatch",
+                $"time length ({time.Length}) must equal flux length ({flux.Length}).");
+        }
+
+        if (time.Length < MinimumPoints)
+        {
+            return Error.Validation(
+                "timeseries.periodsearch.series_too_short",
+                $"At least {MinimumPoints} points are required to search for periodicity.");
+        }
+
+        if (minPeriod <= 0.0 || !double.IsFinite(minPeriod))
+        {
+            return Error.Validation("timeseries.periodsearch.invalid_min_period", "minPeriod must be a finite, positive value.");
+        }
+
+        if (maxPeriod <= minPeriod || !double.IsFinite(maxPeriod))
+        {
+            return Error.Validation(
+                "timeseries.periodsearch.invalid_max_period", "maxPeriod must be finite and greater than minPeriod.");
+        }
+
+        if (gridSize < 2)
+        {
+            return Error.Validation("timeseries.periodsearch.invalid_grid_size", "gridSize must be at least 2.");
+        }
+
+        var mean = Mean(flux);
+
+        var variance = 0.0;
+
+        foreach (var value in flux)
+        {
+            var deviation = value - mean;
+
+            variance += deviation * deviation;
+        }
+
+        if (variance <= 0.0)
+        {
+            return Error.Validation(
+                "timeseries.periodsearch.constant_flux", "The flux series is constant, so no periodic signal can be detected.");
+        }
+
+        var periods = new double[gridSize];
+
+        var powers = new double[gridSize];
+
+        var bestPeriod = minPeriod;
+
+        var bestPower = -1.0;
+
+        var periodStep = (maxPeriod - minPeriod) / (gridSize - 1);
+
+        for (var k = 0; k < gridSize; k++)
+        {
+            var period = minPeriod + k * periodStep;
+
+            var power = ComputePower(time, flux, mean, variance, period);
+
+            var clampedPower = double.IsFinite(power) ? Math.Max(power, 0.0) : 0.0;
+
+            periods[k] = period;
+
+            powers[k] = clampedPower;
+
+            if (clampedPower > bestPower)
+            {
+                bestPower = clampedPower;
+
+                bestPeriod = period;
+            }
+        }
+
+        var normalizedBestPower = bestPower * time.Length;
+
+        var falseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-normalizedBestPower), gridSize), 0.0, 1.0);
+
+        return (bestPeriod, Math.Max(bestPower, 0.0), periods, powers, falseAlarmProbability);
+    }
+
     public static Result<(double MinPeriod, double MaxPeriod)> SuggestPeriodRange(ReadOnlySpan<double> time)
     {
         if (time.Length < MinimumPoints)
@@ -121,7 +208,7 @@ public static class LombScarglePeriodogram
 
         var medianCadence = gaps.Length % 2 == 1
             ? gaps[gaps.Length / 2]
-            : (gaps[(gaps.Length / 2) - 1] + gaps[gaps.Length / 2]) / 2.0;
+            : (gaps[gaps.Length / 2 - 1] + gaps[gaps.Length / 2]) / 2.0;
 
         if (medianCadence <= 0.0)
         {

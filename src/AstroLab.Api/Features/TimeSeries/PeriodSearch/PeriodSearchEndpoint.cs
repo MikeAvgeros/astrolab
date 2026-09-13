@@ -36,9 +36,9 @@ public static class PeriodSearchEndpoint
             return detrendResult.Error.ToProblem();
         }
 
-        var searchResult = LombScarglePeriodogram.Search(data.Time, detrendResult.Value, request.MinPeriod, request.MaxPeriod);
+        var searchResult = LombScarglePeriodogram.SearchFull(data.Time, detrendResult.Value, request.MinPeriod, request.MaxPeriod);
 
-        return searchResult.ToApiResult(search =>
-            Results.Ok(PeriodSearchResponse.Create(fileId, search.BestPeriod, search.Power)));
+        return searchResult.ToApiResult(search => Results.Ok(PeriodSearchResponse.Create(
+            fileId, search.BestPeriod, search.Power, [.. search.Periods], [.. search.Powers], search.FalseAlarmProbability)));
     }
 }

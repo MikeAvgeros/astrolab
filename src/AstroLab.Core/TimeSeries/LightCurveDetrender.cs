@@ -107,7 +107,7 @@ public static class LightCurveDetrender
 
             var median = windowLength % 2 == 1
                 ? activeWindow[windowLength / 2]
-                : (activeWindow[(windowLength / 2) - 1] + activeWindow[windowLength / 2]) / 2.0;
+                : (activeWindow[windowLength / 2 - 1] + activeWindow[windowLength / 2]) / 2.0;
 
             detrended[i] = flux[i] - median;
         }

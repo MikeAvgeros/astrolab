@@ -51,5 +51,11 @@ public sealed record ContinuumRequest
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(iterations);
         }
+
+        if (SigmaClipThreshold.HasValue != SigmaClipIterations.HasValue)
+        {
+            throw new ArgumentException(
+                "sigmaClipThreshold and sigmaClipIterations must be supplied together, or not at all.", nameof(SigmaClipThreshold));
+        }
     }
 }

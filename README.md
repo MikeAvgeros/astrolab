@@ -425,6 +425,26 @@ Because AstroLab uses capabilities rather than a single mutually-exclusive FITS 
 
 ---
 
+## Observation metadata and provenance
+
+```http
+GET /api/fits/{fileId}/observation
+```
+
+Reports observation date/time, target, instrument, filter, exposure, and detector/calibration metadata read directly from the FITS header, alongside AstroLab-derived information such as WCS-based pixel scale — keeping header-sourced values clearly distinct from values AstroLab itself computes.
+
+---
+
+## Data quality
+
+```http
+GET /api/fits/{fileId}/quality
+```
+
+Reports cross-cutting data-quality statistics for a staged dataset's image data: invalid-pixel counts, saturation, dynamic range, and usable-pixel fraction, distinguishing "not present", "not measurable", and "measured as zero".
+
+---
+
 # 3. Image analysis
 
 Image endpoints live under:
@@ -621,6 +641,30 @@ This is useful as a quick visual sanity check of the source-detection algorithm.
 
 ---
 
+## Image cutout
+
+```http
+GET /api/images/{fileId}/cutout
+```
+
+Extracts a rectangular region from a staged image and renders it as a PNG.
+
+The region can be supplied either as a pixel-space rectangle (`x`, `y`, `width`, `height`) or as a WCS-based sky region (`rightAscension`, `declination`, `radiusArcseconds`), which AstroLab converts to pixels using the image's WCS.
+
+---
+
+## Contour geometry
+
+```http
+GET /api/images/{fileId}/contours
+```
+
+Generates scientific contour-line geometry (marching-squares polylines) from an image's pixel data, at explicit `levels` or at an automatically percentile-derived set of `levelCount` levels.
+
+This returns geometry rather than a rendered image, so it can be overlaid on a plot or another visualisation.
+
+---
+
 # 4. Astrometry
 
 Astrometry answers a fundamental question:
@@ -645,6 +689,18 @@ Returns the WCS solution, including information such as:
 
 ---
 
+## Render with a coordinate grid
+
+```http
+GET /api/images/{fileId}/render/wcs-grid
+```
+
+Renders a staged image to PNG with a right-ascension/declination coordinate grid overlaid, derived from the image's WCS. The grid spacing can be adjusted with `linesPerAxis`.
+
+The response also reports pixel scale, orientation, and whether the image is mirrored via the `X-Pixel-Scale-Arcsec-X`, `X-Pixel-Scale-Arcsec-Y`, `X-Orientation-Degrees`, and `X-Is-Mirrored` response headers.
+
+---
+
 ## Pixel → sky coordinates
 
 ```http
@@ -664,6 +720,8 @@ Right Ascension, Declination
 ```
 
 This is useful when you have identified an object in the image and want to determine its celestial coordinates.
+
+For converting many positions at once, `POST /api/images/{fileId}/astrometry/pixel-to-world` accepts a list of pixel points in the request body and returns the matching sky coordinates for each.
 
 ---
 
@@ -685,6 +743,8 @@ Declination
 it determines the corresponding image pixel.
 
 This is useful for locating a known astronomical object in an image.
+
+For converting many positions at once, `POST /api/images/{fileId}/astrometry/world-to-pixel` accepts a list of sky coordinates in the request body and returns the matching pixel position for each.
 
 ---
 
@@ -713,6 +773,38 @@ Calculates the angular separation between two positions in the same image.
 The positions are supplied in pixel coordinates and converted to sky coordinates using the image's WCS.
 
 The result is returned in arcseconds.
+
+---
+
+## Pixel scale
+
+```http
+GET /api/images/{fileId}/astrometry/pixel-scale
+```
+
+Reports the angular pixel scale derived from the image's WCS, in arcseconds per pixel and degrees per pixel, per axis.
+
+---
+
+## Orientation
+
+```http
+GET /api/images/{fileId}/astrometry/orientation
+```
+
+Reports the image's position angle relative to celestial north, and whether the image is mirrored, derived from the image's WCS.
+
+---
+
+## Validate the WCS
+
+```http
+GET /api/images/{fileId}/astrometry/validate
+```
+
+Runs diagnostic checks on the image's WCS solution: invertibility, axis orthogonality, pixel-scale symmetry, and pixel-to-world-to-pixel round-trip consistency.
+
+This is useful for sanity-checking a WCS solution before relying on it for precise measurements.
 
 ---
 
@@ -811,6 +903,36 @@ Differential photometry is particularly useful for variable-star and transit wor
 
 ---
 
+## Flux uncertainty
+
+```http
+POST /api/images/{fileId}/photometry/uncertainty
+```
+
+Estimates the propagated uncertainty of an aperture flux measurement, combining source shot noise and sky-background noise, plus read noise when supplied. A detector gain is read from the `GAIN` header keyword unless one is supplied explicitly in the request.
+
+---
+
+## Signal-to-noise ratio
+
+```http
+POST /api/images/{fileId}/photometry/snr
+```
+
+Measures an aperture flux and its propagated uncertainty, then reports the resulting signal-to-noise ratio for that measurement.
+
+---
+
+## Aperture correction
+
+```http
+POST /api/images/{fileId}/photometry/aperture-correction
+```
+
+Applies a multiplicative correction factor to a previously measured flux — for example, to account for light falling outside a finite aperture — propagating the flux uncertainty where one is supplied.
+
+---
+
 # 6. Comparing and combining images
 
 ## Compare two images
@@ -865,6 +987,18 @@ Supported methods include:
 Image stacking is a standard astronomical technique for improving signal-to-noise by combining multiple observations of the same field.
 
 The result is a **new staged FITS file** with its own `fileId`.
+
+---
+
+## RGB composite
+
+```http
+POST /api/images/composite
+```
+
+Combines three separately staged images — supplied as `redFileId`, `greenFileId`, and `blueFileId`, which must share the same pixel dimensions — into a single RGB colour composite. Each channel is independently auto-scaled (asinh stretch over its 1st–99th percentile range) before combining.
+
+The result is a PNG image.
 
 ---
 
@@ -934,6 +1068,30 @@ This provides the mapping required to turn detector pixels into physically meani
 
 ---
 
+## Fit the continuum
+
+```http
+POST /api/spectroscopy/{fileId}/continuum
+```
+
+Fits a polynomial continuum model to a spectrum, without mutating the original spectrum. The request can supply the polynomial degree, wavelength ranges to exclude from the fit (for example, known emission or absorption features), and iterative sigma-clipping parameters.
+
+The result includes the fitted continuum values alongside the original spectrum, plus the fitted polynomial coefficients.
+
+---
+
+## Subtract the continuum
+
+```http
+POST /api/spectroscopy/{fileId}/continuum/subtract
+```
+
+Fits a continuum using the same parameters as above, then subtracts it from the spectrum.
+
+This isolates spectral features (emission or absorption lines) from the underlying continuum, which is a common preparatory step before line fitting or equivalent-width measurement.
+
+---
+
 ## Detect spectral lines
 
 ```http
@@ -951,6 +1109,28 @@ significanceThreshold
 controls the detection threshold.
 
 Spectral lines can correspond to atomic or molecular transitions and provide information about the physical properties and motion of astronomical sources.
+
+---
+
+## Fit a spectral line
+
+```http
+POST /api/spectroscopy/{fileId}/lines/fit
+```
+
+Fits a Gaussian profile to a spectral line over a supplied wavelength window, given initial guesses for the line's centre, amplitude, and FWHM.
+
+The result reports the fitted centre, amplitude, FWHM, baseline, and integrated flux, each with an uncertainty derived from the fit's linearized covariance, plus the fit's reduced chi-square as a goodness-of-fit indicator.
+
+---
+
+## Equivalent width
+
+```http
+POST /api/spectroscopy/{fileId}/equivalent-width
+```
+
+Calculates the equivalent width of a spectral feature over a supplied wavelength interval — a measure of a line's strength expressed as the width of continuum that carries the same flux as the feature.
 
 ---
 
@@ -993,6 +1173,16 @@ POST /api/spectroscopy/{fileId}/compare
 Cross-correlates one staged spectrum against another.
 
 This can be used to investigate whether two spectra contain similar features or whether one spectrum is shifted relative to another.
+
+---
+
+## Spectral signal-to-noise ratio
+
+```http
+GET /api/spectroscopy/{fileId}/snr
+```
+
+Reports a representative signal-to-noise ratio for a spectrum, both overall and per wavelength sample.
 
 ---
 
@@ -1077,7 +1267,29 @@ maxPeriod
 
 Lomb–Scargle is particularly useful for astronomical observations because observations are often **unevenly sampled** rather than occurring at perfectly regular time intervals.
 
-The result identifies the strongest candidate period within the requested range.
+The result identifies the strongest candidate period within the requested range, and also includes the full periodogram (every trial period and its power) and a false-alarm probability for the best-fit peak.
+
+---
+
+## Fold a light curve by phase
+
+```http
+POST /api/timeseries/{fileId}/phase-fold
+```
+
+Folds a light curve around a supplied period and reference epoch, converting each observation's time into a phase in the range `[0, 1)` while preserving the original time and flux.
+
+Phase-folding is the standard way to visualise and analyse periodic variability once a candidate period is known.
+
+---
+
+## Variability statistics
+
+```http
+GET /api/timeseries/{fileId}/variability
+```
+
+Reports summary statistics describing how much a light curve varies: mean, median, standard deviation, amplitude, RMS, and median absolute deviation.
 
 ---
 
@@ -2264,49 +2476,3 @@ to:
 > **"I can inspect it, see what it contains, locate objects on the sky, measure their light, analyse their spectra or variability, and compare them with astronomical catalogues."**
 
 ---
-
-# Not implemented: roadmap endpoints
-
-The endpoints below have been scaffolded with a real route and, where the request has a body, a real validated request contract. They are wired into the API today, but each one currently returns:
-
-```text
-HTTP 501 Not Implemented
-```
-
-with a stable error code identifying which capability is pending. No scientific calculation, Infrastructure access, or Core algorithm has been implemented for them yet — they exist so the eventual routes and request shapes are already stable. See `spec.md` §9 for the authoritative list and required FITS capability per endpoint.
-
-## Astrometry
-
-- `GET /api/images/{fileId}/astrometry/pixel-scale` — angular pixel scale (and per-axis scales) derived from the WCS.
-- `GET /api/images/{fileId}/astrometry/orientation` — image orientation (position angle) relative to celestial north.
-- `POST /api/images/{fileId}/astrometry/pixel-to-world` — converts multiple pixel positions to RA/Dec in one request.
-- `POST /api/images/{fileId}/astrometry/world-to-pixel` — converts multiple RA/Dec coordinates to pixel positions in one request.
-
-## Photometry
-
-- `POST /api/images/{fileId}/photometry/aperture-correction` — corrects an aperture flux measurement using a supplied correction factor, propagating uncertainty where possible.
-
-## Spectroscopy
-
-- `POST /api/spectroscopy/{fileId}/continuum` — fits a polynomial continuum model to a spectrum.
-- `POST /api/spectroscopy/{fileId}/continuum/subtract` — subtracts a fitted continuum from a spectrum.
-- `POST /api/spectroscopy/{fileId}/lines/fit` — fits a Gaussian profile to a spectral line.
-- `POST /api/spectroscopy/{fileId}/equivalent-width` — calculates equivalent width over a wavelength interval.
-- `GET /api/spectroscopy/{fileId}/snr` — reports overall and per-sample spectral signal-to-noise ratio.
-
-## Time series
-
-- `POST /api/timeseries/{fileId}/phase-fold` — folds a light curve around a supplied period and reference epoch.
-- `GET /api/timeseries/{fileId}/variability` — variability statistics (mean, median, standard deviation, amplitude, RMS, MAD).
-
-The existing period-search endpoint (`GET /api/timeseries/{fileId}/period-search`) already works today; expanding its response to expose the full periodogram is future work on that existing endpoint, not a new roadmap stub.
-
-## Image visualisation
-
-- `GET /api/images/{fileId}/cutout` — extracts a rectangular pixel region, or a WCS-based sky region, from a staged image.
-- `GET /api/images/{fileId}/contours` — generates scientific contour geometry from an image's pixel data.
-- `POST /api/images/composite` — combines separate red/green/blue staged images into an RGB composite.
-
-## Data quality
-
-- `GET /api/fits/{fileId}/quality` — cross-cutting data-quality statistics (invalid pixel counts, saturation, dynamic range, usable-pixel fraction) for a staged FITS dataset.

@@ -10,7 +10,7 @@ For day-to-day operational details such as build/test commands, the current repo
 > - **AI agents:** Treat the **MUST** requirements in §3–§6 as hard constraints. Before completing a task, check the resulting diff against the applicable requirements.
 > - **Specific rules override general rules.** Where a section explicitly defines an exception to an earlier rule, the more specific rule applies.
 > - **Historical information:** §8 describes the original build sequence and is not an outstanding task list.
-> - **Roadmap information:** §9 lists endpoints already scaffolded to return HTTP 501 pending their Core implementation. It *is* an outstanding task list — do not implement its scientific behaviour without also removing the corresponding entry.
+> - **Roadmap information:** §9 lists any endpoints currently scaffolded to return HTTP 501 pending their Core implementation. When it lists entries, it _is_ an outstanding task list — do not implement an entry's scientific behaviour without also removing it from §9.
 
 ## Contents
 
@@ -41,7 +41,6 @@ For day-to-day operational details such as build/test commands, the current repo
    - 6.9 [Global Exception Handling](#69-global-exception-handling)
 7. [Testing Standards](#7-testing-standards)
 8. [Appendix: Original Build Sequence (Historical)](#8-appendix-original-build-sequence-historical)
-9. [Not Implemented Roadmap](#9-not-implemented-roadmap)
 
 ---
 
@@ -863,7 +862,7 @@ If an archive's real query/download contract is genuinely not yet known for a ca
 
 `ICatalogueClient` (`ConeSearchAsync`) is the catalogue-integration counterpart to `IArchiveClient` (§6.6): a single HTTP client abstraction, `VizierTapClient`, over VizieR's real IVOA TAP service, backing both `Catalogues/Query` (a direct cone search) and `Catalogues/CrossMatch` (a cone search over the sky field a staged image's detected sources span, followed by the pure `AstroLab.Core.Catalogues.CatalogueCrossMatcher` nearest-neighbour match).
 
-A VizieR table (e.g. `I/355/gaiadr3`) is identified by its catalogue-native table name, and its RA/Dec/identifier/magnitude column *names* vary per catalogue. `VizierTapClient` MUST NOT assume a fixed column name for any of these roles. Instead, it discovers them per catalogue from the TAP service's mandatory `TAP_SCHEMA.columns` description, matching each role by its IVOA UCD1+ tag (`pos.eq.ra`, `pos.eq.dec`, `meta.id`/`meta.record`, `phot.mag`), preferring a column additionally tagged `meta.main` when more than one candidate matches. This mirrors how `EsoArchiveApiClient` discovers real downloadable products through DataLink rather than guessing a URL (§6.6) — column-name guessing is the equivalent mistake for a catalogue query.
+A VizieR table (e.g. `I/355/gaiadr3`) is identified by its catalogue-native table name, and its RA/Dec/identifier/magnitude column _names_ vary per catalogue. `VizierTapClient` MUST NOT assume a fixed column name for any of these roles. Instead, it discovers them per catalogue from the TAP service's mandatory `TAP_SCHEMA.columns` description, matching each role by its IVOA UCD1+ tag (`pos.eq.ra`, `pos.eq.dec`, `meta.id`/`meta.record`, `phot.mag`), preferring a column additionally tagged `meta.main` when more than one candidate matches. This mirrors how `EsoArchiveApiClient` discovers real downloadable products through DataLink rather than guessing a URL (§6.6) — column-name guessing is the equivalent mistake for a catalogue query.
 
 A magnitude column is optional metadata: when a catalogue exposes none, the cone-search ADQL selects a literal `NULL` for it rather than omitting the column or inventing a value, and `CatalogueRecord.Magnitude` is `null`.
 
@@ -926,10 +925,10 @@ HTTP response
 The same separation applies to future:
 
 - spectrum plots
-- light curves
-- source overlays
-- RGB composites
+- light-curve plots
 - false-colour images
+
+(Source overlays and RGB composites already follow this same separation today — see `Images/Overlay` and `Images/Composite`.)
 
 Core supplies scientific values. Infrastructure/API mapping turns those values into the requested visual or wire representation.
 
@@ -1117,23 +1116,3 @@ This appendix is **historical**. It is retained as a reference for extending the
 At each stage, the implementation compiled and its tests remained passing before proceeding to the next stage.
 
 The same discipline applies to future work that extends this architectural pattern.
-
----
-
-## 9. Not Implemented Roadmap
-
-The endpoints below have been scaffolded under the **Roadmap Endpoint Rule** (§6.5): each has a real route, a real request DTO where the request has a body, and a handler that returns HTTP 501 via `AstroLab.Api.Features.NotImplementedResult.Value(code, message)`.
-
-No Infrastructure or Core work has been performed for these endpoints. They MUST NOT be treated as implemented, and they MUST continue to return HTTP 501 with the stable error code listed below until their Request → Infrastructure → Core → `Result<T>` → Response flow is genuinely implemented, at which point this table entry should be removed.
-
-These endpoints extend the six scientific areas — astrometry, photometry, spectroscopy, time-series analysis, image visualisation, and scientific measurements/data quality — beyond the Phase 1 capabilities already implemented (existing WCS conversion, aperture/differential/multi-source photometry, spectral extraction/calibration/lines/redshift/comparison, light-curve/detrend/period-search/transit/comparison, stellar colour/temperature/classification, radial velocity, galaxy morphology, surface brightness, and image render/overlay/align/compare/stack all remain supported and are unaffected by this section).
-
-The astrometry, photometry, and data-quality roadmap items originally listed here are now fully implemented: WCS pixel scale (`GET /api/images/{fileId}/astrometry/pixel-scale`), orientation (`GET /api/images/{fileId}/astrometry/orientation`), WCS validation (`GET /api/images/{fileId}/astrometry/validate`), multi-point pixel-to-world and world-to-pixel conversion (`POST /api/images/{fileId}/astrometry/pixel-to-world` / `world-to-pixel`), aperture correction (`POST /api/images/{fileId}/photometry/aperture-correction`), photometric flux uncertainty and signal-to-noise ratio (`POST /api/images/{fileId}/photometry/uncertainty` / `snr`, also surfaced on the existing aperture, differential, and multi-source photometry responses), cross-cutting data-quality analysis (`GET /api/fits/{fileId}/quality`), and observation metadata/provenance (`GET /api/fits/{fileId}/observation`, distinguishing FITS-header-sourced values from AstroLab-derived ones). None of those routes remain in this roadmap.
-
-The time-series roadmap items originally listed here are now fully implemented: phase folding (`POST /api/timeseries/{fileId}/phase-fold`) and variability statistics — mean, median, standard deviation, amplitude, RMS, and median absolute deviation (`GET /api/timeseries/{fileId}/variability`). The existing `GET /api/timeseries/{fileId}/period-search` endpoint has also been enhanced to expose the full periodogram (every trial period and its power) and a false-alarm probability for the best-fit peak, in addition to the best period and power it already reported. None of those routes remain in this roadmap.
-
-The spectroscopy roadmap items originally listed here are now fully implemented: polynomial continuum fitting with optional excluded wavelength ranges and iterative sigma-clipping (`POST /api/spectroscopy/{fileId}/continuum`), continuum subtraction (`POST /api/spectroscopy/{fileId}/continuum/subtract`), Gaussian spectral line fitting exposing fitted parameters, linearized-covariance uncertainties, and fit quality (`POST /api/spectroscopy/{fileId}/lines/fit`), equivalent width calculation over a wavelength interval (`POST /api/spectroscopy/{fileId}/equivalent-width`), and spectral signal-to-noise ratio, overall and per-sample (`GET /api/spectroscopy/{fileId}/snr`). None of those routes remain in this roadmap.
-
-The image-visualisation roadmap items originally listed here are now fully implemented: pixel-region or WCS-based sky-region image cutouts rendered as PNG (`GET /api/images/{fileId}/cutout`), marching-squares contour level geometry at explicit or automatically-percentile-derived levels (`GET /api/images/{fileId}/contours`), and RGB composites combining three independently auto-scaled channel images (`POST /api/images/composite`). None of those routes remain in this roadmap.
-
-A further image-visualisation capability, not originally listed in this roadmap, has also been added: `GET /api/images/{fileId}/render/wcs-grid` renders a staged image to PNG with a right-ascension/declination coordinate grid overlaid, derived from the image's WCS, and reports pixel scale, orientation, and mirroring via `X-Pixel-Scale-Arcsec-X`/`X-Pixel-Scale-Arcsec-Y`/`X-Orientation-Degrees`/`X-Is-Mirrored` response headers, following the same Core-computes/Infrastructure-renders separation as `render`/`render/overlay` (§6.8).

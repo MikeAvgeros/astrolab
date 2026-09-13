@@ -86,7 +86,14 @@ public static class DifferentialPhotometryEndpoint
         var (differentialMagnitude, uncertainty) = InstrumentalPhotometry.ComputeDifferentialMagnitude(
             targetMagnitude.Magnitude, targetMagnitude.MagnitudeUncertainty, comparisonMagnitude.Magnitude, comparisonMagnitude.MagnitudeUncertainty);
 
+        var targetSnr = PhotometricUncertainty.ComputeSignalToNoiseRatio(
+            target.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, target.ApertureArea));
+
+        var comparisonSnr = PhotometricUncertainty.ComputeSignalToNoiseRatio(
+            comparison.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, comparison.ApertureArea));
+
         return Results.Ok(DifferentialPhotometryResponse.Create(
-            fileId, targetMagnitude.Magnitude, comparisonMagnitude.Magnitude, differentialMagnitude, uncertainty));
+            fileId, targetMagnitude.Magnitude, comparisonMagnitude.Magnitude, differentialMagnitude, uncertainty,
+            targetSnr.IsSuccess ? targetSnr.Value : null, comparisonSnr.IsSuccess ? comparisonSnr.Value : null));
     }
 }

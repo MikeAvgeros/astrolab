@@ -2,7 +2,9 @@ namespace AstroLab.Api.Features.Images.Photometry;
 
 public sealed record AperturePhotometryResponse
 {
-    private AperturePhotometryResponse(string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
+    private AperturePhotometryResponse(
+        string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux,
+        double fluxUncertainty, double signalToNoiseRatio)
     {
         FileId = fileId;
 
@@ -13,6 +15,10 @@ public sealed record AperturePhotometryResponse
         BackgroundPerPixel = backgroundPerPixel;
 
         NetFlux = netFlux;
+
+        FluxUncertainty = fluxUncertainty;
+
+        SignalToNoiseRatio = signalToNoiseRatio;
     }
 
     public string FileId { get; }
@@ -25,10 +31,16 @@ public sealed record AperturePhotometryResponse
 
     public double NetFlux { get; }
 
-    public static AperturePhotometryResponse Create(string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
+    public double FluxUncertainty { get; }
+
+    public double SignalToNoiseRatio { get; }
+
+    public static AperturePhotometryResponse Create(
+        string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux,
+        double fluxUncertainty, double signalToNoiseRatio)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 
-        return new AperturePhotometryResponse(fileId, rawFlux, apertureArea, backgroundPerPixel, netFlux);
+        return new AperturePhotometryResponse(fileId, rawFlux, apertureArea, backgroundPerPixel, netFlux, fluxUncertainty, signalToNoiseRatio);
     }
 }

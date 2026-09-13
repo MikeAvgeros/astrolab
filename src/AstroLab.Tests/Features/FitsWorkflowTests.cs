@@ -1513,4 +1513,291 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
         Assert.Equal(1.0, body.GetProperty("physicalSizeAu").GetDouble(), precision: 9);
     }
+
+    [Fact]
+    public async Task GetPixelScale_ReturnsArcsecondsPerPixelMatchingWcs()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-scale");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(1.0, body.GetProperty("pixelScaleXArcsecPerPixel").GetDouble(), precision: 1);
+
+        Assert.Equal(1.0, body.GetProperty("pixelScaleYArcsecPerPixel").GetDouble(), precision: 1);
+    }
+
+    [Fact]
+    public async Task GetPixelScale_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-scale");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetOrientation_ReturnsRotationAndMirroredFlag()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/orientation");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(180.0, Math.Abs(body.GetProperty("rotationDegrees").GetDouble()), precision: 3);
+
+        Assert.True(body.GetProperty("isMirrored").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ValidateWcs_OnGoodWcs_ReportsValid()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/validate");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("isValid").GetBoolean());
+
+        Assert.True(body.GetProperty("isInvertible").GetBoolean());
+
+        Assert.Empty(body.GetProperty("issues").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ValidateWcs_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/astrometry/validate");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PixelToWorldBatch_ConvertsEveryPointAndMatchesSinglePointEndpoint()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var singleResponse = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=2.5&pixelY=1.5");
+
+        var single = await singleResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        var request = new { Points = new[] { new { PixelX = 0.5, PixelY = 0.5 }, new { PixelX = 2.5, PixelY = 1.5 } } };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/astrometry/pixel-to-world", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var points = body.GetProperty("points").EnumerateArray().ToArray();
+
+        Assert.Equal(2, points.Length);
+
+        Assert.Equal(single.GetProperty("rightAscension").GetDouble(), points[1].GetProperty("rightAscension").GetDouble(), precision: 9);
+
+        Assert.Equal(single.GetProperty("declination").GetDouble(), points[1].GetProperty("declination").GetDouble(), precision: 9);
+    }
+
+    [Fact]
+    public async Task PixelToWorldBatch_OnImageWithoutWcs_ReturnsNotFound()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { Points = new[] { new { PixelX = 0.5, PixelY = 0.5 } } };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/astrometry/pixel-to-world", request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WorldToPixelBatch_ConvertsEveryPointAndMatchesSinglePointEndpoint()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var toWorldResponse = await _client.GetAsync($"/api/images/{fileId}/astrometry/pixel-to-world?pixelX=2.5&pixelY=1.5");
+
+        var world = await toWorldResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        var ra = world.GetProperty("rightAscension").GetDouble();
+
+        var dec = world.GetProperty("declination").GetDouble();
+
+        var request = new { Points = new[] { new { RightAscension = ra, Declination = dec } } };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/astrometry/world-to-pixel", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var point = Assert.Single(body.GetProperty("points").EnumerateArray());
+
+        Assert.Equal(2.5, point.GetProperty("pixelX").GetDouble(), precision: 4);
+
+        Assert.Equal(1.5, point.GetProperty("pixelY").GetDouble(), precision: 4);
+    }
+
+    [Fact]
+    public async Task EstimateUncertainty_ReturnsPositiveFluxUncertainty()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { CenterX = 0.5, CenterY = 0.5, ApertureRadius = 0.3, AnnulusInnerRadius = 1.0, AnnulusOuterRadius = 1.8 };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/uncertainty", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("fluxUncertainty").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task ComputeSnr_ReturnsPositiveSignalToNoiseRatio()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var request = new { CenterX = 5.5, CenterY = 5.5, ApertureRadius = 3.0, AnnulusInnerRadius = 4.0, AnnulusOuterRadius = 5.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/snr", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("signalToNoiseRatio").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task MeasureAperture_ResponseIncludesFluxUncertaintyAndSnr()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new
+        {
+            CenterX = 0.5,
+            CenterY = 0.5,
+            ApertureRadius = 0.3,
+            AnnulusInnerRadius = 1.0,
+            AnnulusOuterRadius = 1.8
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("fluxUncertainty").GetDouble() > 0);
+
+        Assert.True(double.IsFinite(body.GetProperty("signalToNoiseRatio").GetDouble()));
+    }
+
+    [Fact]
+    public async Task ApplyApertureCorrection_ScalesMeasuredFluxAndUncertainty()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { MeasuredFlux = 100.0, CorrectionFactor = 1.2, MeasuredFluxUncertainty = 4.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture-correction", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(120.0, body.GetProperty("correctedFlux").GetDouble(), precision: 6);
+
+        Assert.Equal(4.8, body.GetProperty("correctedFluxUncertainty").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task ApplyApertureCorrection_OnSpectrumFrame_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new { MeasuredFlux = 100.0, CorrectionFactor = 1.2 };
+
+        var response = await _client.PostAsJsonAsync($"/api/images/{fileId}/photometry/aperture-correction", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetQuality_ReportsExactStatisticsForKnownImage()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/quality");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(0, body.GetProperty("nanCount").GetInt64());
+
+        Assert.Equal(0, body.GetProperty("infiniteCount").GetInt64());
+
+        Assert.Equal(10.0, body.GetProperty("min").GetDouble(), precision: 6);
+
+        Assert.Equal(80.0, body.GetProperty("max").GetDouble(), precision: 6);
+
+        Assert.Equal(1.0, body.GetProperty("usablePixelFraction").GetDouble(), precision: 6);
+
+        Assert.Equal(255.0, body.GetProperty("saturationThreshold").GetDouble(), precision: 6);
+
+        Assert.False(body.GetProperty("saturationThresholdFromHeader").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetObservation_ExposesHeaderMetadataAndWcsDerivedPixelScale()
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/observation");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var header = body.GetProperty("header");
+
+        Assert.Equal(4, header.GetProperty("detectorWidth").GetInt32());
+
+        Assert.Equal(2, header.GetProperty("detectorHeight").GetInt32());
+
+        var derived = body.GetProperty("derived");
+
+        Assert.True(derived.GetProperty("hasWcs").GetBoolean());
+
+        Assert.Equal(1.0, derived.GetProperty("pixelScaleXArcsecPerPixel").GetDouble(), precision: 1);
+    }
+
+    [Fact]
+    public async Task GetObservation_WithoutWcs_ReportsHasWcsFalse()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/observation");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.False(body.GetProperty("derived").GetProperty("hasWcs").GetBoolean());
+    }
 }

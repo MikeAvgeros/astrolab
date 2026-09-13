@@ -2,13 +2,16 @@ namespace AstroLab.Api.Features.Images.MultiPhotometry;
 
 public sealed record SourcePhotometryDto
 {
-    private SourcePhotometryDto(int sourceId, double netFlux, double fluxUncertainty, double instrumentalMagnitude, double magnitudeUncertainty)
+    private SourcePhotometryDto(
+        int sourceId, double netFlux, double fluxUncertainty, double instrumentalMagnitude, double magnitudeUncertainty,
+        double? signalToNoiseRatio)
     {
         SourceId = sourceId;
         NetFlux = netFlux;
         FluxUncertainty = fluxUncertainty;
         InstrumentalMagnitude = instrumentalMagnitude;
         MagnitudeUncertainty = magnitudeUncertainty;
+        SignalToNoiseRatio = signalToNoiseRatio;
     }
 
     public int SourceId { get; }
@@ -21,10 +24,14 @@ public sealed record SourcePhotometryDto
 
     public double MagnitudeUncertainty { get; }
 
-    public static SourcePhotometryDto Create(int sourceId, double netFlux, double fluxUncertainty, double instrumentalMagnitude, double magnitudeUncertainty)
+    public double? SignalToNoiseRatio { get; }
+
+    public static SourcePhotometryDto Create(
+        int sourceId, double netFlux, double fluxUncertainty, double instrumentalMagnitude, double magnitudeUncertainty,
+        double? signalToNoiseRatio)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sourceId);
 
-        return new SourcePhotometryDto(sourceId, netFlux, fluxUncertainty, instrumentalMagnitude, magnitudeUncertainty);
+        return new SourcePhotometryDto(sourceId, netFlux, fluxUncertainty, instrumentalMagnitude, magnitudeUncertainty, signalToNoiseRatio);
     }
 }

@@ -1,3 +1,4 @@
+using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Infrastructure.Storage;
 
@@ -44,11 +45,40 @@ public static class PhotometryEndpoint
             request.AnnulusOuterRadius,
             request.BackgroundMethod);
 
-        return measurementResult.ToApiResult(measurement => Results.Ok(AperturePhotometryResponse.Create(
+        if (measurementResult.IsFailure)
+        {
+            return measurementResult.Error.ToProblem();
+        }
+
+        var measurement = measurementResult.Value;
+
+        var statsResult = ImageStatistics.Compute(dataset.Pixels);
+
+        if (statsResult.IsFailure)
+        {
+            return statsResult.Error.ToProblem();
+        }
+
+        var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
+
+        var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(measurement.NetFlux, measurement.ApertureArea, skySigma);
+
+        if (uncertaintyResult.IsFailure)
+        {
+            return uncertaintyResult.Error.ToProblem();
+        }
+
+        var fluxUncertainty = uncertaintyResult.Value;
+
+        var snrResult = PhotometricUncertainty.ComputeSignalToNoiseRatio(measurement.NetFlux, fluxUncertainty);
+
+        return snrResult.ToApiResult(snr => Results.Ok(AperturePhotometryResponse.Create(
             fileId,
             measurement.RawFlux,
             measurement.ApertureArea,
             measurement.BackgroundPerPixel,
-            measurement.NetFlux)));
+            measurement.NetFlux,
+            fluxUncertainty,
+            snr)));
     }
 }

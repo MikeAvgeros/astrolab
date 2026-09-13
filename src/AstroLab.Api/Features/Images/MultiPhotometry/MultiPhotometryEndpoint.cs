@@ -85,8 +85,11 @@ public static class MultiPhotometryEndpoint
                 continue;
             }
 
+            var snrResult = PhotometricUncertainty.ComputeSignalToNoiseRatio(measurement.NetFlux, fluxUncertainty);
+
             sourceDtos.Add(SourcePhotometryDto.Create(
-                source.Id, measurement.NetFlux, fluxUncertainty, magnitudeResult.Value.Magnitude, magnitudeResult.Value.MagnitudeUncertainty));
+                source.Id, measurement.NetFlux, fluxUncertainty, magnitudeResult.Value.Magnitude, magnitudeResult.Value.MagnitudeUncertainty,
+                snrResult.IsSuccess ? snrResult.Value : null));
         }
 
         return Results.Ok(MultiAperturePhotometryResponse.Create(fileId, sourceDtos.ToImmutable()));

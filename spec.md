@@ -1128,22 +1128,9 @@ No Infrastructure or Core work has been performed for these endpoints. They MUST
 
 These endpoints extend the six scientific areas — astrometry, photometry, spectroscopy, time-series analysis, image visualisation, and scientific measurements/data quality — beyond the Phase 1 capabilities already implemented (existing WCS conversion, aperture/differential/multi-source photometry, spectral extraction/calibration/lines/redshift/comparison, light-curve/detrend/period-search/transit/comparison, stellar colour/temperature/classification, radial velocity, galaxy morphology, surface brightness, and image render/overlay/align/compare/stack all remain supported and are unaffected by this section).
 
-### 9.1 Astrometry
+The astrometry, photometry, and data-quality roadmap items originally listed here are now fully implemented: WCS pixel scale (`GET /api/images/{fileId}/astrometry/pixel-scale`), orientation (`GET /api/images/{fileId}/astrometry/orientation`), WCS validation (`GET /api/images/{fileId}/astrometry/validate`), multi-point pixel-to-world and world-to-pixel conversion (`POST /api/images/{fileId}/astrometry/pixel-to-world` / `world-to-pixel`), aperture correction (`POST /api/images/{fileId}/photometry/aperture-correction`), photometric flux uncertainty and signal-to-noise ratio (`POST /api/images/{fileId}/photometry/uncertainty` / `snr`, also surfaced on the existing aperture, differential, and multi-source photometry responses), cross-cutting data-quality analysis (`GET /api/fits/{fileId}/quality`), and observation metadata/provenance (`GET /api/fits/{fileId}/observation`, distinguishing FITS-header-sourced values from AstroLab-derived ones). None of those routes remain in this roadmap.
 
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `GET /api/images/{fileId}/astrometry/pixel-scale` | ImageData + WCS | `astrometry.pixel_scale.not_implemented` |
-| `GET /api/images/{fileId}/astrometry/orientation` | ImageData + WCS | `astrometry.orientation.not_implemented` |
-| `POST /api/images/{fileId}/astrometry/pixel-to-world` (multi-point) | ImageData + WCS | `astrometry.pixel_to_world_batch.not_implemented` |
-| `POST /api/images/{fileId}/astrometry/world-to-pixel` (multi-point) | ImageData + WCS | `astrometry.world_to_pixel_batch.not_implemented` |
-
-### 9.2 Photometry
-
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `POST /api/images/{fileId}/photometry/aperture-correction` | ImageData | `photometry.aperture_correction.not_implemented` |
-
-### 9.3 Spectroscopy
+### 9.1 Spectroscopy
 
 | Route | Required capability | Roadmap error code |
 | --- | --- | --- |
@@ -1153,7 +1140,7 @@ These endpoints extend the six scientific areas — astrometry, photometry, spec
 | `POST /api/spectroscopy/{fileId}/equivalent-width` | SpectralData | `spectroscopy.equivalent_width.not_implemented` |
 | `GET /api/spectroscopy/{fileId}/snr` | SpectralData | `spectroscopy.snr.not_implemented` |
 
-### 9.4 Time Series
+### 9.2 Time Series
 
 | Route | Required capability | Roadmap error code |
 | --- | --- | --- |
@@ -1162,16 +1149,10 @@ These endpoints extend the six scientific areas — astrometry, photometry, spec
 
 The existing `GET /api/timeseries/{fileId}/period-search` endpoint remains implemented as-is. Expanding its response to expose the full periodogram (frequencies, powers, false-alarm probability) is deferred future work on an *existing* endpoint, not a new roadmap stub, and is not covered by this section.
 
-### 9.5 Image Visualisation
+### 9.3 Image Visualisation
 
 | Route | Required capability | Roadmap error code |
 | --- | --- | --- |
 | `GET /api/images/{fileId}/cutout` | ImageData (WCS optional, for sky-based cutouts) | `image.cutout.not_implemented` |
 | `GET /api/images/{fileId}/contours` | ImageData | `image.contours.not_implemented` |
 | `POST /api/images/composite` | ImageData (per channel) | `image.composite.not_implemented` |
-
-### 9.6 Data Quality
-
-| Route | Required capability | Roadmap error code |
-| --- | --- | --- |
-| `GET /api/fits/{fileId}/quality` | any FITS dataset capability | `fits.quality.not_implemented` |

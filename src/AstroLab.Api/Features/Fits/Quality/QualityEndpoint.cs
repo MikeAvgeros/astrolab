@@ -1,6 +1,9 @@
+using AstroLab.Core.Imaging;
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Fits.Quality;
 
-/// <summary>Roadmap: reports cross-cutting data-quality statistics (invalid pixel counts, saturation, dynamic range, usable-pixel fraction) for a staged FITS dataset. Not yet implemented (HTTP 501).</summary>
+/// <summary>Reports cross-cutting data-quality statistics (invalid pixel counts, saturation, dynamic range, usable-pixel fraction) for a staged FITS dataset's image data.</summary>
 public static class QualityEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -8,12 +11,23 @@ public static class QualityEndpoint
         public void MapQualityEndpoint()
         {
             group.MapGet("/{fileId}/quality", GetQualityAsync)
-                .WithSummary("Roadmap: reports data-quality statistics for a staged FITS dataset, distinguishing not-present, not-measurable, and measured-as-zero. Not yet implemented (HTTP 501).");
+                .WithSummary("Reports data-quality statistics for a staged FITS dataset's image data, distinguishing not-present, not-measurable, and measured-as-zero.");
         }
     }
 
-    private static Task<IResult> GetQualityAsync(string fileId, CancellationToken cancellationToken) =>
-        Task.FromResult(NotImplementedResult.Value(
-            "fits.quality.not_implemented",
-            "Data-quality analysis is not yet implemented."));
+    private static async Task<IResult> GetQualityAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+
+        if (datasetResult.IsFailure)
+        {
+            return datasetResult.Error.ToProblem();
+        }
+
+        using var dataset = datasetResult.Value;
+
+        var reportResult = ImageQualityAnalyzer.Analyze(dataset.Pixels, dataset.Hdu.Header, dataset.Image);
+
+        return reportResult.ToApiResult(report => Results.Ok(FitsQualityResponse.Create(fileId, report)));
+    }
 }

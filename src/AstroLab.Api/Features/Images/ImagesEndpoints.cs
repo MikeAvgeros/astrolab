@@ -15,10 +15,12 @@ using AstroLab.Api.Features.Images.Photometry;
 using AstroLab.Api.Features.Images.Render;
 using AstroLab.Api.Features.Images.Segmentation;
 using AstroLab.Api.Features.Images.Separation;
+using AstroLab.Api.Features.Images.Snr;
 using AstroLab.Api.Features.Images.SourceCharacterization;
 using AstroLab.Api.Features.Images.Sources;
 using AstroLab.Api.Features.Images.Stack;
 using AstroLab.Api.Features.Images.Statistics;
+using AstroLab.Api.Features.Images.Uncertainty;
 
 namespace AstroLab.Api.Features.Images;
 
@@ -71,6 +73,10 @@ public static class ImagesEndpoints
             group.MapContoursEndpoint();
 
             group.MapCompositeEndpoint();
+
+            group.MapUncertaintyEndpoint();
+
+            group.MapSnrEndpoint();
         }
     }
 }

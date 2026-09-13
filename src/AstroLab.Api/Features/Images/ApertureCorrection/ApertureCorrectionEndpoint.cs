@@ -1,6 +1,8 @@
+using AstroLab.Infrastructure.Storage;
+
 namespace AstroLab.Api.Features.Images.ApertureCorrection;
 
-/// <summary>Roadmap: corrects an aperture flux measurement using a supplied correction factor. Not yet implemented (HTTP 501).</summary>
+/// <summary>Applies a multiplicative aperture correction to a measured flux, propagating uncertainty where supplied.</summary>
 public static class ApertureCorrectionEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -8,17 +10,25 @@ public static class ApertureCorrectionEndpoint
         public void MapApertureCorrectionEndpoint()
         {
             group.MapPost("/{fileId}/photometry/aperture-correction", ApplyApertureCorrectionAsync)
-                .WithSummary("Roadmap: applies an aperture correction to a measured flux and propagates uncertainty where available. Not yet implemented (HTTP 501).");
+                .WithSummary("Applies an aperture correction to a measured flux and propagates uncertainty where available.");
         }
     }
 
-    private static Task<IResult> ApplyApertureCorrectionAsync(
-        string fileId, ApertureCorrectionRequest request, CancellationToken cancellationToken)
+    private static async Task<IResult> ApplyApertureCorrectionAsync(
+        string fileId, ApertureCorrectionRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "photometry.aperture_correction.not_implemented",
-            "Aperture correction is not yet implemented."));
+        var hduResult = await datasetReader.LoadImageMetadataAsync(fileId, cancellationToken);
+
+        if (hduResult.IsFailure)
+        {
+            return hduResult.Error.ToProblem();
+        }
+
+        var (correctedFlux, correctedFluxUncertainty) = Core.Photometry.ApertureCorrection.Apply(
+            request.MeasuredFlux, request.CorrectionFactor, request.MeasuredFluxUncertainty);
+
+        return Results.Ok(ApertureCorrectionResponse.Create(fileId, correctedFlux, correctedFluxUncertainty));
     }
 }

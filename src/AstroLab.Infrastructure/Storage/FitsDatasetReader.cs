@@ -45,6 +45,32 @@ public sealed class FitsDatasetReader
     
     public Task<Result<FitsDataset>> LoadSpectrumImageAsync(string relativeKey, CancellationToken cancellationToken = default) =>
         LoadPixelDataAsync(relativeKey, FitsDatasetKind.Spectrum, cancellationToken);
+    
+    public async Task<Result<HduDescriptor>> LoadImageMetadataAsync(string relativeKey, CancellationToken cancellationToken = default)
+    {
+        var hdusResult = await ReadAllHdusAsync(relativeKey, cancellationToken);
+
+        if (hdusResult.IsFailure)
+        {
+            return Result<HduDescriptor>.Failure(hdusResult.Error);
+        }
+
+        var hdus = hdusResult.Value;
+
+        var kindResult = FitsDatasetClassifier.EnsureKind(hdus, FitsDatasetKind.Image);
+
+        if (kindResult.IsFailure)
+        {
+            return Result<HduDescriptor>.Failure(kindResult.Error);
+        }
+
+        if (FindMatchingHdu(hdus, FitsDatasetKind.Image) is not { } hdu)
+        {
+            return Error.Validation("fits.data.no_image", "The file does not contain an HDU with pixel data.");
+        }
+
+        return hdu;
+    }
 
     public async Task<Result<LightCurveTableData>> LoadLightCurveAsync(string relativeKey, CancellationToken cancellationToken = default)
     {
@@ -170,6 +196,19 @@ public sealed class FitsDatasetReader
             if (FitsDatasetClassifier.MatchesKind(location.Descriptor, requiredKind))
             {
                 return location;
+            }
+        }
+
+        return null;
+    }
+
+    private static HduDescriptor? FindMatchingHdu(ImmutableArray<HduDescriptor> hdus, FitsDatasetKind requiredKind)
+    {
+        foreach (var hdu in hdus)
+        {
+            if (FitsDatasetClassifier.MatchesKind(hdu, requiredKind))
+            {
+                return hdu;
             }
         }
 

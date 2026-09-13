@@ -13,6 +13,7 @@ public readonly record struct Wcs
     private const double FullCircleDegrees = 360.0;
     private const double MinDeclinationDegrees = -90.0;
     private const double MaxDeclinationDegrees = 90.0;
+    private const double ArcsecondsPerDegree = 3600.0;
 
     private const double PixelCenterOffset = 0.5;
 
@@ -83,7 +84,15 @@ public readonly record struct Wcs
 
     public double PixelScaleYDegrees => Math.Sqrt((Cd12 * Cd12) + (Cd22 * Cd22));
 
+    public double PixelScaleXArcsecPerPixel => PixelScaleXDegrees * ArcsecondsPerDegree;
+
+    public double PixelScaleYArcsecPerPixel => PixelScaleYDegrees * ArcsecondsPerDegree;
+
     public double RotationDegrees => Math.Atan2(Cd21, Cd11) * RadiansToDegrees;
+
+    public double Determinant => (Cd11 * Cd22) - (Cd12 * Cd21);
+
+    public bool IsMirrored => Determinant < 0.0;
 
     public Result<(double RightAscension, double Declination)> PixelToWorld(double pixelX, double pixelY)
     {
@@ -91,9 +100,9 @@ public readonly record struct Wcs
 
         var p2 = pixelY + PixelCenterOffset - CrPix2;
 
-        var iwc1 = (Cd11 * p1) + (Cd12 * p2);
+        var iwc1 = Cd11 * p1 + Cd12 * p2;
 
-        var iwc2 = (Cd21 * p1) + (Cd22 * p2);
+        var iwc2 = Cd21 * p1 + Cd22 * p2;
 
         var xDegrees = LongitudeAxisIndex == 0 ? iwc1 : iwc2;
 
@@ -187,7 +196,7 @@ public readonly record struct Wcs
 
         var iwc2 = LatitudeAxisIndex == 0 ? xDegrees : yDegrees;
 
-        var determinant = Cd11 * Cd22 - Cd12 * Cd21;
+        var determinant = Determinant;
 
         if (determinant == 0.0)
         {

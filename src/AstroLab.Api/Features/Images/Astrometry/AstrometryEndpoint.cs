@@ -1,10 +1,11 @@
+using System.Collections.Immutable;
 using AstroLab.Core.Astrometry;
 using AstroLab.Core.Result;
 using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.Images.Astrometry;
 
-/// <summary>Converts between pixel and celestial (RA/Dec) coordinates via a staged image's FITS WCS, and reports the WCS solution itself.</summary>
+/// <summary>Converts between pixel and celestial (RA/Dec) coordinates via a staged image's FITS WCS, and reports the WCS solution, pixel scale, orientation, and validation diagnostics.</summary>
 public static class AstrometryEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -21,16 +22,19 @@ public static class AstrometryEndpoint
                 .WithSummary("Converts world (RA/Dec) coordinates to a pixel position via the image's WCS.");
 
             group.MapGet("/{fileId}/astrometry/pixel-scale", GetPixelScaleAsync)
-                .WithSummary("Roadmap: reports the angular pixel scale (and per-axis scales) derived from the image's WCS. Not yet implemented (HTTP 501).");
+                .WithSummary("Reports the angular pixel scale (arcsec/pixel and degrees/pixel, per axis) derived from the image's WCS.");
 
             group.MapGet("/{fileId}/astrometry/orientation", GetOrientationAsync)
-                .WithSummary("Roadmap: reports the image's position angle relative to celestial north, derived from the image's WCS. Not yet implemented (HTTP 501).");
+                .WithSummary("Reports the image's position angle relative to celestial north, and whether it is mirrored, derived from the image's WCS.");
 
             group.MapPost("/{fileId}/astrometry/pixel-to-world", ConvertPixelToWorldBatchAsync)
-                .WithSummary("Roadmap: converts multiple pixel positions to world (RA/Dec) coordinates in one request. Not yet implemented (HTTP 501).");
+                .WithSummary("Converts multiple pixel positions to world (RA/Dec) coordinates in one request.");
 
             group.MapPost("/{fileId}/astrometry/world-to-pixel", ConvertWorldToPixelBatchAsync)
-                .WithSummary("Roadmap: converts multiple world (RA/Dec) coordinates to pixel positions in one request. Not yet implemented (HTTP 501).");
+                .WithSummary("Converts multiple world (RA/Dec) coordinates to pixel positions in one request.");
+
+            group.MapGet("/{fileId}/astrometry/validate", ValidateWcsAsync)
+                .WithSummary("Validates the image's WCS solution: invertibility, axis orthogonality, pixel-scale symmetry, and pixel-to-world-to-pixel round-trip consistency.");
         }
     }
 
@@ -75,47 +79,116 @@ public static class AstrometryEndpoint
         return pixelResult.ToApiResult(pixel => Results.Ok(PixelCoordinateResponse.Create(fileId, pixel.PixelX, pixel.PixelY)));
     }
 
-    private static Task<IResult> GetPixelScaleAsync(string fileId, CancellationToken cancellationToken) =>
-        Task.FromResult(NotImplementedResult.Value(
-            "astrometry.pixel_scale.not_implemented",
-            "Pixel scale calculation is not yet implemented."));
-
-    private static Task<IResult> GetOrientationAsync(string fileId, CancellationToken cancellationToken) =>
-        Task.FromResult(NotImplementedResult.Value(
-            "astrometry.orientation.not_implemented",
-            "Image orientation calculation is not yet implemented."));
-
-    private static Task<IResult> ConvertPixelToWorldBatchAsync(
-        string fileId, PixelToWorldBatchRequest request, CancellationToken cancellationToken)
+    private static async Task<IResult> GetPixelScaleAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        request.Validate();
+        var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "astrometry.pixel_to_world_batch.not_implemented",
-            "Multi-point pixel-to-world conversion is not yet implemented."));
+        return wcsResult.ToApiResult(wcs => Results.Ok(PixelScaleResponse.Create(fileId, wcs)));
     }
 
-    private static Task<IResult> ConvertWorldToPixelBatchAsync(
-        string fileId, WorldToPixelBatchRequest request, CancellationToken cancellationToken)
+    private static async Task<IResult> GetOrientationAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
+
+        return wcsResult.ToApiResult(wcs => Results.Ok(OrientationResponse.Create(fileId, wcs)));
+    }
+
+    private static async Task<IResult> ConvertPixelToWorldBatchAsync(
+        string fileId, PixelToWorldBatchRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
         request.Validate();
 
-        return Task.FromResult(NotImplementedResult.Value(
-            "astrometry.world_to_pixel_batch.not_implemented",
-            "Multi-point world-to-pixel conversion is not yet implemented."));
+        var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
+
+        if (wcsResult.IsFailure)
+        {
+            return wcsResult.Error.ToProblem();
+        }
+
+        var wcs = wcsResult.Value;
+
+        var pairs = ImmutableList.CreateBuilder<PixelWorldPairDto>();
+
+        foreach (var point in request.Points)
+        {
+            var worldResult = wcs.PixelToWorld(point.PixelX, point.PixelY);
+
+            if (worldResult.IsFailure)
+            {
+                return worldResult.Error.ToProblem();
+            }
+
+            pairs.Add(PixelWorldPairDto.Create(point.PixelX, point.PixelY, worldResult.Value.RightAscension, worldResult.Value.Declination));
+        }
+
+        return Results.Ok(PixelToWorldBatchResponse.Create(fileId, pairs.ToImmutable()));
+    }
+
+    private static async Task<IResult> ConvertWorldToPixelBatchAsync(
+        string fileId, WorldToPixelBatchRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        request.Validate();
+
+        var wcsResult = await LoadWcsAsync(fileId, datasetReader, cancellationToken);
+
+        if (wcsResult.IsFailure)
+        {
+            return wcsResult.Error.ToProblem();
+        }
+
+        var wcs = wcsResult.Value;
+
+        var pairs = ImmutableList.CreateBuilder<WorldPixelPairDto>();
+
+        foreach (var point in request.Points)
+        {
+            var pixelResult = wcs.WorldToPixel(point.RightAscension, point.Declination);
+
+            if (pixelResult.IsFailure)
+            {
+                return pixelResult.Error.ToProblem();
+            }
+
+            pairs.Add(WorldPixelPairDto.Create(point.RightAscension, point.Declination, pixelResult.Value.PixelX, pixelResult.Value.PixelY));
+        }
+
+        return Results.Ok(WorldToPixelBatchResponse.Create(fileId, pairs.ToImmutable()));
+    }
+
+    private static async Task<IResult> ValidateWcsAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+    {
+        var hduResult = await datasetReader.LoadImageMetadataAsync(fileId, cancellationToken);
+
+        if (hduResult.IsFailure)
+        {
+            return hduResult.Error.ToProblem();
+        }
+
+        var hdu = hduResult.Value;
+
+        var wcsResult = Wcs.FromHeader(hdu.Header);
+
+        if (wcsResult.IsFailure)
+        {
+            return wcsResult.Error.ToProblem();
+        }
+
+        var (width, height) = hdu.Image!.Value.Resolve2DDimensions();
+
+        var reportResult = WcsValidator.Validate(wcsResult.Value, width, height);
+
+        return reportResult.ToApiResult(report => Results.Ok(WcsValidationResponse.Create(fileId, report)));
     }
 
     private static async Task<Result<Wcs>> LoadWcsAsync(string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
-        var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
+        var hduResult = await datasetReader.LoadImageMetadataAsync(fileId, cancellationToken);
 
-        if (datasetResult.IsFailure)
+        if (hduResult.IsFailure)
         {
-            return Result<Wcs>.Failure(datasetResult.Error);
+            return Result<Wcs>.Failure(hduResult.Error);
         }
 
-        using var dataset = datasetResult.Value;
-
-        return Wcs.FromHeader(dataset.Hdu.Header);
+        return Wcs.FromHeader(hduResult.Value.Header);
     }
 }

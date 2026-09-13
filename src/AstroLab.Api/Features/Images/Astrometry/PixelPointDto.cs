@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace AstroLab.Api.Features.Images.Astrometry;
 
 public sealed record PixelPointDto
 {
+    [JsonConstructor]
     private PixelPointDto(double pixelX, double pixelY)
     {
         PixelX = pixelX;

@@ -1,4 +1,5 @@
 using AstroLab.Api.Features.Fits.Inspect;
+using AstroLab.Api.Features.Fits.Observation;
 using AstroLab.Api.Features.Fits.Quality;
 using AstroLab.Api.Features.Fits.Upload;
 
@@ -17,6 +18,8 @@ public static class FitsEndpoints
             group.MapInspectEndpoint();
 
             group.MapQualityEndpoint();
+
+            group.MapObservationEndpoint();
         }
     }
 }

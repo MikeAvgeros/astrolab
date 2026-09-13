@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace AstroLab.Api.Features.Images.Astrometry;
 
 public sealed record WorldPointDto
 {
+    [JsonConstructor]
     private WorldPointDto(double rightAscension, double declination)
     {
         RightAscension = rightAscension;

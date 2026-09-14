@@ -4,6 +4,8 @@ AstroLab is a high-performance **.NET 10 / C# 14 RESTful API** for working with 
 
 It can download observations from the **ESO** and **MAST**, accept your own FITS files, and then turn those datasets into something you can inspect, visualise and analyse programmatically.
 
+> **Work in progress.** AstroLab is under active development. Endpoints, response shapes, and scientific algorithms may change, and some calculations have not yet been validated against reference implementations or real instrument data. Treat computed values as indicative rather than authoritative until they have been independently verified.
+
 The API currently supports:
 
 - 🔭 Searching the ESO and MAST archives
@@ -95,6 +97,8 @@ AstroLab understands FITS files at the HDU level and can inspect:
 - Data types
 - WCS metadata
 - Scientific capabilities provided by individual HDUs
+- Data-quality statistics (invalid/saturated pixels, dynamic range, usable-pixel fraction)
+- Observation metadata and provenance (target, instrument, exposure, calibration/archive identifiers)
 
 A FITS dataset is treated as a collection of capabilities rather than as one mutually exclusive data type. A single file can therefore contain image data, WCS information, spectral data, and time-series tables simultaneously.
 
@@ -116,6 +120,10 @@ AstroLab provides tools for working with astronomical images:
 - Image comparison
 - Image alignment
 - Image stacking
+- Image cutouts (pixel-region or WCS sky-region)
+- Scientific contour geometry
+- RGB image composites
+- WCS coordinate-grid overlay rendering
 
 ### Astrometry
 
@@ -126,6 +134,9 @@ Images containing a valid FITS WCS can be connected to celestial coordinates:
 - Convert RA/Dec to pixel coordinates
 - Calculate an image's sky footprint
 - Calculate angular separation between image positions
+- Report pixel scale and orientation
+- Validate a WCS solution (invertibility, axis orthogonality, round-trip consistency)
+- Convert batches of pixel/world coordinates in a single request
 
 ### Photometry
 
@@ -135,6 +146,8 @@ AstroLab can measure the brightness of astronomical sources using:
 - Background subtraction
 - Instrumental magnitudes
 - Photometric uncertainty
+- Signal-to-noise ratio
+- Aperture correction
 - Differential photometry
 - Multi-source photometry
 
@@ -144,7 +157,10 @@ For spectroscopic FITS data AstroLab supports:
 
 - 1D spectral extraction
 - Wavelength calibration
-- Spectral-line detection
+- Continuum fitting and subtraction
+- Spectral-line detection and Gaussian profile fitting
+- Equivalent-width measurement
+- Spectral signal-to-noise ratio
 - Redshift estimation
 - Spectral comparison
 
@@ -154,8 +170,10 @@ For FITS tables containing observational time-series data:
 
 - Light-curve extraction
 - Detrending
+- Phase folding
 - Light-curve comparison
 - Lomb-Scargle period searches
+- Variability statistics
 - Transit detection
 
 ### Measurements
@@ -505,6 +523,42 @@ The dataset is not forced into a single mutually exclusive category. Capabilitie
 
 ---
 
+## Data Quality
+
+```http
+GET /api/fits/{fileId}/quality
+```
+
+Reports cross-cutting data-quality statistics for a staged dataset's image data, distinguishing pixels that are not present, not measurable, or measured-as-zero.
+
+The response includes:
+
+- NaN and infinite pixel counts
+- Invalid and valid pixel counts
+- Minimum, maximum, mean, and standard deviation
+- Estimated background and noise
+- Dynamic range
+- Saturation threshold (from the header when available) and saturated pixel count/fraction
+- Usable-pixel fraction
+- Quality flags
+
+---
+
+## Observation Metadata
+
+```http
+GET /api/fits/{fileId}/observation
+```
+
+Reports observation metadata and provenance for a staged FITS file, keeping values read directly from the FITS header distinct from values AstroLab derives from the WCS.
+
+The response includes:
+
+- Header-sourced fields such as target, observation date, telescope, instrument, observer, exposure time, filter, RA/Dec, detector size, gain, and checksum/archive identifiers
+- Derived fields: dataset kind classification, WCS presence, projection, pixel scale, and rotation
+
+---
+
 # Image Analysis
 
 All image endpoints use:
@@ -659,13 +713,101 @@ This provides a convenient visual check of whether the source-detection paramete
 
 ---
 
+## Cutout
+
+```http
+GET /api/images/{fileId}/cutout
+```
+
+Extracts a rectangular region from a staged image and renders it as a PNG.
+
+The region can be specified either in pixel space:
+
+```text
+x, y, width, height
+```
+
+or as a WCS-based sky region:
+
+```text
+rightAscension, declination, radiusArcseconds
+```
+
+Example:
+
+```bash
+curl "http://localhost:5279/api/images/FILE_ID/cutout?x=400&y=380&width=256&height=256" -o cutout.png
+```
+
+---
+
+## Contours
+
+```http
+GET /api/images/{fileId}/contours
+```
+
+Generates scientific contour geometry (marching-squares polylines) from an image's pixel data, at configurable or automatically calculated levels.
+
+Parameters include:
+
+- `levels` — explicit contour levels
+- `levelCount` — number of automatically calculated levels, when `levels` is omitted
+
+The result reports, for each level, the traced polylines as pixel-coordinate points, suitable for client-side plotting or overlay rendering.
+
+---
+
+## RGB Composite
+
+```http
+POST /api/images/composite
+```
+
+Combines up to three separate staged images into an RGB colour composite, one per channel, each independently percentile-scaled.
+
+Example:
+
+```json
+{
+  "redFileId": "frame-r",
+  "greenFileId": "frame-g",
+  "blueFileId": "frame-b"
+}
+```
+
+The three channel images must share the same pixel dimensions.
+
+---
+
+## WCS Grid Overlay
+
+```http
+GET /api/images/{fileId}/render/wcs-grid
+```
+
+Renders a staged image to PNG with a WCS right-ascension/declination coordinate grid overlaid.
+
+The `linesPerAxis` parameter controls grid density. Pixel scale, orientation, and mirroring are reported in response headers.
+
+---
+
 ## Image Comparison
 
 ```http
-POST /api/images/{fileId}/compare
+POST /api/images/compare
 ```
 
 Compares two staged images of the same dimensions.
+
+Example:
+
+```json
+{
+  "fileId": "frame-001",
+  "comparisonFileId": "frame-002"
+}
+```
 
 The result includes difference statistics such as:
 
@@ -678,10 +820,19 @@ The result includes difference statistics such as:
 ## Image Alignment
 
 ```http
-POST /api/images/{fileId}/align
+POST /api/images/align
 ```
 
 Calculates a registration transform between an image and a reference image.
+
+Example:
+
+```json
+{
+  "fileId": "frame-001",
+  "referenceFileId": "frame-002"
+}
+```
 
 The transform can include:
 
@@ -696,7 +847,7 @@ This is useful when multiple observations of the same field have been captured a
 ## Image Stacking
 
 ```http
-POST /api/images/{fileId}/stack
+POST /api/images/stack
 ```
 
 Combines multiple staged images into a new FITS dataset.
@@ -821,6 +972,58 @@ The result is returned in arcseconds.
 
 ---
 
+## Pixel Scale
+
+```http
+GET /api/images/{fileId}/astrometry/pixel-scale
+```
+
+Reports the angular pixel scale (arcsec/pixel and degrees/pixel, per axis) derived from the image's WCS.
+
+---
+
+## Orientation
+
+```http
+GET /api/images/{fileId}/astrometry/orientation
+```
+
+Reports the image's position angle relative to celestial north, and whether it is mirrored, derived from the image's WCS.
+
+---
+
+## Batch Coordinate Conversion
+
+```http
+POST /api/images/{fileId}/astrometry/pixel-to-world
+POST /api/images/{fileId}/astrometry/world-to-pixel
+```
+
+Converts multiple pixel or world coordinates in a single request.
+
+Example request for the batch pixel-to-world endpoint:
+
+```json
+{
+  "points": [
+    { "pixelX": 512.4, "pixelY": 498.1 },
+    { "pixelX": 600.0, "pixelY": 420.0 }
+  ]
+}
+```
+
+---
+
+## WCS Validation
+
+```http
+GET /api/images/{fileId}/astrometry/validate
+```
+
+Validates the image's WCS solution: invertibility, axis orthogonality, pixel-scale symmetry, and pixel-to-world-to-pixel round-trip consistency.
+
+---
+
 # Photometry
 
 Photometry measures the brightness of astronomical objects.
@@ -940,6 +1143,46 @@ Differential photometry is particularly useful for monitoring relative brightnes
 
 ---
 
+## Photometric Uncertainty
+
+```http
+POST /api/images/{fileId}/photometry/uncertainty
+```
+
+Estimates the propagated flux uncertainty of an aperture measurement, accounting for source shot noise, sky-background noise, and read noise, using the CCD equation when a detector gain is available (from the request, or the FITS `GAIN` header).
+
+---
+
+## Signal-to-Noise Ratio
+
+```http
+POST /api/images/{fileId}/photometry/snr
+```
+
+Measures aperture flux and its propagated uncertainty, then reports the resulting signal-to-noise ratio for the same aperture/annulus parameters used by aperture photometry.
+
+---
+
+## Aperture Correction
+
+```http
+POST /api/images/{fileId}/photometry/aperture-correction
+```
+
+Applies a multiplicative aperture correction to a measured flux, propagating uncertainty where supplied.
+
+Example:
+
+```json
+{
+  "measuredFlux": 180334.6,
+  "correctionFactor": 1.05,
+  "measuredFluxUncertainty": 420.1
+}
+```
+
+---
+
 # Spectroscopy
 
 Spectroscopic routes are available under:
@@ -977,6 +1220,41 @@ This converts detector pixel positions into physical wavelengths.
 
 ---
 
+## Continuum Fitting
+
+```http
+POST /api/spectroscopy/{fileId}/continuum
+```
+
+Fits a polynomial continuum model to a one-dimensional spectrum, with optional wavelength exclusion ranges and sigma-clipping, without mutating the original spectrum.
+
+Example:
+
+```json
+{
+  "polynomialDegree": 3,
+  "excludedRanges": [{ "minWavelength": 6550, "maxWavelength": 6580 }],
+  "sigmaClipThreshold": 3.0,
+  "sigmaClipIterations": 2
+}
+```
+
+The response includes the wavelength grid, original flux, fitted continuum, and polynomial coefficients.
+
+---
+
+## Continuum Subtraction
+
+```http
+POST /api/spectroscopy/{fileId}/continuum/subtract
+```
+
+Fits and subtracts a continuum model from a one-dimensional spectrum, using the same parameters as continuum fitting.
+
+The response includes the wavelength grid, original flux, and continuum-subtracted flux.
+
+---
+
 ## Spectral-Line Detection
 
 ```http
@@ -986,6 +1264,37 @@ GET /api/spectroscopy/{fileId}/lines
 Detects significant spectral features, including potential absorption and emission lines.
 
 A significance threshold can be supplied to control detection sensitivity.
+
+---
+
+## Spectral-Line Fitting
+
+```http
+POST /api/spectroscopy/{fileId}/lines/fit
+```
+
+Fits a Gaussian profile to a spectral line over a supplied wavelength region, optionally seeded with initial centre, amplitude, and FWHM estimates.
+
+The response includes the fitted baseline, amplitude, centre, and FWHM (each with uncertainty), integrated flux, and reduced chi-square.
+
+---
+
+## Equivalent Width
+
+```http
+POST /api/spectroscopy/{fileId}/equivalent-width
+```
+
+Calculates the equivalent width of a spectral feature over a supplied wavelength interval.
+
+Example:
+
+```json
+{
+  "minWavelength": 6550,
+  "maxWavelength": 6580
+}
+```
 
 ---
 
@@ -1010,6 +1319,16 @@ where:
 - \(\lambda\_{\mathrm{obs}}\) is the observed wavelength
 - \(\lambda\_{\mathrm{rest}}\) is the laboratory/rest wavelength
 - \(z\) is the redshift
+
+---
+
+## Spectral Signal-to-Noise Ratio
+
+```http
+GET /api/spectroscopy/{fileId}/snr
+```
+
+Reports overall and per-sample spectral signal-to-noise ratio for a staged spectrum.
 
 ---
 
@@ -1062,6 +1381,25 @@ Detrending is useful when instrumental or observational trends are much larger t
 
 ---
 
+## Phase Folding
+
+```http
+POST /api/timeseries/{fileId}/phase-fold
+```
+
+Folds a light curve around a supplied period and reference epoch, preserving the original time values alongside the computed phase.
+
+Example:
+
+```json
+{
+  "period": 3.14,
+  "referenceEpoch": 2459000.5
+}
+```
+
+---
+
 ## Light-Curve Comparison
 
 ```http
@@ -1096,6 +1434,16 @@ This is useful for detecting periodic behaviour such as:
 - Stellar rotation
 - Binary systems
 - Repeating observational signals
+
+---
+
+## Variability Statistics
+
+```http
+GET /api/timeseries/{fileId}/variability
+```
+
+Calculates variability statistics for a staged light curve: mean, median, standard deviation, amplitude, RMS, and median absolute deviation.
 
 ---
 

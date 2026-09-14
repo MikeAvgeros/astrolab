@@ -106,4 +106,32 @@ public class InstrumentalPhotometryTests
 
         Assert.Equal("photometry.surfacebrightness.invalid_pixel_scale", result.Error.Code);
     }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_WithUncertainty_PassesMagnitudeUncertaintyThroughUnchanged()
+    {
+        var pixelScaleDegrees = 1.0 / 3600.0;
+
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, magnitudeUncertainty: 0.05,
+            apertureAreaPixels: 100.0, pixelScaleXDegrees: pixelScaleDegrees, pixelScaleYDegrees: pixelScaleDegrees);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(15.0 + (2.5 * Math.Log10(100.0)), result.Value.SurfaceBrightness, precision: 9);
+
+        Assert.Equal(0.05, result.Value.SurfaceBrightnessUncertainty, precision: 9);
+    }
+
+    [Fact]
+    public void ComputeSurfaceBrightness_WithUncertainty_RejectsNegativeMagnitudeUncertainty()
+    {
+        var result = InstrumentalPhotometry.ComputeSurfaceBrightness(
+            magnitude: 15.0, magnitudeUncertainty: -0.01,
+            apertureAreaPixels: 10.0, pixelScaleXDegrees: 0.001, pixelScaleYDegrees: 0.001);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.surfacebrightness.invalid_magnitude_uncertainty", result.Error.Code);
+    }
 }

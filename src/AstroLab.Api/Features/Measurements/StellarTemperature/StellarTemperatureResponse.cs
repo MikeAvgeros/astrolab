@@ -2,20 +2,25 @@ namespace AstroLab.Api.Features.Measurements.StellarTemperature;
 
 public sealed record StellarTemperatureResponse
 {
-    private StellarTemperatureResponse(double colourIndex, double estimatedTemperatureKelvin)
+    private StellarTemperatureResponse(double colourIndex, double estimatedTemperatureKelvin, string method)
     {
         ColourIndex = colourIndex;
         EstimatedTemperatureKelvin = estimatedTemperatureKelvin;
+        Method = method;
     }
 
     public double ColourIndex { get; }
 
     public double EstimatedTemperatureKelvin { get; }
 
-    public static StellarTemperatureResponse Create(double colourIndex, double estimatedTemperatureKelvin)
+    public string Method { get; }
+
+    public static StellarTemperatureResponse Create(double colourIndex, double estimatedTemperatureKelvin, string method)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(estimatedTemperatureKelvin);
 
-        return new StellarTemperatureResponse(colourIndex, estimatedTemperatureKelvin);
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+
+        return new StellarTemperatureResponse(colourIndex, estimatedTemperatureKelvin, method);
     }
 }

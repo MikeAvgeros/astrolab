@@ -123,6 +123,22 @@ public class GalaxyMorphologyAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_UniformDisk_ExposesConcentrationIndexBelowEllipticalThreshold()
+    {
+        const int size = 90;
+
+        var pixels = BuildUniformDiskImage(size, size, 45.0, 45.0, 15.0);
+
+        var result = GalaxyMorphologyAnalyzer.Analyze(pixels, size, size, 45.0, 45.0);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.NotNull(result.Value.ConcentrationIndex);
+
+        Assert.True(result.Value.ConcentrationIndex < 2.6);
+    }
+
+    [Fact]
     public void Analyze_CoreDominatedProfile_ClassifiesAsElliptical()
     {
         const int size = 90;
@@ -134,6 +150,22 @@ public class GalaxyMorphologyAnalyzerTests
         Assert.True(result.IsSuccess);
 
         Assert.Equal("Elliptical", result.Value.MorphologicalType);
+    }
+
+    [Fact]
+    public void Analyze_CoreDominatedProfile_ExposesConcentrationIndexAtOrAboveEllipticalThreshold()
+    {
+        const int size = 90;
+
+        var pixels = BuildCoreHaloImage(size, size, 45.0, 45.0, coreRadius: 4.0, haloRadius: 20.0);
+
+        var result = GalaxyMorphologyAnalyzer.Analyze(pixels, size, size, 45.0, 45.0);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.NotNull(result.Value.ConcentrationIndex);
+
+        Assert.True(result.Value.ConcentrationIndex >= 2.6);
     }
 
     [Fact]
@@ -176,5 +208,11 @@ public class GalaxyMorphologyAnalyzerTests
         Assert.Equal(soloResult.Value.EffectiveRadiusPixels, combinedResult.Value.EffectiveRadiusPixels, precision: 6);
 
         Assert.Equal("Spiral", combinedResult.Value.MorphologicalType);
+    }
+
+    [Fact]
+    public void MethodName_IsNotEmpty()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(GalaxyMorphologyAnalyzer.MethodName));
     }
 }

@@ -10,6 +10,8 @@ namespace AstroLab.Core.Spectroscopy;
 /// </summary>
 public static class RadialVelocityEstimator
 {
+    public const string MethodName = "Classical (non-relativistic) Doppler shift: v = c·z";
+
     public const double SpeedOfLightKmPerSecond = 299792.458;
 
     public static Result<double> EstimateKilometersPerSecond(double observedWavelengthNm, double restWavelengthNm)

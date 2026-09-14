@@ -2,11 +2,12 @@ namespace AstroLab.Core.Sources;
 
 public readonly record struct GalaxyMorphologyEstimate
 {
-    private GalaxyMorphologyEstimate(double effectiveRadiusPixels, double ellipticity, string morphologicalType)
+    private GalaxyMorphologyEstimate(double effectiveRadiusPixels, double ellipticity, string morphologicalType, double? concentrationIndex)
     {
         EffectiveRadiusPixels = effectiveRadiusPixels;
         Ellipticity = ellipticity;
         MorphologicalType = morphologicalType;
+        ConcentrationIndex = concentrationIndex;
     }
 
     public double EffectiveRadiusPixels { get; }
@@ -14,13 +15,15 @@ public readonly record struct GalaxyMorphologyEstimate
     public double Ellipticity { get; }
 
     public string MorphologicalType { get; }
+    
+    public double? ConcentrationIndex { get; }
 
-    public static GalaxyMorphologyEstimate Create(double effectiveRadiusPixels, double ellipticity, string morphologicalType)
+    public static GalaxyMorphologyEstimate Create(double effectiveRadiusPixels, double ellipticity, string morphologicalType, double? concentrationIndex)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(effectiveRadiusPixels);
 
         ArgumentException.ThrowIfNullOrWhiteSpace(morphologicalType);
 
-        return new GalaxyMorphologyEstimate(effectiveRadiusPixels, ellipticity, morphologicalType);
+        return new GalaxyMorphologyEstimate(effectiveRadiusPixels, ellipticity, morphologicalType, concentrationIndex);
     }
 }

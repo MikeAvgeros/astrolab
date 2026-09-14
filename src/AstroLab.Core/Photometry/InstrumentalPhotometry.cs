@@ -69,6 +69,20 @@ public static class InstrumentalPhotometry
 
         var areaArcsec2 = apertureAreaPixels * (pixelScaleXDegrees * ArcsecondsPerDegree) * (pixelScaleYDegrees * ArcsecondsPerDegree);
 
-        return magnitude + (MagnitudeScaleFactor * Math.Log10(areaArcsec2));
+        return magnitude + MagnitudeScaleFactor * Math.Log10(areaArcsec2);
+    }
+    
+    public static Result<(double SurfaceBrightness, double SurfaceBrightnessUncertainty)> ComputeSurfaceBrightness(
+        double magnitude, double magnitudeUncertainty, double apertureAreaPixels, double pixelScaleXDegrees, double pixelScaleYDegrees)
+    {
+        if (magnitudeUncertainty < 0.0 || !double.IsFinite(magnitudeUncertainty))
+        {
+            return Error.Validation(
+                "photometry.surfacebrightness.invalid_magnitude_uncertainty", "magnitudeUncertainty must be a finite, non-negative value.");
+        }
+
+        var surfaceBrightnessResult = ComputeSurfaceBrightness(magnitude, apertureAreaPixels, pixelScaleXDegrees, pixelScaleYDegrees);
+
+        return surfaceBrightnessResult.Map(surfaceBrightness => (surfaceBrightness, magnitudeUncertainty));
     }
 }

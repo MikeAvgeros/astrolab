@@ -43,4 +43,10 @@ public class RadialVelocityEstimatorTests
 
         Assert.Equal("spectroscopy.redshift.invalid_rest_wavelength", result.Error.Code);
     }
+
+    [Fact]
+    public void MethodName_IsNotEmpty()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(RadialVelocityEstimator.MethodName));
+    }
 }

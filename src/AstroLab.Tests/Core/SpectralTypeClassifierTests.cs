@@ -65,4 +65,10 @@ public class SpectralTypeClassifierTests
 
         Assert.Equal("spectroscopy.lines.empty_spectrum", result.Error.Code);
     }
+
+    [Fact]
+    public void MethodName_IsNotEmpty()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(SpectralTypeClassifier.MethodName));
+    }
 }

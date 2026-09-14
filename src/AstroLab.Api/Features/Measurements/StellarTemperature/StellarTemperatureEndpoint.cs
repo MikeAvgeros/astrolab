@@ -25,6 +25,6 @@ public static class StellarTemperatureEndpoint
         var estimateResult = StellarTemperatureEstimator.EstimateKelvin(request.ColourIndex);
 
         return estimateResult.ToApiResult(temperatureKelvin =>
-            Results.Ok(StellarTemperatureResponse.Create(request.ColourIndex, temperatureKelvin)));
+            Results.Ok(StellarTemperatureResponse.Create(request.ColourIndex, temperatureKelvin, StellarTemperatureEstimator.MethodName)));
     }
 }

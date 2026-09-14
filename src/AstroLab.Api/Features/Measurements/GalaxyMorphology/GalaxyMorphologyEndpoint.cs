@@ -39,6 +39,7 @@ public static class GalaxyMorphologyEndpoint
         var estimateResult = GalaxyMorphologyAnalyzer.Analyze(dataset.Pixels, width, height, request.CenterX, request.CenterY);
 
         return estimateResult.ToApiResult(estimate => Results.Ok(GalaxyMorphologyResponse.Create(
-            fileId, estimate.EffectiveRadiusPixels, estimate.Ellipticity, estimate.MorphologicalType)));
+            fileId, estimate.EffectiveRadiusPixels, estimate.Ellipticity, estimate.MorphologicalType,
+            estimate.ConcentrationIndex, GalaxyMorphologyAnalyzer.MethodName)));
     }
 }

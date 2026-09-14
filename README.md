@@ -1,6 +1,6 @@
 # AstroLab
 
-**AstroLab** is a .NET 10 / C# 14 REST API for working with astronomical data.
+AstroLab is a high-performance **.NET 10 / C# 14 RESTful API** for working with astronomical **FITS (Flexible Image Transport System)** data.
 
 It can download observations from the **ESO** and **MAST**, accept your own FITS files, and then turn those datasets into something you can inspect, visualise and analyse programmatically.
 
@@ -10,18 +10,33 @@ The API currently supports:
 - 📥 Downloading astronomical observations
 - 📁 Uploading your own FITS files
 - 🧩 Inspecting FITS HDUs and their scientific capabilities
+- 🗂️ Inspecting observation metadata and provenance
+- ✅ Assessing FITS image data quality
 - 🖼️ Rendering astronomical images
 - 📊 Image statistics and histograms
 - ⭐ Source detection and source characterisation
-- 📐 Astrometry using FITS World Coordinate System (WCS) information
-- 💡 Aperture and differential photometry
-- 🌈 Spectral extraction and analysis
+- 🧩 Source segmentation and background estimation
+- 📐 WCS-based astrometry
+- 🗺️ WCS-aware image visualisation
+- 💡 Aperture, uncertainty, SNR and differential photometry
+- 🔧 Aperture correction
+- 🔬 Spectral extraction and wavelength calibration
+- 📈 Spectral continuum fitting and subtraction
+- ✨ Spectral-line detection and fitting
+- 📏 Equivalent-width and spectral SNR measurements
+- 🌈 Spectral redshift analysis and comparison
 - ⏱️ Time-series and light-curve analysis
-- 🪐 Transit and periodicity searches
+- 📉 Light-curve detrending and variability statistics
+- 🔄 Lomb–Scargle period searches, periodograms and phase folding
+- 🪐 Transit candidate searches
 - 🌡️ Stellar colour and temperature estimation
+- 🔬 Spectral classification and radial-velocity measurements
 - 🌌 Galaxy morphology and surface-brightness measurements
-- 📚 Cross-matching detected sources against astronomical catalogues
+- 📏 Physical-size measurements
+- 📚 Astronomical catalogue queries and source cross-matching
 - 🔬 Image comparison, alignment and stacking
+- 🎨 RGB image composites
+- ✂️ Image cutouts and scientific contour geometry
 
 The project is intended to bridge the gap between **raw astronomical observations** and the kinds of measurements an astronomer would normally perform when analysing those observations.
 
@@ -29,86 +44,221 @@ The architecture is documented in [`spec.md`](spec.md) and [`CLAUDE.md`](CLAUDE.
 
 ---
 
-# The AstroLab workflow
+## Contents
 
-AstroLab follows a simple staged-file workflow.
-
-First, get a FITS dataset into AstroLab by either:
-
-1. Searching ESO or MAST and downloading an observation.
-2. Uploading your own FITS file.
-
-Once a dataset has been staged, the API returns an opaque `fileId`.
-
-That `fileId` can then be used with the analysis endpoints.
-
-```text
-                         ┌─────────────────┐
-                         │   ESO / MAST    │
-                         │    archives     │
-                         └────────┬────────┘
-                                  │
-                                Search
-                                  │
-                                  ▼
-                         ┌─────────────────┐
-                         │     Download    │
-                         └────────┬────────┘
-                                  │
-                                  │
-     ┌────────────────┐           ▼
-     │ Your FITS file │────►  ┌──────────┐
-     └────────────────┘       │  Staged  │
-                              │   FITS   │
-                              │  fileId  │
-                              └────┬─────┘
-                                   │
-             ┌─────────────────────┼──────────────────────┐
-             │          │            │           │        │
-             ▼          ▼            ▼           ▼        ▼
-          Images   Astrometry   Photometry  Spectroscopy Time Series
-             │          │            │           │        │
-             └──────────┴────────────┴───────────┴────────┘
-                                    │
-                                    ▼
-                           Scientific measurements
-```
-
-A FITS file is **not** assumed to represent one particular kind of data.
-
-A single dataset can contain multiple HDUs and can provide several capabilities at once — for example, an image may contain both image data and WCS information, while another HDU in the same file may contain a time-series table.
-
-Each analysis endpoint therefore checks whether the staged dataset provides the capability it requires.
+- [Features](#features)
+- [How AstroLab Works](#how-astrolab-works)
+- [Running the API](#running-the-api)
+- [CFITSIO](#cfitsio)
+- [Getting FITS Data](#getting-fits-data)
+  - [Search an Archive](#1-search-an-archive)
+  - [Download an Observation](#2-download-an-observation)
+  - [Upload Your Own FITS File](#3-upload-your-own-fits-file)
+- [Working with a FITS Dataset](#working-with-a-fits-dataset)
+  - [FITS Inspection](#fits-inspection)
+  - [Image Analysis](#image-analysis)
+  - [Astrometry](#astrometry)
+  - [Photometry](#photometry)
+  - [Spectroscopy](#spectroscopy)
+  - [Time-Series Analysis](#time-series-analysis)
+  - [Measurements](#measurements)
+  - [Catalogues](#catalogues)
+- [Astronomical Concepts](#astronomical-concepts)
+  - [FITS](#fits)
+  - [Astrometry and WCS](#astrometry-and-wcs)
+  - [Image Analysis](#image-analysis-1)
+  - [Photometry](#photometry-1)
+  - [Spectroscopy and Redshift](#spectroscopy-and-redshift)
+  - [Time-Series Astronomy](#time-series-astronomy)
+- [End-to-End Example](#end-to-end-example)
+- [Architecture](#architecture)
+- [Storage](#storage)
+- [Configuration](#configuration)
+- [Error Handling](#error-handling)
+- [Testing](#testing)
+- [Performance and Design](#performance-and-design)
 
 ---
 
-# Getting started
+## Features
 
-## Build the API
+### FITS
+
+AstroLab understands FITS files at the HDU level and can inspect:
+
+- Primary HDUs
+- Image HDUs
+- Binary tables
+- ASCII tables
+- Header keywords and values
+- Image dimensions
+- Data types
+- WCS metadata
+- Scientific capabilities provided by individual HDUs
+
+A FITS dataset is treated as a collection of capabilities rather than as one mutually exclusive data type. A single file can therefore contain image data, WCS information, spectral data, and time-series tables simultaneously.
+
+### Image Analysis
+
+AstroLab provides tools for working with astronomical images:
+
+- FITS-to-PNG rendering
+- Linear, logarithmic, square-root, and asinh stretches
+- Multiple colour maps
+- Percentile-based black/white points
+- Image statistics
+- Pixel histograms
+- Background estimation
+- Source detection
+- Source segmentation
+- Source shape characterization
+- Source-overlay rendering
+- Image comparison
+- Image alignment
+- Image stacking
+
+### Astrometry
+
+Images containing a valid FITS WCS can be connected to celestial coordinates:
+
+- Inspect WCS parameters
+- Convert pixel coordinates to RA/Dec
+- Convert RA/Dec to pixel coordinates
+- Calculate an image's sky footprint
+- Calculate angular separation between image positions
+
+### Photometry
+
+AstroLab can measure the brightness of astronomical sources using:
+
+- Aperture photometry
+- Background subtraction
+- Instrumental magnitudes
+- Photometric uncertainty
+- Differential photometry
+- Multi-source photometry
+
+### Spectroscopy
+
+For spectroscopic FITS data AstroLab supports:
+
+- 1D spectral extraction
+- Wavelength calibration
+- Spectral-line detection
+- Redshift estimation
+- Spectral comparison
+
+### Time Series
+
+For FITS tables containing observational time-series data:
+
+- Light-curve extraction
+- Detrending
+- Light-curve comparison
+- Lomb-Scargle period searches
+- Transit detection
+
+### Measurements
+
+Higher-level measurements combine lower-level astronomical results to derive quantities such as:
+
+- Stellar colour
+- Effective temperature
+- Spectral classification
+- Radial velocity
+- Galaxy morphology
+- Surface brightness
+- Physical size
+
+### Catalogues
+
+AstroLab integrates with public astronomical catalogues through VizieR and supports:
+
+- Catalogue cone searches
+- Multiple-catalogue cross-matching
+- Matching detected image sources to catalogue coordinates
+
+---
+
+# How AstroLab Works
+
+Every analysis begins with a **staged FITS file**.
+
+There are three ways to obtain one:
+
+```text
+                         ┌─────────────────────┐
+                         │     ESO / MAST      │
+                         │       Archive       │
+                         └──────────┬──────────┘
+                                    │
+                                  Search
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │      Download       │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+┌─────────────────┐        ┌─────────────────────┐
+│  Your own FITS  │───────►│   Local Storage     │
+│      file       │ Upload └──────────┬──────────┘
+└─────────────────┘                   │
+                                      │ fileId
+                                      ▼
+                           ┌─────────────────────┐
+                           │     FITS Dataset    │
+                           └──────────┬──────────┘
+                                      │
+             ┌────────────────────────┼────────────────────────┐
+             │                        │                        │
+             ▼                        ▼                        ▼
+        Image Analysis           Spectroscopy           Time Series
+             │                        │                        │
+             ▼                        ▼                        ▼
+        Astrometry               Measurements          Measurements
+        Photometry
+             │
+             ▼
+         Catalogues
+```
+
+The returned `fileId` identifies the staged dataset. Once a file has been staged, it can be analysed repeatedly without downloading or uploading it again.
+
+The analysis endpoints are read-only unless an operation explicitly creates a new dataset, such as image stacking.
+
+---
+
+# Running the API
+
+## Requirements
+
+For local development:
+
+- .NET 10 SDK
+- C# 14
+- Docker Desktop, if using the containerised setup
+- CFITSIO for the native FITS table/time-series functionality when running outside Docker
+
+Build the solution with:
 
 ```bash
 dotnet build AstroLab.slnx
 ```
 
-## Run locally
+Run the API with:
 
 ```bash
 dotnet run --project src/AstroLab.Api
 ```
 
-The API listens on:
+By default the development API listens on:
 
 ```text
 http://localhost:5279
 ```
 
-The port is configured in:
-
-```text
-src/AstroLab.Api/Properties/launchSettings.json
-```
-
-When running in `Development`, Swagger UI is available at:
+Swagger UI is available at:
 
 ```text
 http://localhost:5279/swagger
@@ -120,11 +270,11 @@ The OpenAPI document is available at:
 http://localhost:5279/openapi/v1.json
 ```
 
-Swagger is the easiest way to explore the available endpoints and their request/response models.
+Swagger is the easiest way to inspect the available request and response models interactively.
 
 ---
 
-# Running with Docker
+## Docker
 
 Build the image:
 
@@ -141,79 +291,53 @@ docker run \
   astrolab-api
 ```
 
-The storage volume is important because AstroLab stages downloaded and uploaded FITS files on local disk.
-
-There is currently **no database**. Files are stored under:
+The API is then available at:
 
 ```text
-storage/
+http://localhost:8080
 ```
 
-The location can be configured using:
-
-```text
-Storage:RootPath
-```
-
-Storage is gitignored and files are **not automatically deleted**. The staged datasets therefore remain available until they are cleaned up manually.
+The named Docker volume keeps staged FITS datasets outside the container lifecycle.
 
 ---
 
-# Native dependency: CFITSIO
+# CFITSIO
 
-Most of AstroLab is implemented in managed C#.
+Most AstroLab functionality is implemented in managed C#.
 
-This includes:
+The time-series FITS-table reader additionally uses the native **CFITSIO** library through P/Invoke.
 
-- FITS header parsing
-- Image rendering
-- Image statistics
-- Photometry
-- Astrometry
-- Spectral extraction
-- Most numerical and scientific calculations
-
-The main native dependency is **CFITSIO**, the widely used C library for reading and writing FITS files.
-
-AstroLab currently uses CFITSIO specifically for the binary/ASCII FITS table-reading path used by the time-series endpoints.
+CFITSIO is used for reading FITS binary and ASCII tables used by the time-series endpoints.
 
 ## Docker
 
-Nothing needs to be installed manually.
+Nothing additional is required.
 
 The Docker build:
 
 1. Downloads a pinned CFITSIO release.
 2. Verifies its checksum.
-3. Builds it in a dedicated build stage.
-4. Installs `libcfitsio.so` into the runtime image.
-5. Runs `ldconfig` so the .NET application can load it through P/Invoke.
+3. Compiles CFITSIO in a dedicated build stage.
+4. Copies the resulting shared library into the runtime image.
+5. Registers the library with the dynamic linker.
 
-## Running directly with `dotnet run`
+## Running with `dotnet run`
 
-CFITSIO is **not bundled with the application** when running directly on Windows, macOS or Linux.
-
-A compatible native library must therefore be installed separately.
+CFITSIO is not bundled with the .NET application when running directly on the host.
 
 ### Windows
 
-Provide:
-
-```text
-cfitsio.dll
-```
-
-For example, using vcpkg:
+A `cfitsio.dll` must be available to the application, for example by installing/building CFITSIO with vcpkg:
 
 ```bash
 vcpkg install cfitsio
 ```
 
-The DLL can either be placed next to `AstroLab.Api.dll` in the build output or made available through `PATH`.
+The DLL can be placed next to the application binaries or somewhere on `PATH`.
 
 ### Linux / macOS
 
-Provide the appropriate shared library:
+A compatible:
 
 ```text
 libcfitsio.so
@@ -225,58 +349,43 @@ or:
 libcfitsio.dylib
 ```
 
-It must be discoverable through the operating system's normal library mechanisms, such as `ldconfig`, `LD_LIBRARY_PATH` or the system package manager.
+must be installed and discoverable by the operating system's dynamic linker.
 
-Without CFITSIO, the time-series endpoints that depend on FITS table reading will not work. The rest of the API remains usable.
-
----
-
-# API overview
-
-The API is organised around the main stages of astronomical analysis:
-
-| Area         | What it does                                                    |
-| ------------ | --------------------------------------------------------------- |
-| Archives     | Find and download real astronomical observations                |
-| FITS         | Inspect the structure and metadata of a dataset                 |
-| Images       | Render and analyse image data                                   |
-| Astrometry   | Connect image pixels to positions on the sky                    |
-| Photometry   | Measure the brightness of astronomical sources                  |
-| Spectroscopy | Extract and analyse wavelength information                      |
-| Time series  | Analyse brightness as a function of time                        |
-| Measurements | Turn observations into higher-level astronomical measurements   |
-| Catalogues   | Compare detected sources with published astronomical catalogues |
-
-The sections below describe what each endpoint is for and when you would use it.
+Without CFITSIO, FITS image processing and the other managed functionality continue to work, but the native-backed time-series FITS-table functionality cannot operate.
 
 ---
 
-# 1. Getting astronomical data
+# Getting FITS Data
 
-## Search ESO or MAST
+## 1. Search an Archive
 
 ```http
 GET /api/archives/search
 ```
 
-Searches one of the supported astronomical archives.
+Supported archives:
 
-### Query parameters
+- `Mast`
+- `Eso`
 
-| Parameter             | Type   | Description                                 |
-| --------------------- | ------ | ------------------------------------------- |
-| `archive`             | enum   | `Eso` or `Mast`                             |
-| `target`              | string | Target name                                 |
-| `mission`             | string | Optional mission/collection filter          |
-| `instrument`          | string | Optional instrument filter                  |
-| `searchRadiusDegrees` | double | Optional cone-search radius                 |
-| `maxResults`          | int    | Maximum number of results; defaults to `50` |
+Example:
 
-### MAST target names
+```bash
+curl "http://localhost:5279/api/archives/search?archive=Mast&target=M31&instrument=WFC3&maxResults=5"
+```
 
-MAST resolves target names through its own name-resolution service.
+### Parameters
 
-This means common names such as:
+| Parameter             | Type   | Description                 |
+| --------------------- | ------ | --------------------------- |
+| `archive`             | enum   | `Mast` or `Eso`             |
+| `target`              | string | Astronomical target         |
+| `mission`             | string | Optional mission/collection |
+| `instrument`          | string | Optional instrument         |
+| `searchRadiusDegrees` | double | Optional cone-search radius |
+| `maxResults`          | int    | Maximum number of results   |
+
+MAST resolves target names through its own name-resolution service, so names such as:
 
 ```text
 M31
@@ -286,73 +395,46 @@ Andromeda Galaxy
 
 can be used directly.
 
-### ESO target names
+ESO target matching uses the archive's target-name field. Using the archive's naming convention can therefore improve results.
 
-ESO searches the archive's `target_name` field.
-
-It is therefore useful to use ESO's naming convention. For example:
-
-```text
-M 31
-```
-
-may work better than:
-
-```text
-M31
-```
-
-depending on how the observation is recorded.
-
-### Response
-
-The response contains `ArchiveObservationDto` records describing the observations found.
-
-Typical information includes:
+The response contains observations with information such as:
 
 - Dataset ID
 - Target
 - Instrument
 - Observation date
-- Right Ascension
-- Declination
+- RA/Dec
 - Exposure time
-- Wavelength range
-- Proposal ID
-- Proposal PI
+- Wavelength information
+- Proposal information
+- Principal investigator
 - Data rights
 - Archive provenance
 
-The important field for the next step is:
-
-```text
-datasetId
-```
-
 ---
 
-## Download an observation
+## 2. Download an Observation
+
+Once an observation has been selected:
 
 ```http
 POST /api/archives/download
 ```
 
-Downloads a selected archive observation and stages it locally.
-
 Example:
 
-```json
-{
-  "archive": "Mast",
-  "datasetId": "<datasetId from search>"
-}
+```bash
+curl -X POST http://localhost:5279/api/archives/download \
+  -H "Content-Type: application/json" \
+  -d '{
+    "archive": "Mast",
+    "datasetId": "hst_12345_01_wfc3_uvis_f814w"
+  }'
 ```
 
-AstroLab asks the archive for the actual downloadable product rather than constructing a filename or download URL itself.
+The archive client uses the archive's product/DataLink information to discover the downloadable product rather than constructing a download URL from assumptions about the filename.
 
-The downloaded FITS file is streamed directly to local storage.
-
-Example response:
+The result contains a `fileId`:
 
 ```json
 {
@@ -362,126 +444,94 @@ Example response:
 }
 ```
 
-The returned `fileId` becomes the identifier for all subsequent analysis.
-
-The response also provides a `Location` header pointing to the FITS header endpoint.
+That `fileId` is used by subsequent analysis requests.
 
 ---
 
-## Upload your own FITS file
+## 3. Upload Your Own FITS File
+
+Local observations can be uploaded directly:
 
 ```http
 POST /api/fits/upload
 ```
 
-AstroLab can also work with FITS files that did not come from ESO or MAST.
+The FITS bytes are streamed directly to storage.
 
-The file is sent as the raw request body:
+There is no requirement to wrap the file in a multipart form and the entire FITS dataset does not need to be buffered in application memory.
+
+Example:
 
 ```bash
-curl -X POST \
-  http://localhost:5279/api/fits/upload \
+curl -X POST http://localhost:5279/api/fits/upload \
   --data-binary @m31.fits \
   -H "Content-Type: application/octet-stream"
 ```
 
-The upload is streamed directly to disk rather than loading the entire FITS file into memory.
-
-The response contains a `fileId` and file size:
+Response:
 
 ```json
 {
-  "fileId": "20260906-...",
+  "fileId": "20260906-142233-a1b2c3-fits",
   "sizeBytes": 41984000
 }
 ```
 
-From this point onwards, an uploaded file behaves exactly like an archived observation.
+This is particularly useful for FITS files produced by personal telescopes, observatory instruments, or other astronomy software.
 
 ---
 
-# 2. Understanding a FITS dataset
+# Working with a FITS Dataset
 
-## Inspect the FITS header
+Once a FITS file has a `fileId`, the same dataset can be passed to the analysis endpoints.
+
+## FITS Inspection
 
 ```http
 GET /api/fits/{fileId}/header
 ```
 
-This is usually the best first request after obtaining a `fileId`.
+This endpoint parses the FITS structure and returns information about the HDUs and their available scientific capabilities.
 
-It parses the FITS structure and reports information about its HDUs and available scientific capabilities.
+It can be used to determine whether a dataset contains:
 
-This helps answer questions such as:
+- Image data
+- WCS information
+- Spectral data
+- Time-series tables
+- Other FITS table data
 
-- How many HDUs does this FITS file contain?
-- Which HDU contains the image?
-- Is there WCS information?
-- Does the dataset contain a time-series table?
-- Is the data suitable for spectroscopy?
-- What metadata does the instrument provide?
-
-Because AstroLab uses capabilities rather than a single mutually-exclusive FITS "type", a dataset can expose several capabilities simultaneously.
+The dataset is not forced into a single mutually exclusive category. Capabilities are determined from the actual HDUs present in the file.
 
 ---
 
-## Observation metadata and provenance
+# Image Analysis
 
-```http
-GET /api/fits/{fileId}/observation
-```
-
-Reports observation date/time, target, instrument, filter, exposure, and detector/calibration metadata read directly from the FITS header, alongside AstroLab-derived information such as WCS-based pixel scale — keeping header-sourced values clearly distinct from values AstroLab itself computes.
-
----
-
-## Data quality
-
-```http
-GET /api/fits/{fileId}/quality
-```
-
-Reports cross-cutting data-quality statistics for a staged dataset's image data: invalid-pixel counts, saturation, dynamic range, and usable-pixel fraction, distinguishing "not present", "not measurable", and "measured as zero".
-
----
-
-# 3. Image analysis
-
-Image endpoints live under:
+All image endpoints use:
 
 ```text
-/api/images/{fileId}
+/api/images/{fileId}/...
 ```
 
-These endpoints operate on image HDUs and provide the building blocks for astronomical image analysis.
-
----
-
-## Render an astronomical image
+## Render an Image
 
 ```http
 GET /api/images/{fileId}/render
 ```
 
-Converts an image HDU into a PNG suitable for viewing.
+Produces a browser-consumable PNG representation of an image HDU.
 
-Astronomical detector data often has a much wider dynamic range than a normal display can show. AstroLab therefore supports different intensity stretches.
+Supported controls include:
 
-### Available stretches
-
-- `Linear`
-- `Logarithmic`
-- `SquareRoot`
-- `Asinh`
-
-The API also supports colour maps such as:
-
-- `Grayscale`
-- `Viridis`
-- `Hot`
-
-Additional controls include:
-
+- `stretch`
+  - `Linear`
+  - `Logarithmic`
+  - `SquareRoot`
+  - `Asinh`
+- `colorMap`
+  - `Grayscale`
+  - `Viridis`
+  - `Hot`
 - `blackPoint`
 - `whitePoint`
 - `lowerPercentile`
@@ -489,27 +539,24 @@ Additional controls include:
 - `asinhSoftening`
 - `maxDimension`
 
-For example:
+Example:
 
 ```bash
-curl \
-  "http://localhost:5279/api/images/{fileId}/render?stretch=Asinh&colorMap=Viridis" \
-  -o preview.png
+curl "http://localhost:5279/api/images/FILE_ID/render?stretch=Asinh&colorMap=Viridis" \
+  -o image.png
 ```
 
-An `Asinh` stretch is particularly useful for astronomical images because it can simultaneously reveal faint structures while retaining detail in bright sources.
+Rendering is a visualisation operation. It does not alter the underlying scientific pixel data.
 
 ---
 
-## Image statistics
+## Image Statistics
 
 ```http
 GET /api/images/{fileId}/statistics
 ```
 
-Calculates descriptive statistics for the image.
-
-The response includes measurements such as:
+Returns statistics such as:
 
 - Minimum
 - Maximum
@@ -517,48 +564,31 @@ The response includes measurements such as:
 - Median
 - Standard deviation
 - Valid pixel count
-- Dead/invalid pixel count
+- Invalid/dead pixel count
 - Background statistics
 - Percentiles
 
-These are useful for understanding the detector data before performing more advanced analysis.
+These values are useful for understanding the dynamic range and quality of an astronomical image before performing measurements.
 
 ---
 
 ## Histogram
 
 ```http
-GET /api/images/{fileId}/histogram
+GET /api/images/{fileId}/histogram?binCount=64
 ```
 
-Produces a histogram of pixel values.
-
-The number of bins can be controlled using:
-
-```text
-binCount
-```
-
-For example:
-
-```bash
-curl \
-  "http://localhost:5279/api/images/{fileId}/histogram?binCount=64"
-```
-
-The histogram is intended to be consumed by a client for plotting or further analysis.
+Returns a pixel-value histogram suitable for plotting or further analysis by a client application.
 
 ---
 
-## Detect sources
+## Source Detection
 
 ```http
 GET /api/images/{fileId}/sources
 ```
 
-Searches the image for candidate astronomical sources.
-
-Detection is based on the significance of pixels above the estimated background.
+Detects candidate astronomical sources above a configurable background threshold.
 
 Parameters include:
 
@@ -566,376 +596,70 @@ Parameters include:
 - `minimumArea`
 - `maxSources`
 
-When usable WCS information is available, detected pixel positions can also be converted into sky coordinates.
-
-This endpoint can therefore turn an image from:
-
-> "Here is a grid of detector values."
-
-into:
-
-> "Here are the candidate sources detected in the field, and here is where they are on the sky."
+When a valid WCS is available, detected sources can also be associated with celestial RA/Dec coordinates.
 
 ---
 
-## Source characterisation
-
-```http
-GET /api/images/{fileId}/sources/characterization
-```
-
-Measures the shape of detected sources.
-
-Measurements include:
-
-- Semi-major axis
-- Semi-minor axis
-- Orientation
-- Ellipticity-related properties
-
-These measurements can help distinguish point-like objects from extended sources and provide information about how sources appear in the image.
-
----
-
-## Source segmentation
+## Source Segmentation
 
 ```http
 GET /api/images/{fileId}/segmentation
 ```
 
-Returns the pixels belonging to detected sources based on threshold-based segmentation.
+Produces pixel-level segments associated with detected sources.
 
-This provides more detailed information than simply returning a source centroid and is useful for downstream measurements.
+This provides the connection between source detection and subsequent measurements of individual objects.
 
 ---
 
-## Background estimation
+## Source Characterization
+
+```http
+GET /api/images/{fileId}/sources/characterization
+```
+
+Measures properties such as:
+
+- Semi-major axis
+- Semi-minor axis
+- Orientation
+- Ellipticity
+
+These measurements can help distinguish point-like and extended sources and provide useful information for subsequent astronomical analysis.
+
+---
+
+## Background Estimation
 
 ```http
 GET /api/images/{fileId}/background
 ```
 
-Builds a mesh-based background model.
+Calculates a mesh-based background model.
 
-The main configuration parameter is:
+The mesh size can be controlled using:
 
 ```text
 meshSizePixels
 ```
 
-The result provides an estimate of the local sky background and its RMS variation.
-
-Background estimation is important because astronomical images contain not only source photons but also sky background, detector effects and noise.
+The result includes background and RMS information useful for source detection and photometric measurements.
 
 ---
 
-## Render with detected sources
+## Source Overlay
 
 ```http
 GET /api/images/{fileId}/render/overlay
 ```
 
-Produces a PNG containing the rendered image with detected sources marked on top.
+Renders an image while overlaying detected sources.
 
-This is useful as a quick visual sanity check of the source-detection algorithm.
-
----
-
-## Image cutout
-
-```http
-GET /api/images/{fileId}/cutout
-```
-
-Extracts a rectangular region from a staged image and renders it as a PNG.
-
-The region can be supplied either as a pixel-space rectangle (`x`, `y`, `width`, `height`) or as a WCS-based sky region (`rightAscension`, `declination`, `radiusArcseconds`), which AstroLab converts to pixels using the image's WCS.
+This provides a convenient visual check of whether the source-detection parameters are identifying the expected astronomical objects.
 
 ---
 
-## Contour geometry
-
-```http
-GET /api/images/{fileId}/contours
-```
-
-Generates scientific contour-line geometry (marching-squares polylines) from an image's pixel data, at explicit `levels` or at an automatically percentile-derived set of `levelCount` levels.
-
-This returns geometry rather than a rendered image, so it can be overlaid on a plot or another visualisation.
-
----
-
-# 4. Astrometry
-
-Astrometry answers a fundamental question:
-
-> **Where on the sky does this pixel correspond to?**
-
-AstroLab uses the **World Coordinate System (WCS)** stored in FITS headers to establish this relationship.
-
-## Inspect the WCS
-
-```http
-GET /api/images/{fileId}/astrometry/wcs
-```
-
-Returns the WCS solution, including information such as:
-
-- Projection
-- Reference pixel
-- Reference sky coordinates
-- Pixel scale
-- Rotation
-
----
-
-## Render with a coordinate grid
-
-```http
-GET /api/images/{fileId}/render/wcs-grid
-```
-
-Renders a staged image to PNG with a right-ascension/declination coordinate grid overlaid, derived from the image's WCS. The grid spacing can be adjusted with `linesPerAxis`.
-
-The response also reports pixel scale, orientation, and whether the image is mirrored via the `X-Pixel-Scale-Arcsec-X`, `X-Pixel-Scale-Arcsec-Y`, `X-Orientation-Degrees`, and `X-Is-Mirrored` response headers.
-
----
-
-## Pixel → sky coordinates
-
-```http
-GET /api/images/{fileId}/astrometry/pixel-to-world
-```
-
-Converts:
-
-```text
-X, Y pixel position
-```
-
-into:
-
-```text
-Right Ascension, Declination
-```
-
-This is useful when you have identified an object in the image and want to determine its celestial coordinates.
-
-For converting many positions at once, `POST /api/images/{fileId}/astrometry/pixel-to-world` accepts a list of pixel points in the request body and returns the matching sky coordinates for each.
-
----
-
-## Sky coordinates → pixel
-
-```http
-GET /api/images/{fileId}/astrometry/world-to-pixel
-```
-
-Performs the inverse transformation.
-
-Given:
-
-```text
-Right Ascension
-Declination
-```
-
-it determines the corresponding image pixel.
-
-This is useful for locating a known astronomical object in an image.
-
-For converting many positions at once, `POST /api/images/{fileId}/astrometry/world-to-pixel` accepts a list of sky coordinates in the request body and returns the matching pixel position for each.
-
----
-
-## Image footprint
-
-```http
-GET /api/images/{fileId}/astrometry/footprint
-```
-
-Calculates the region of the sky covered by the image.
-
-The response contains the sky coordinates of the image corners.
-
-This is particularly useful when comparing an observation against an external catalogue.
-
----
-
-## Angular separation
-
-```http
-GET /api/images/{fileId}/astrometry/separation
-```
-
-Calculates the angular separation between two positions in the same image.
-
-The positions are supplied in pixel coordinates and converted to sky coordinates using the image's WCS.
-
-The result is returned in arcseconds.
-
----
-
-## Pixel scale
-
-```http
-GET /api/images/{fileId}/astrometry/pixel-scale
-```
-
-Reports the angular pixel scale derived from the image's WCS, in arcseconds per pixel and degrees per pixel, per axis.
-
----
-
-## Orientation
-
-```http
-GET /api/images/{fileId}/astrometry/orientation
-```
-
-Reports the image's position angle relative to celestial north, and whether the image is mirrored, derived from the image's WCS.
-
----
-
-## Validate the WCS
-
-```http
-GET /api/images/{fileId}/astrometry/validate
-```
-
-Runs diagnostic checks on the image's WCS solution: invertibility, axis orthogonality, pixel-scale symmetry, and pixel-to-world-to-pixel round-trip consistency.
-
-This is useful for sanity-checking a WCS solution before relying on it for precise measurements.
-
----
-
-# 5. Photometry
-
-Photometry is the measurement of the brightness of astronomical objects.
-
-AstroLab currently provides aperture-based photometry.
-
-## Aperture photometry
-
-```http
-POST /api/images/{fileId}/photometry/aperture
-```
-
-Measures the flux inside a circular aperture and estimates the background using a surrounding annulus.
-
-Example request:
-
-```json
-{
-  "centerX": 512.4,
-  "centerY": 498.1,
-  "apertureRadius": 10,
-  "annulusInnerRadius": 14,
-  "annulusOuterRadius": 20,
-  "backgroundMethod": "Median"
-}
-```
-
-The result includes values such as:
-
-- Raw flux
-- Aperture area
-- Background per pixel
-- Background-subtracted/net flux
-
-The basic calculation is:
-
-$$
-F_{\mathrm{net}}
-=
-F_{\mathrm{total}}
--
-A_{\mathrm{aperture}}
-\times
-I_{\mathrm{background}}
-$$
-
-This is one of the fundamental measurements in observational astronomy: determining how much light from a source actually belongs to the source rather than the surrounding sky.
-
----
-
-## Photometry of detected sources
-
-```http
-GET /api/images/{fileId}/photometry/sources
-```
-
-Runs source detection followed by aperture photometry for the detected sources.
-
-The result includes instrumental magnitude and uncertainty estimates.
-
-Parameters include:
-
-- `thresholdSigma`
-- `minimumArea`
-- `maxSources`
-- `apertureRadius`
-- `annulusInnerRadius`
-- `annulusOuterRadius`
-- `magnitudeZeroPoint`
-
-This provides a convenient path from:
-
-```text
-Image → detected sources → brightness measurements
-```
-
----
-
-## Differential photometry
-
-```http
-POST /api/images/{fileId}/photometry/differential
-```
-
-Compares the brightness of two apertures in the same image:
-
-- Target
-- Comparison source
-
-The result is a differential magnitude.
-
-Differential photometry is particularly useful for variable-star and transit work because many changes affecting the whole image — such as atmospheric transparency — can partially cancel when comparing a target with a nearby reference source.
-
----
-
-## Flux uncertainty
-
-```http
-POST /api/images/{fileId}/photometry/uncertainty
-```
-
-Estimates the propagated uncertainty of an aperture flux measurement, combining source shot noise and sky-background noise, plus read noise when supplied. A detector gain is read from the `GAIN` header keyword unless one is supplied explicitly in the request.
-
----
-
-## Signal-to-noise ratio
-
-```http
-POST /api/images/{fileId}/photometry/snr
-```
-
-Measures an aperture flux and its propagated uncertainty, then reports the resulting signal-to-noise ratio for that measurement.
-
----
-
-## Aperture correction
-
-```http
-POST /api/images/{fileId}/photometry/aperture-correction
-```
-
-Applies a multiplicative correction factor to a previously measured flux — for example, to account for light falling outside a finite aperture — propagating the flux uncertainty where one is supplied.
-
----
-
-# 6. Comparing and combining images
-
-## Compare two images
+## Image Comparison
 
 ```http
 POST /api/images/{fileId}/compare
@@ -943,17 +667,15 @@ POST /api/images/{fileId}/compare
 
 Compares two staged images of the same dimensions.
 
-The response includes pixel-difference statistics such as:
+The result includes difference statistics such as:
 
 - Mean difference
 - Standard deviation
 - Maximum absolute difference
 
-This can be useful for assessing whether two observations differ significantly.
-
 ---
 
-## Align two images
+## Image Alignment
 
 ```http
 POST /api/images/{fileId}/align
@@ -967,11 +689,11 @@ The transform can include:
 - Rotation
 - Scale
 
-This is useful before combining images that were taken at slightly different positions or orientations.
+This is useful when multiple observations of the same field have been captured at different positions or orientations.
 
 ---
 
-## Stack multiple images
+## Image Stacking
 
 ```http
 POST /api/images/{fileId}/stack
@@ -979,42 +701,254 @@ POST /api/images/{fileId}/stack
 
 Combines multiple staged images into a new FITS dataset.
 
-Supported methods include:
+Supported combination methods include:
 
 - Mean
 - Median
 
-Image stacking is a standard astronomical technique for improving signal-to-noise by combining multiple observations of the same field.
+Example request:
 
-The result is a **new staged FITS file** with its own `fileId`.
-
----
-
-## RGB composite
-
-```http
-POST /api/images/composite
+```json
+{
+  "fileIds": ["frame-001", "frame-002", "frame-003"],
+  "method": "Median"
+}
 ```
 
-Combines three separately staged images — supplied as `redFileId`, `greenFileId`, and `blueFileId`, which must share the same pixel dimensions — into a single RGB colour composite. Each channel is independently auto-scaled (asinh stretch over its 1st–99th percentile range) before combining.
-
-The result is a PNG image.
+The result is a new staged FITS file that can itself be passed to the analysis endpoints.
 
 ---
 
-# 7. Spectroscopy
+# Astrometry
 
-Spectroscopy turns an image containing dispersed light into information about the wavelengths emitted or absorbed by an astronomical object.
+Astrometry connects an image's pixel coordinate system to the celestial coordinate system.
 
-Endpoints live under:
+Routes are available under:
 
 ```text
-/api/spectroscopy/{fileId}
+/api/images/{fileId}/astrometry/...
+```
+
+## WCS
+
+```http
+GET /api/images/{fileId}/astrometry/wcs
+```
+
+Returns information from the image's FITS WCS solution, including:
+
+- Projection
+- Reference pixel
+- Reference celestial coordinates
+- Pixel scale
+- Rotation
+
+---
+
+## Pixel to World
+
+```http
+GET /api/images/{fileId}/astrometry/pixel-to-world
+```
+
+Converts:
+
+```text
+pixel X/Y
+```
+
+into:
+
+```text
+Right Ascension / Declination
+```
+
+Example:
+
+```bash
+curl "http://localhost:5279/api/images/FILE_ID/astrometry/pixel-to-world?pixelX=512&pixelY=498"
 ```
 
 ---
 
-## Extract a spectrum
+## World to Pixel
+
+```http
+GET /api/images/{fileId}/astrometry/world-to-pixel
+```
+
+Performs the inverse transformation.
+
+Example:
+
+```bash
+curl "http://localhost:5279/api/images/FILE_ID/astrometry/world-to-pixel?rightAscension=10.6847&declination=41.269"
+```
+
+Example result:
+
+```json
+{
+  "fileId": "FILE_ID",
+  "pixelX": 512.4,
+  "pixelY": 498.1
+}
+```
+
+---
+
+## Image Footprint
+
+```http
+GET /api/images/{fileId}/astrometry/footprint
+```
+
+Calculates the celestial footprint of the image from its WCS and pixel dimensions.
+
+The result describes the region of sky covered by the image.
+
+---
+
+## Angular Separation
+
+```http
+GET /api/images/{fileId}/astrometry/separation
+```
+
+Calculates the angular separation between two pixel positions using the image's WCS.
+
+The result is returned in arcseconds.
+
+---
+
+# Photometry
+
+Photometry measures the brightness of astronomical objects.
+
+Routes are available under:
+
+```text
+/api/images/{fileId}/photometry/...
+```
+
+## Aperture Photometry
+
+```http
+POST /api/images/{fileId}/photometry/aperture
+```
+
+Example:
+
+```json
+{
+  "centerX": 512.4,
+  "centerY": 498.1,
+  "apertureRadius": 10,
+  "annulusInnerRadius": 14,
+  "annulusOuterRadius": 20,
+  "backgroundMethod": "Median"
+}
+```
+
+The aperture contains the target source.
+
+The surrounding annulus estimates the local sky background.
+
+The basic background-subtracted flux is:
+
+\[
+F*{\mathrm{net}}
+=
+F*{\mathrm{total}}
+
+- A*{\mathrm{aperture}} I*{\mathrm{background}}
+  \]
+
+where:
+
+- \(F\_{\mathrm{total}}\) is the total measured flux inside the aperture
+- \(A\_{\mathrm{aperture}}\) is the aperture area
+- \(I\_{\mathrm{background}}\) is the estimated background intensity per pixel
+
+The response includes values such as:
+
+```json
+{
+  "fileId": "FILE_ID",
+  "rawFlux": 184230.5,
+  "apertureArea": 314.16,
+  "backgroundPerPixel": 12.4,
+  "netFlux": 180334.6
+}
+```
+
+---
+
+## Photometry of Detected Sources
+
+```http
+GET /api/images/{fileId}/photometry/sources
+```
+
+Detects sources and performs aperture photometry for each one.
+
+The result can include:
+
+- Source position
+- Flux
+- Instrumental magnitude
+- Uncertainty
+- Background estimate
+
+Parameters include:
+
+```text
+thresholdSigma
+minimumArea
+maxSources
+apertureRadius
+annulusInnerRadius
+annulusOuterRadius
+magnitudeZeroPoint
+```
+
+---
+
+## Differential Photometry
+
+```http
+POST /api/images/{fileId}/photometry/differential
+```
+
+Measures the magnitude difference between a target and comparison source in the same image.
+
+Example:
+
+```json
+{
+  "targetCenterX": 512,
+  "targetCenterY": 498,
+  "comparisonCenterX": 650,
+  "comparisonCenterY": 470,
+  "apertureRadius": 8,
+  "annulusInnerRadius": 12,
+  "annulusOuterRadius": 18
+}
+```
+
+Differential photometry is particularly useful for monitoring relative brightness changes because the comparison source provides a reference against common observational variations.
+
+---
+
+# Spectroscopy
+
+Spectroscopic routes are available under:
+
+```text
+/api/spectroscopy/{fileId}/...
+```
+
+## Spectral Extraction
 
 ```http
 POST /api/spectroscopy/{fileId}/extract
@@ -1022,203 +956,96 @@ POST /api/spectroscopy/{fileId}/extract
 
 Extracts a one-dimensional spectrum from a spectroscopic image using boxcar extraction.
 
-The extraction can be performed along either:
-
-```text
-Horizontal
-Vertical
-```
-
-The request can specify:
-
-- Trace centre(s)
-- Aperture half-width
-- Optional wavelength-dispersion coefficients
-
-The result is a 1D representation of:
-
-```text
-flux vs wavelength
-```
-
-when wavelength calibration is available.
+The extraction can operate along either the horizontal or vertical image axis and supports trace positions and an extraction aperture.
 
 ---
 
-## Wavelength calibration
+## Wavelength Calibration
 
 ```http
 POST /api/spectroscopy/{fileId}/calibrate
 ```
 
-Fits a polynomial dispersion relation from known pixel/wavelength pairs.
+Fits a polynomial wavelength-dispersion relationship using known pixel/wavelength pairs.
 
-Input:
-
-```text
-pixel position → known wavelength
-```
-
-Output:
+The response includes:
 
 - Dispersion coefficients
 - Residual RMS
 
-This provides the mapping required to turn detector pixels into physically meaningful wavelengths.
+This converts detector pixel positions into physical wavelengths.
 
 ---
 
-## Fit the continuum
-
-```http
-POST /api/spectroscopy/{fileId}/continuum
-```
-
-Fits a polynomial continuum model to a spectrum, without mutating the original spectrum. The request can supply the polynomial degree, wavelength ranges to exclude from the fit (for example, known emission or absorption features), and iterative sigma-clipping parameters.
-
-The result includes the fitted continuum values alongside the original spectrum, plus the fitted polynomial coefficients.
-
----
-
-## Subtract the continuum
-
-```http
-POST /api/spectroscopy/{fileId}/continuum/subtract
-```
-
-Fits a continuum using the same parameters as above, then subtracts it from the spectrum.
-
-This isolates spectral features (emission or absorption lines) from the underlying continuum, which is a common preparatory step before line fitting or equivalent-width measurement.
-
----
-
-## Detect spectral lines
+## Spectral-Line Detection
 
 ```http
 GET /api/spectroscopy/{fileId}/lines
 ```
 
-Searches a spectrum for significant spectral features.
+Detects significant spectral features, including potential absorption and emission lines.
 
-The optional:
-
-```text
-significanceThreshold
-```
-
-controls the detection threshold.
-
-Spectral lines can correspond to atomic or molecular transitions and provide information about the physical properties and motion of astronomical sources.
+A significance threshold can be supplied to control detection sensitivity.
 
 ---
 
-## Fit a spectral line
-
-```http
-POST /api/spectroscopy/{fileId}/lines/fit
-```
-
-Fits a Gaussian profile to a spectral line over a supplied wavelength window, given initial guesses for the line's centre, amplitude, and FWHM.
-
-The result reports the fitted centre, amplitude, FWHM, baseline, and integrated flux, each with an uncertainty derived from the fit's linearized covariance, plus the fit's reduced chi-square as a goodness-of-fit indicator.
-
----
-
-## Equivalent width
-
-```http
-POST /api/spectroscopy/{fileId}/equivalent-width
-```
-
-Calculates the equivalent width of a spectral feature over a supplied wavelength interval — a measure of a line's strength expressed as the width of continuum that carries the same flux as the feature.
-
----
-
-## Estimate redshift
+## Redshift
 
 ```http
 POST /api/spectroscopy/{fileId}/redshift
 ```
 
-Estimates redshift by comparing observed spectral-line wavelengths with their known rest-frame wavelengths.
+Estimates redshift from observed and rest-frame spectral-line wavelengths.
 
 The fundamental relation is:
 
-$$
+\[
 z =
-\frac{\lambda_{\mathrm{obs}}-\lambda_{\mathrm{rest}}}
-{\lambda_{\mathrm{rest}}}
-$$
+\frac{\lambda*{\mathrm{obs}}-\lambda*{\mathrm{rest}}}
+{\lambda\_{\mathrm{rest}}}
+\]
 
-A positive redshift means the observed wavelength is longer than the rest wavelength.
+where:
 
-For small velocities, redshift can be related approximately to radial velocity by:
-
-$$
-v \approx cz
-$$
-
-where `c` is the speed of light.
-
-For sufficiently large redshifts, however, this simple classical approximation is not appropriate for interpreting cosmological distances or velocities.
+- \(\lambda\_{\mathrm{obs}}\) is the observed wavelength
+- \(\lambda\_{\mathrm{rest}}\) is the laboratory/rest wavelength
+- \(z\) is the redshift
 
 ---
 
-## Compare spectra
+## Spectral Comparison
 
 ```http
 POST /api/spectroscopy/{fileId}/compare
 ```
 
-Cross-correlates one staged spectrum against another.
-
-This can be used to investigate whether two spectra contain similar features or whether one spectrum is shifted relative to another.
+Cross-correlates one spectrum against another to identify similarity between their spectral structures.
 
 ---
 
-## Spectral signal-to-noise ratio
+# Time-Series Analysis
 
-```http
-GET /api/spectroscopy/{fileId}/snr
-```
-
-Reports a representative signal-to-noise ratio for a spectrum, both overall and per wavelength sample.
-
----
-
-# 8. Time-series analysis
-
-Time-series endpoints operate on FITS tables containing measurements taken at different times.
-
-They live under:
+Time-series routes are available under:
 
 ```text
-/api/timeseries/{fileId}
+/api/timeseries/{fileId}/...
 ```
 
-These endpoints require the native CFITSIO dependency.
+They operate on FITS tables containing observational measurements at multiple times.
 
----
-
-## Build a light curve
+## Light Curve
 
 ```http
 GET /api/timeseries/{fileId}/light-curve
 ```
 
-Extracts a light curve from a time-series FITS table.
+Extracts a time-versus-flux light curve from a FITS table.
 
-The resulting data represents:
-
-```text
-time → measured brightness/flux
-```
-
-This is the starting point for analysing objects whose brightness changes over time.
+The native CFITSIO library is used to read the FITS table.
 
 ---
 
-## Detrend a light curve
+## Detrending
 
 ```http
 POST /api/timeseries/{fileId}/detrend
@@ -1226,220 +1053,174 @@ POST /api/timeseries/{fileId}/detrend
 
 Removes long-term trends from a light curve.
 
-Available methods include:
+Supported methods include:
 
 - `linear`
 - `median`
 
-Detrending is important because changes in brightness may come from the instrument or observing conditions rather than the astronomical source itself.
+Detrending is useful when instrumental or observational trends are much larger than the variation being investigated.
 
 ---
 
-## Compare light curves
+## Light-Curve Comparison
 
 ```http
 POST /api/timeseries/{fileId}/compare
 ```
 
-Compares two staged light curves using:
+Compares two light curves using measures such as:
 
 - Pearson correlation
 - Mean instrumental-magnitude offset
 
-This can help determine whether two objects show similar variability.
-
 ---
 
-## Search for periodicity
+## Period Search
 
 ```http
 GET /api/timeseries/{fileId}/period-search
 ```
 
-Uses a **Lomb–Scargle periodogram** to search for periodic signals.
+Searches for periodic signals using a Lomb-Scargle periodogram.
 
-The user supplies:
+Parameters include:
 
 ```text
 minPeriod
 maxPeriod
 ```
 
-Lomb–Scargle is particularly useful for astronomical observations because observations are often **unevenly sampled** rather than occurring at perfectly regular time intervals.
+This is useful for detecting periodic behaviour such as:
 
-The result identifies the strongest candidate period within the requested range, and also includes the full periodogram (every trial period and its power) and a false-alarm probability for the best-fit peak.
-
----
-
-## Fold a light curve by phase
-
-```http
-POST /api/timeseries/{fileId}/phase-fold
-```
-
-Folds a light curve around a supplied period and reference epoch, converting each observation's time into a phase in the range `[0, 1)` while preserving the original time and flux.
-
-Phase-folding is the standard way to visualise and analyse periodic variability once a candidate period is known.
+- Variable stars
+- Stellar rotation
+- Binary systems
+- Repeating observational signals
 
 ---
 
-## Variability statistics
-
-```http
-GET /api/timeseries/{fileId}/variability
-```
-
-Reports summary statistics describing how much a light curve varies: mean, median, standard deviation, amplitude, RMS, and median absolute deviation.
-
----
-
-## Search for transits
+## Transit Detection
 
 ```http
 GET /api/timeseries/{fileId}/transit
 ```
 
-Searches for periodic brightness dips consistent with transits.
+Searches for periodic brightness decreases consistent with transiting objects.
 
-The search can be constrained using:
+The result can include:
 
-- `minPeriod`
-- `maxPeriod`
-- `minTransitDepth`
-
-The result includes quantities such as:
-
-- Best-fit period
+- Best period
 - Transit depth
 - Transit duration
 - Transit epoch
 
-This provides a simple pipeline from:
+Parameters include:
 
 ```text
-Time-series observations
-        ↓
-      Light curve
-        ↓
-     Detrending
-        ↓
- Periodicity search
-        ↓
- Transit candidate
+minPeriod
+maxPeriod
+minTransitDepth
 ```
 
-It is intended as an analysis tool rather than a complete exoplanet validation pipeline.
+A transit appears as a temporary decrease in observed brightness when a body passes across the stellar disk.
 
 ---
 
-# 9. Higher-level astronomical measurements
+# Measurements
 
-The `/api/measurements` endpoints build on the lower-level image and spectroscopy functionality to produce more directly interpretable astronomical quantities.
+Higher-level measurements combine information from the lower-level analysis capabilities.
 
----
+Routes are available under:
 
-## Stellar colour
+```text
+/api/measurements/...
+```
+
+## Stellar Colour
 
 ```http
 POST /api/measurements/{fileId}/stellar-colour
 ```
 
-Measures a colour index between two observations taken in different photometric bands.
+Calculates a colour index from photometry in two different bands.
 
-The request provides:
+The comparison image is supplied through:
 
-- Comparison image
-- Source position
-- Aperture radius
+```text
+comparisonFileId
+```
 
-Colour indices describe how an object's brightness changes between filters and provide information about its spectral energy distribution.
+along with the target position and aperture.
 
 ---
 
-## Stellar temperature
+## Stellar Temperature
 
 ```http
 GET /api/measurements/stellar-temperature
 ```
 
-Estimates effective temperature from a B−V colour index using the Ballesteros (2012) relation.
+Estimates stellar effective temperature from a B−V colour index.
+
+The implementation uses the Ballesteros relation.
 
 The result is expressed in Kelvin.
 
-This is an estimate rather than a direct measurement of the star's physical temperature. Real stellar atmospheres, metallicity, reddening and photometric calibration can all affect the relationship between colour and temperature.
-
 ---
 
-## Spectral classification
+## Spectral Classification
 
 ```http
 GET /api/measurements/{fileId}/spectral-classification
 ```
 
-Provides a coarse OBAFGKM spectral classification based on the density of detected absorption/emission features.
+Provides a coarse stellar spectral classification using spectral absorption/emission-line characteristics.
 
-The familiar sequence:
+The classification follows the familiar:
 
 ```text
-O → B → A → F → G → K → M
+O B A F G K M
 ```
 
-roughly corresponds to decreasing stellar temperature.
-
-The classification implemented here is intentionally coarse and should be treated as an automated estimate rather than a professional spectroscopic classification pipeline.
+sequence.
 
 ---
 
-## Radial velocity
+## Radial Velocity
 
 ```http
 GET /api/measurements/{fileId}/radial-velocity
 ```
 
-Calculates classical Doppler radial velocity from a rest-frame and observed wavelength.
+Calculates line-of-sight velocity from the observed shift of a spectral line.
 
-The calculation is based on:
-
-$$
-v =
-c
-\frac{\lambda_{\mathrm{obs}}-\lambda_{\mathrm{rest}}}
-{\lambda_{\mathrm{rest}}}
-$$
-
-The result describes motion along the line of sight.
-
-As with the redshift endpoint, this classical approximation is most appropriate for relatively small velocities.
+The classical Doppler relationship is used from the supplied rest and observed wavelengths.
 
 ---
 
-## Galaxy morphology
+## Galaxy Morphology
 
 ```http
 GET /api/measurements/{fileId}/galaxy-morphology
 ```
 
-Analyses the source nearest a supplied pixel position.
-
-It calculates properties such as:
+Measures properties of a detected extended source, including:
 
 - Effective radius
 - Ellipticity
-- Concentration index
+- Concentration
 
-and uses those measurements to provide a coarse morphological classification:
+A concentration-based classification provides a coarse:
 
-```text
-Elliptical
-Spiral
-Irregular
-```
+- Elliptical
+- Spiral
+- Irregular
 
-This should be regarded as a simplified image-based classification rather than a replacement for detailed galaxy morphology analysis.
+classification.
 
 ---
 
-## Surface brightness
+## Surface Brightness
 
 ```http
 GET /api/measurements/{fileId}/surface-brightness
@@ -1451,181 +1232,351 @@ Calculates surface brightness in:
 mag / arcsec²
 ```
 
-within an aperture.
-
-The image's WCS is used to determine the angular size represented by the pixels.
-
-This is important because total flux and surface brightness describe different physical properties: a large, faint galaxy and a small, bright source can have very different total brightnesses but overlapping surface-brightness characteristics.
+The image WCS supplies the pixel scale required to convert an image aperture into an angular area on the sky.
 
 ---
 
-## Physical size
+## Physical Size
 
 ```http
 GET /api/measurements/physical-size
 ```
 
-Converts an angular size and an assumed distance into a physical size.
+Converts an angular size and assumed distance into a physical size.
 
-Inputs:
-
-- Angular size in arcseconds
-- Distance in parsecs
-
-Output:
-
-- Physical size in AU
-
-Conceptually, this is the astronomical equivalent of converting:
+Parameters:
 
 ```text
-"How large does it look?"
+angularSizeArcsec
+distanceParsecs
 ```
 
-into:
-
-```text
-"How large is it actually?"
-```
-
-The result naturally depends on the assumed distance.
+The result is expressed in astronomical units.
 
 ---
 
-# 10. Astronomical catalogues
+# Catalogues
 
-AstroLab can query public astronomical catalogues through **VizieR's IVOA TAP service**.
+AstroLab integrates with public VizieR catalogues through the IVOA TAP service.
 
-No API key or user account is required.
+No API key or account is required.
 
-Catalogue identifiers use VizieR table names, for example:
+Examples of catalogue identifiers include:
 
 ```text
 I/355/gaiadr3
-```
-
-for Gaia DR3, or:
-
-```text
 II/246/out
 ```
 
-for 2MASS.
+representing catalogues such as Gaia DR3 and 2MASS.
 
----
-
-## Query a catalogue
+## Catalogue Query
 
 ```http
 GET /api/catalogues/query
 ```
 
-Performs a cone search around a sky position.
+Performs a cone search around a celestial position.
 
 Parameters:
 
-- `catalogueId`
-- `rightAscension`
-- `declination`
-- `radiusArcsec`
-- Optional `maxResults`
-
-This is useful when you know the sky position of an object and want to find matching catalogue entries.
+```text
+catalogueId
+rightAscension
+declination
+radiusArcsec
+maxResults
+```
 
 ---
 
-## Cross-match an image against catalogues
+## Image Catalogue Cross-Match
 
 ```http
 POST /api/catalogues/cross-match
 ```
 
-This endpoint connects several parts of AstroLab together.
-
 The workflow is:
 
 ```text
-Image
-  ↓
-Detect sources
-  ↓
-WCS pixel → RA/Dec
-  ↓
-Query catalogue
-  ↓
-Match nearby catalogue objects
+FITS image
+    │
+    ▼
+Source detection
+    │
+    ▼
+Pixel positions
+    │
+    ▼
+WCS transformation
+    │
+    ▼
+RA / Dec
+    │
+    ▼
+VizieR catalogue
+    │
+    ▼
+Matched catalogue sources
 ```
 
-The request specifies:
-
-- `fileId`
-- One or more `catalogueIds`
-- Matching radius in arcseconds
-
-This allows detected sources in an image to be associated with objects already recorded in major astronomical catalogues.
-
----
-
-# Error handling
-
-Expected failures are returned as standard `ProblemDetails` responses rather than raw exceptions.
-
-Examples include:
-
-- Invalid FITS data
-- Missing scientific capability
-- No archive results
-- Invalid request parameters
-- Missing files
-- Unsupported analysis operations
-
-Appropriate HTTP status codes are used, such as:
-
-```text
-400 Bad Request
-404 Not Found
-422 Unprocessable Entity
-501 Not Implemented
-```
-
-Raw exception messages and stack traces are not returned to API consumers.
-
-`501 Not Implemented` is returned by roadmap endpoints that have been scaffolded with a real route and request contract but do not yet have a scientific implementation behind them — see [Not implemented: roadmap endpoints](#not-implemented-roadmap-endpoints) below.
-
----
-
-# Worked example: M31 from archive to photometry
-
-The following example demonstrates the complete AstroLab workflow using M31 (the Andromeda Galaxy).
-
-## 1. Find an observation
-
-```bash
-curl \
-  "http://localhost:5279/api/archives/search?archive=Mast&target=M31&instrument=WFC3&maxResults=5"
-```
-
-A result contains information such as:
+The request supplies:
 
 ```json
 {
-  "datasetId": "hst_12345_01_wfc3_uvis_f814w",
-  "target": "M31",
-  "instrument": "WFC3/UVIS",
-  "observationDate": "2011-08-...",
-  "rightAscension": 10.6847,
-  "declination": 41.269,
-  "exposureTimeSeconds": 1200
+  "fileId": "FILE_ID",
+  "catalogueIds": ["I/355/gaiadr3"],
+  "radiusArcsec": 2
+}
+```
+
+This allows detected astronomical sources to be associated with external catalogue information.
+
+---
+
+# Astronomical Concepts
+
+AstroLab is built around several fundamental observational-astronomy concepts.
+
+## FITS
+
+FITS is the standard format used throughout astronomy for exchanging scientific observational data.
+
+A FITS file can contain:
+
+- Scientific measurements
+- Image pixels
+- Tables
+- Instrument metadata
+- Observation metadata
+- Celestial-coordinate information
+
+The file is divided into **Header/Data Units (HDUs)**.
+
+The header contains keyword/value pairs describing the associated data.
+
+For example, a header can contain information about:
+
+```text
+EXPTIME
+DATE-OBS
+FILTER
+INSTRUME
+RA
+DEC
+CTYPE
+CRPIX
+CRVAL
+CDELT
+CD
+```
+
+AstroLab preserves the distinction between the FITS data itself and the metadata describing how that data should be interpreted.
+
+---
+
+# Astrometry and WCS
+
+A telescope records an image using detector coordinates:
+
+```text
+X, Y
+```
+
+Astronomers ultimately want celestial coordinates:
+
+```text
+Right Ascension, Declination
+```
+
+The **World Coordinate System (WCS)** stored in a FITS header defines the transformation between these coordinate systems.
+
+Conceptually:
+
+```text
+Detector
+  Pixel coordinates
+       │
+       │ WCS transformation
+       ▼
+Celestial sphere
+  RA / Dec
+```
+
+This allows AstroLab to answer questions such as:
+
+> Which part of the sky does this image contain?
+
+or:
+
+> Where in the image is the object at RA 10.6847°, Dec 41.269°?
+
+The sky coordinate system is especially important when combining AstroLab's source detection with external catalogues.
+
+---
+
+# Image Analysis
+
+Astronomical images contain far more than just visible stars.
+
+A typical image may contain:
+
+- Point sources
+- Extended galaxies
+- Nebulae
+- Background sky
+- Detector noise
+- Bad pixels
+- Cosmic-ray contamination
+- Saturated pixels
+
+AstroLab therefore separates several stages of image analysis.
+
+```text
+FITS pixels
+     │
+     ▼
+Background estimation
+     │
+     ▼
+Source detection
+     │
+     ├────► Segmentation
+     │
+     └────► Characterization
+                 │
+                 ▼
+             Photometry
+```
+
+The image renderer is deliberately separate from the scientific analysis. Changing the colour map or image stretch changes how the data is displayed, not the underlying scientific measurements.
+
+---
+
+# Photometry
+
+Photometry measures the brightness of astronomical sources.
+
+For aperture photometry, AstroLab defines:
+
+```text
+       Annulus
+    ┌─────────────┐
+    │             │
+    │   Aperture  │
+    │      ●      │
+    │             │
+    └─────────────┘
+```
+
+The aperture measures the target.
+
+The surrounding annulus estimates the local sky background.
+
+The background contribution is then removed from the total aperture flux.
+
+The resulting quantity is **net instrumental flux**.
+
+Instrumental magnitudes can then be calculated from flux ratios.
+
+Absolute calibrated magnitudes require additional calibration information such as a photometric zero point and, depending on the observation, instrument/filter/atmospheric calibration.
+
+---
+
+# Spectroscopy and Redshift
+
+A spectrograph spreads incoming light by wavelength.
+
+Instead of a 2D image of an object, the analysis ultimately produces a one-dimensional spectrum:
+
+```text
+Flux
+ │
+ │       /\          /\
+ │      /  \        /  \
+ │_____/____\______/____\____ Wavelength
+```
+
+Spectral lines provide information about the physical source.
+
+If a known spectral line is observed at a different wavelength from its laboratory value, the shift can be expressed as:
+
+\[
+z =
+\frac{\lambda*{\mathrm{obs}}-\lambda*{\mathrm{rest}}}
+{\lambda\_{\mathrm{rest}}}
+\]
+
+This redshift can then be related to the motion of the emitting/absorbing object and, for sufficiently distant astronomical objects, to cosmic expansion.
+
+---
+
+# Time-Series Astronomy
+
+A single image provides information about an object at one point in time.
+
+A sequence of observations provides a **light curve**:
+
+```text
+Brightness
+   │
+   │ ────────╲      ╱────────
+   │          ╲____╱
+   │
+   └────────────────────────── Time
+```
+
+Repeated observations can reveal changes that are invisible in a single image.
+
+Examples include:
+
+- Variable stars
+- Eclipsing binaries
+- Stellar rotation
+- Transiting exoplanets
+- Periodic stellar activity
+
+AstroLab can extract, detrend, compare, and search these time-series measurements for periodic behaviour.
+
+The Lomb-Scargle method is particularly useful for astronomical observations because observations are not always evenly spaced in time.
+
+---
+
+# End-to-End Example
+
+The following example demonstrates a complete workflow using an M31 observation from MAST.
+
+## 1. Search MAST
+
+```bash
+curl "http://localhost:5279/api/archives/search?archive=Mast&target=M31&instrument=WFC3&maxResults=5"
+```
+
+A result may contain:
+
+```json
+{
+  "observations": [
+    {
+      "datasetId": "hst_12345_01_wfc3_uvis_f814w",
+      "target": "M31",
+      "instrument": "WFC3/UVIS",
+      "observationDate": "2011-08-...",
+      "source": "Mast",
+      "rightAscension": 10.6847,
+      "declination": 41.269,
+      "exposureTimeSeconds": 1200
+    }
+  ]
 }
 ```
 
 ---
 
-## 2. Download it
+## 2. Download the Observation
 
 ```bash
-curl -X POST \
-  http://localhost:5279/api/archives/download \
+curl -X POST http://localhost:5279/api/archives/download \
   -H "Content-Type: application/json" \
   -d '{
     "archive": "Mast",
@@ -1633,7 +1584,7 @@ curl -X POST \
   }'
 ```
 
-Response:
+Suppose this returns:
 
 ```json
 {
@@ -1643,69 +1594,69 @@ Response:
 }
 ```
 
-Keep the `fileId`. It identifies the staged dataset for the rest of the workflow.
+Save the `fileId`.
 
 ---
 
-## 3. Inspect the dataset
+## 3. Inspect the FITS Dataset
 
 ```bash
-curl \
-  "http://localhost:5279/api/fits/20260906-142233-a1b2c3-fits/header"
+curl "http://localhost:5279/api/fits/20260906-142233-a1b2c3-fits/header"
 ```
 
-This tells you what the FITS file contains and which capabilities are available.
+This identifies the HDUs and available capabilities.
 
 ---
 
-## 4. Render an image
+## 4. Render the Image
 
 ```bash
 curl \
   "http://localhost:5279/api/images/20260906-142233-a1b2c3-fits/render?stretch=Asinh&colorMap=Viridis" \
-  -o m31-preview.png
+  -o m31.png
 ```
+
+The asinh stretch is useful for astronomical images because it can display faint structure while retaining brighter features.
 
 ---
 
-## 5. Analyse the image
+## 5. Inspect Image Statistics
 
 ```bash
 curl \
   "http://localhost:5279/api/images/20260906-142233-a1b2c3-fits/statistics"
+```
 
+And inspect the histogram:
+
+```bash
 curl \
   "http://localhost:5279/api/images/20260906-142233-a1b2c3-fits/histogram?binCount=64"
 ```
 
 ---
 
-## 6. Detect sources
+## 6. Detect Sources
 
 ```bash
 curl \
   "http://localhost:5279/api/images/20260906-142233-a1b2c3-fits/sources?thresholdSigma=5&minimumArea=5"
 ```
 
+AstroLab identifies candidate sources in the image.
+
 ---
 
-## 7. Use WCS to locate an object
+## 7. Use the WCS
 
-First inspect the WCS:
+Retrieve the WCS:
 
 ```bash
 curl \
   "http://localhost:5279/api/images/20260906-142233-a1b2c3-fits/astrometry/wcs"
 ```
 
-Then convert M31's approximate coordinates:
-
-```text
-RA  = 10.6847°
-Dec = 41.269°
-```
-
-into image coordinates:
+Then convert the approximate centre of M31:
 
 ```bash
 curl \
@@ -1724,9 +1675,9 @@ For example:
 
 ---
 
-## 8. Measure the source
+## 8. Perform Aperture Photometry
 
-Run aperture photometry around the resulting position:
+Use the calculated pixel position:
 
 ```bash
 curl -X POST \
@@ -1742,737 +1693,466 @@ curl -X POST \
   }'
 ```
 
-The response contains measurements such as:
+The resulting measurement gives the background-subtracted flux for the selected region.
 
-```json
-{
-  "fileId": "20260906-142233-a1b2c3-fits",
-  "rawFlux": 184230.5,
-  "apertureArea": 314.16,
-  "backgroundPerPixel": 12.4,
-  "netFlux": 180334.6
-}
-```
-
-At this point the API has taken you all the way from:
+The complete workflow is therefore:
 
 ```text
-Astronomical archive
-      ↓
+MAST
+ │
+ │ search
+ ▼
 Observation
-      ↓
-FITS file
-      ↓
-Image
-      ↓
-Sky coordinates
-      ↓
-Detected/selected source
-      ↓
-Photometric measurement
+ │
+ │ download
+ ▼
+Staged FITS
+ │
+ ├──► FITS metadata
+ │
+ ├──► Image rendering
+ │
+ ├──► Image statistics
+ │
+ ├──► Source detection
+ │
+ ├──► WCS
+ │      │
+ │      ▼
+ │    RA/Dec
+ │
+ └──► Photometry
+        │
+        ▼
+      Flux
+```
+
+The same workflow can begin with an ESO observation or a FITS file uploaded from a user's own telescope.
+
+---
+
+# Architecture
+
+AstroLab uses **Functional Core, Imperative Shell (FCIS)** together with **Vertical Slice Architecture** in the API.
+
+The solution consists of four projects:
+
+```text
+AstroLab.slnx
+│
+├── src/
+│   ├── AstroLab.Core/
+│   ├── AstroLab.Infrastructure/
+│   ├── AstroLab.Api/
+│   └── AstroLab.Tests/
+```
+
+Dependency direction is one-way:
+
+```text
+AstroLab.Api
+      │
+      ▼
+AstroLab.Infrastructure
+      │
+      ▼
+AstroLab.Core
+
+AstroLab.Tests
+      │
+      └──────► Core
+      └──────► Infrastructure
+      └──────► Api
+```
+
+## AstroLab.Core
+
+The Core contains the scientific domain logic.
+
+It is designed to be:
+
+- Pure
+- Deterministic
+- Allocation-conscious
+- Independent of ASP.NET Core
+- Independent of infrastructure
+- Free from I/O
+- Free from native interop
+
+Scientific algorithms operate on data rather than performing file or network operations themselves.
+
+The Core contains areas such as:
+
+```text
+Fits/
+Astrometry/
+Imaging/
+Photometry/
+Spectroscopy/
+TimeSeries/
+Measurements/
+Result/
 ```
 
 ---
 
-# The Science Behind the AstroLab API
+## AstroLab.Infrastructure
 
-AstroLab is built around a simple idea:
+Infrastructure owns external effects and platform-specific operations.
 
-> **Astronomical observations are measurements of light, and useful astronomy comes from turning those measurements into physical quantities.**
+It contains functionality such as:
 
-A FITS file provides the raw ingredients: detector measurements plus the metadata required to understand what those measurements mean.
-
-AstroLab implements several of the standard techniques used to turn those ingredients into astronomical information.
-
----
-
-## FITS: the foundation
-
-**FITS — Flexible Image Transport System** — is the standard format used throughout astronomy for exchanging observational data.
-
-A FITS file can contain:
-
-- Images
-- Tables
-- Multiple HDUs
-- Instrument metadata
-- Observation times
-- Exposure information
-- Detector information
-- Celestial coordinate information
-- Wavelength calibration information
-
-The distinction between the **data** and its **metadata** is particularly important.
-
-For example, a pixel value by itself might simply be:
-
-```text
-184230.5
-```
-
-The FITS metadata can tell us:
-
-- Which detector produced it
-- When the observation was taken
-- Which filter was being used
-- Where the telescope was pointing
-- How pixels map onto the sky
-- What the exposure time was
-
-AstroLab uses both the numerical data and this metadata throughout the analysis pipeline.
+- FITS file access
+- Native CFITSIO interop
+- Unmanaged memory
+- Local file storage
+- ESO HTTP clients
+- MAST HTTP clients
+- VizieR integration
+- FITS image rendering
+- PNG encoding
+- Streaming
 
 ---
 
-# From pixels to the sky: Astrometry
+## AstroLab.Api
 
-A telescope camera records an image as a rectangular array:
+The API project is the HTTP boundary.
 
-```text
-       X →
-   ┌───────────────┐
- Y │               │
- ↓ │     source    │
-   │       ●       │
-   │               │
-   └───────────────┘
-```
+Endpoints are organised as vertical slices around user-facing features.
 
-The pixel coordinates are not themselves celestial coordinates.
-
-The FITS **World Coordinate System (WCS)** describes how those pixels map onto positions on the celestial sphere.
-
-AstroLab uses that WCS information to perform transformations between:
+Each endpoint follows the **REPR** model:
 
 ```text
-Pixel coordinates
-      ↕
-RA / Dec
-```
-
-This allows the API to answer questions such as:
-
-- Where on the sky is this source?
-- Where should a known object appear in this image?
-- What area of the sky does this image cover?
-- How far apart are two detected objects?
-
-WCS therefore provides the bridge between **image processing** and **astronomy**.
-
----
-
-# Measuring light: Photometry
-
-Photometry is the measurement of an object's brightness.
-
-A simple aperture-photometry measurement looks like:
-
-```text
-             background annulus
-          ┌─────────────────────┐
-          │                     │
-          │      ┌───────┐      │
-          │      │ source│      │
-          │      │   ●   │      │
-          │      └───────┘      │
-          │                     │
-          └─────────────────────┘
-                aperture
-```
-
-The aperture contains the target's light.
-
-The surrounding annulus estimates the local sky background.
-
-If:
-
-- `F_total` is the total flux inside the aperture,
-- `A_aperture` is the aperture area,
-- `I_background` is the estimated background intensity per pixel,
-
-then the background-subtracted flux is:
-
-$$
-F_{\mathrm{net}}
-=
-F_{\mathrm{total}}
--
-A_{\mathrm{aperture}}
-I_{\mathrm{background}}
-$$
-
-This distinction is important because a detector measures both the astronomical source and everything contributing to the local background.
-
-Once a flux has been measured, it can be converted into an instrumental magnitude:
-
-$$
-m = -2.5\log_{10}(F) + ZP
-$$
-
-where `ZP` is the photometric zero point.
-
-The quality of the resulting physical magnitude depends on calibration, so instrumental photometry should not automatically be interpreted as calibrated apparent magnitude.
-
----
-
-# Differential photometry
-
-Instead of measuring an object in isolation, astronomers can compare it with a nearby reference object.
-
-For example:
-
-```text
-Target star       Comparison star
-    ●                   ●
-    │                   │
-    └──── brightness ───┘
-             ↓
-      relative change
-```
-
-If both objects are observed through approximately the same atmosphere and detector conditions, common variations can partially cancel.
-
-This makes differential photometry particularly useful for:
-
-- Variable stars
-- Transit searches
-- Monitoring changing brightness
-
-A transit is a good example: the absolute brightness of the target may be affected by observing conditions, but its brightness relative to nearby comparison stars can reveal a small periodic dip.
-
----
-
-# Understanding images: background, noise and sources
-
-Astronomical images are not simply collections of bright dots.
-
-They contain a combination of:
-
-- Astronomical sources
-- Sky background
-- Detector noise
-- Instrumental effects
-- Cosmic-ray or other anomalous pixels
-- Potentially very faint sources
-
-AstroLab therefore separates several operations.
-
-### Background estimation
-
-Estimates the local sky level and RMS variation.
-
-### Source detection
-
-Looks for regions significantly above the estimated background.
-
-### Segmentation
-
-Determines which pixels belong to detected sources.
-
-### Characterisation
-
-Measures properties such as source size, ellipticity and orientation.
-
-These steps provide the foundation for higher-level analysis such as photometry and galaxy morphology.
-
----
-
-# Image stretching and visualisation
-
-Raw astronomical pixel values often have a very different distribution from ordinary photographs.
-
-A few very bright pixels can dominate the numerical range while faint astronomical structures remain almost invisible.
-
-AstroLab therefore supports several display transformations.
-
-### Linear
-
-Directly maps pixel values to display intensity.
-
-### Logarithmic
-
-Compresses large dynamic ranges and makes faint structures easier to see.
-
-### Square-root
-
-Provides a compromise between linear and logarithmic scaling.
-
-### Asinh
-
-The inverse hyperbolic sine transformation is particularly useful for astronomical images because it behaves approximately linearly around zero while compressing large positive values.
-
-This makes it possible to display both:
-
-```text
-very bright sources
-        +
-faint extended structure
-```
-
-in the same image.
-
-The rendered image is therefore a **visual representation of the data**, not a replacement for the underlying numerical measurements.
-
----
-
-# Spectroscopy: reading the fingerprint of light
-
-Spectroscopy spreads light out by wavelength.
-
-Instead of simply asking:
-
-> "How bright is this object?"
-
-spectroscopy asks:
-
-> "How does its brightness change with wavelength?"
-
-The result is a spectrum:
-
-```text
-Flux
- ↑
- │       /\                 /\
- │      /  \       /\      /  \
- │─────/────\─────/──\────/────\──→ wavelength
- │          ↑         ↑
- │       spectral   spectral
- │         line       line
-```
-
-Spectral lines are particularly valuable because atoms and molecules absorb or emit light at characteristic wavelengths.
-
-This means a spectrum can reveal information about:
-
-- Chemical composition
-- Temperature
-- Physical conditions
-- Motion
-- Stellar classification
-
-AstroLab extracts a 1D spectrum from a spectroscopic image and can then identify significant spectral features.
-
----
-
-# Wavelength calibration
-
-The detector initially measures pixels, not wavelengths.
-
-For example:
-
-```text
-pixel 100 → ?
-pixel 200 → ?
-pixel 300 → ?
-```
-
-Known spectral lines provide reference points:
-
-```text
-pixel position ↔ known wavelength
-```
-
-AstroLab fits a polynomial dispersion relationship to these points.
-
-The calibrated spectrum can then be represented as:
-
-```text
-flux ↔ wavelength
-```
-
-rather than:
-
-```text
-flux ↔ detector pixel
-```
-
-The residual RMS returned by the calibration endpoint provides an indication of how well the fitted dispersion relation matches the supplied calibration points.
-
----
-
-# Redshift and radial velocity
-
-If an astronomical object is moving relative to the observer, its spectral lines shift.
-
-For a rest wavelength:
-
-$$
-\lambda_{\mathrm{rest}}
-$$
-
-and an observed wavelength:
-
-$$
-\lambda_{\mathrm{obs}}
-$$
-
-the redshift is:
-
-$$
-z =
-\frac{\lambda_{\mathrm{obs}}-\lambda_{\mathrm{rest}}}
-{\lambda_{\mathrm{rest}}}
-$$
-
-A positive value means the wavelength has shifted towards the red end of the spectrum.
-
-For relatively small velocities, radial velocity can be approximated using:
-
-$$
-v \approx cz
-$$
-
-or directly from the wavelength shift:
-
-$$
-v =
-c
-\frac{\lambda_{\mathrm{obs}}-\lambda_{\mathrm{rest}}}
-{\lambda_{\mathrm{rest}}}
-$$
-
-This is the principle behind measuring the line-of-sight motion of stars and galaxies.
-
-For large cosmological redshifts, however, `z` should not simply be interpreted as a classical velocity using `v = cz`.
-
----
-
-# Time-series astronomy
-
-Some astronomical observations are not primarily about spatial structure.
-
-Instead, the important quantity is:
-
-```text
-brightness → time
-```
-
-This produces a **light curve**.
-
-For example:
-
-```text
-Brightness
-   ↑
-   │  ● ● ● ●
-   │ ●       ● ●
-   │            ●
-   │             ● ●
+Request
    │
-   └──────────────────→ time
-                 transit
+   ▼
+Endpoint
+   │
+   ▼
+Processing
+   │
+   ▼
+Response
 ```
 
-A light curve can reveal:
+The API is responsible for:
 
-- Variable stars
-- Stellar rotation
-- Pulsations
-- Eclipsing binaries
-- Exoplanet transits
-- Other periodic or transient behaviour
+- HTTP request binding
+- Validation
+- Calling application/domain functionality
+- Mapping results to HTTP responses
+- Producing API DTOs
+- ProblemDetails responses
 
 ---
 
-# Detrending
+# Storage
 
-Real observations contain trends that are not necessarily intrinsic to the astronomical object.
+AstroLab does not currently require a database.
+
+FITS datasets are staged on local disk:
+
+```text
+storage/
+```
+
+The location is configurable through:
+
+```text
+Storage:RootPath
+```
+
+Each staged dataset is referenced by a `fileId`.
+
+The storage model is deliberately simple:
+
+```text
+Archive / Upload
+       │
+       ▼
+Local FITS file
+       │
+       ▼
+     fileId
+       │
+       ├──► Header
+       ├──► Image
+       ├──► Astrometry
+       ├──► Photometry
+       ├──► Spectroscopy
+       ├──► Time Series
+       └──► Measurements
+```
+
+Files are not automatically deleted. Storage therefore needs to be managed by the host environment.
+
+---
+
+# Configuration
+
+Infrastructure settings are configured through the application's normal .NET configuration system.
+
+Important configuration areas include:
+
+```text
+Storage
+Archives
+```
+
+Storage controls where staged FITS datasets are written.
+
+Archive configuration contains the ESO and MAST service settings used by their respective clients.
+
+The repository's configuration files provide the concrete defaults used during development.
+
+---
+
+# Error Handling
+
+AstroLab uses `ProblemDetails` for expected API failures.
 
 Examples include:
 
-- Changing atmospheric conditions
-- Instrumental drift
-- Long-term baseline changes
-- Systematic effects
+- Invalid request parameters
+- Invalid FITS files
+- Missing FITS capabilities
+- Missing files
+- Unsupported operations
+- Archive search failures
+- No matching archive observations
+- Invalid scientific input
 
-Detrending attempts to remove these slow variations while retaining the shorter-scale signal of interest.
-
-AstroLab currently provides linear and median-based detrending methods.
-
-The purpose is not to manufacture a cleaner-looking graph, but to make subsequent searches for periodic or transient signals less sensitive to known long-term trends.
-
----
-
-# Finding periodic signals
-
-A periodic astronomical signal may not be sampled at perfectly regular intervals.
-
-This is common in real observations because:
-
-- Observations occur only at night
-- Weather interrupts observations
-- Telescope scheduling creates gaps
-- Individual observations may have different timings
-
-AstroLab therefore uses a **Lomb–Scargle periodogram** for periodicity searches.
-
-Conceptually, the periodogram asks:
-
-> "At which periods does a repeating signal best explain the observed brightness variations?"
-
-The result can be used to identify candidate periods for variable stars or other periodic phenomena.
-
----
-
-# Detecting exoplanet transits
-
-A planetary transit occurs when a planet passes between its host star and the observer.
-
-The observed brightness changes approximately like:
+Responses use appropriate HTTP status codes such as:
 
 ```text
-Brightness
-   │
-   │───────────┐     ┌───────────
-   │           └─────┘
-   │
-   └─────────────────────────────→ time
-                 transit
+400 Bad Request
+404 Not Found
+422 Unprocessable Entity
 ```
 
-The depth of the transit is related approximately to the ratio of the planet and star radii:
-
-$$
-\frac{\Delta F}{F}
-\approx
-\left(\frac{R_p}{R_*}\right)^2
-$$
-
-where:
-
-- `R_p` is the planet radius
-- `R_*` is the stellar radius
-
-AstroLab's transit endpoint searches for periodic brightness dips and reports candidate properties such as period, depth, duration and epoch.
-
-This is a **candidate-detection tool**, not a complete exoplanet confirmation pipeline. Confirming a candidate normally requires additional observations and astrophysical validation.
+Expected failures do not expose raw exception messages or stack traces to API consumers.
 
 ---
 
-# Stellar colour and temperature
+# Testing
 
-Stars emit approximately thermal spectra, but their observed colours depend on the shape of that spectrum and the filters through which they are observed.
-
-A colour index compares brightness in two bands.
-
-For example:
-
-$$
-B-V = m_B - m_V
-$$
-
-where `B` and `V` are standard photometric bands.
-
-Hotter stars tend to be bluer, while cooler stars tend to be redder.
-
-AstroLab uses a colour-temperature relationship to estimate effective temperature from B−V.
-
-The result is an estimate of the star's **effective temperature** — the temperature of a blackbody that would emit the same total energy per unit surface area.
-
-In real observations, effects such as:
-
-- Interstellar reddening
-- Metallicity
-- Photometric calibration
-- Stellar atmosphere physics
-
-can cause the simple colour-temperature relationship to deviate from the true stellar temperature.
-
----
-
-# Stellar spectral classification
-
-The OBAFGKM sequence is one of the best-known classification systems in astronomy:
+The test project is:
 
 ```text
-O → B → A → F → G → K → M
+src/AstroLab.Tests
 ```
 
-The sequence primarily tracks stellar temperature.
+Run the complete suite with:
 
-Very roughly:
+```bash
+dotnet test src/AstroLab.Tests
+```
+
+Run a specific test class:
+
+```bash
+dotnet test src/AstroLab.Tests \
+  --filter "FullyQualifiedName~ApertureEngineTests"
+```
+
+Run a specific test:
+
+```bash
+dotnet test src/AstroLab.Tests \
+  --filter "DisplayName~<test name>"
+```
+
+API integration tests use:
 
 ```text
-O  hottest
-B
-A
-F
-G
-K
-M  coolest
+Microsoft.AspNetCore.Mvc.Testing
 ```
 
-Different spectral types exhibit characteristic absorption-line patterns because different atomic transitions become prominent at different temperatures.
+to run the API host in-process.
 
-AstroLab uses detected spectral features to produce a coarse automated OBAFGKM classification.
+Tests cover areas including:
 
-This is intended as an educational and analytical approximation rather than a replacement for a detailed professional spectral classification.
+- FITS parsing
+- FITS headers
+- Image processing
+- Photometry
+- Astrometry
+- Spectroscopy
+- Time-series processing
+- Native buffer ownership
+- Native resource disposal
+- Archive clients
+- Streaming
+- Rendering
+- API request validation
+- HTTP status codes
+- DTO mapping
+- Result-to-HTTP mapping
+- Error handling
+- Cancellation
+- End-to-end FITS workflows
+
+Native-library-dependent tests can detect the absence of CFITSIO and skip the native portion rather than making unrelated tests fail.
 
 ---
 
-# Galaxy morphology
+# Performance and Design
 
-Galaxies can have very different structures.
+AstroLab is designed to process potentially very large astronomical datasets without unnecessarily loading entire files into managed memory.
 
-Common broad categories include:
+Several design decisions support this.
 
-```text
-Elliptical     Spiral        Irregular
-   ◉           ◎            ✦  ✧
+## Functional Core
+
+Scientific calculations are isolated from I/O and infrastructure.
+
+This makes the mathematical operations:
+
+- Deterministic
+- Easier to test
+- Easier to benchmark
+- Independent of the HTTP layer
+
+## Spans
+
+Hot-path calculations use constructs such as:
+
+```csharp
+ReadOnlySpan<float>
+ReadOnlySpan<byte>
 ```
 
-AstroLab uses image measurements such as:
+where appropriate.
 
-- Effective radius
-- Ellipticity
-- Concentration
+This allows algorithms to operate over existing memory without creating unnecessary arrays or other managed allocations.
 
-to produce a coarse morphology classification.
+## Unmanaged Memory
 
-These quantities capture different aspects of the distribution of light.
+Native FITS data can involve large buffers.
 
-For example, ellipticity describes how elongated a source appears, while concentration describes how centrally concentrated its light is.
+AstroLab therefore uses explicit unmanaged-memory ownership where required, with deterministic disposal of native resources.
 
-The resulting classification is intentionally simplified. Real galaxy morphology is influenced by factors such as inclination, resolution, wavelength, dust and interactions with neighbouring galaxies.
+## Streaming
 
----
+Large FITS files are streamed to storage rather than being buffered in their entirety in application memory.
 
-# Surface brightness
+This is particularly important for astronomical datasets that can reach hundreds of megabytes or more.
 
-Total brightness does not tell the whole story for an extended astronomical object.
+## Native Interop
 
-Two objects can have the same total flux but distribute that flux over very different areas.
+CFITSIO is isolated behind the infrastructure boundary.
 
-Surface brightness describes brightness per unit angular area.
+The scientific Core does not depend directly on the native library.
 
-AstroLab reports surface brightness in:
+## Separation of Visualisation and Science
 
-$$
-\mathrm{mag/arcsec^2}
-$$
-
-The WCS is important here because detector pixels represent an angular area on the sky.
-
-This lets AstroLab convert:
-
-```text
-pixels
-   ↓
-angular area
-   ↓
-brightness per arcsec²
-```
-
-Surface brightness is especially useful when studying extended objects such as galaxies and nebulae.
-
----
-
-# Catalogue cross-matching
-
-Astronomy rarely analyses an observation in isolation.
-
-Once AstroLab has detected a source and converted its pixel position into RA/Dec, that position can be compared with external catalogues.
+Rendering an astronomical image and analysing an astronomical image are different operations.
 
 For example:
 
 ```text
-                    AstroLab image
-                         │
-                    Source detection
-                         │
-                         ▼
-                       RA/Dec
-                         │
-                         ▼
-                ┌─────────────────┐
-                │VizieR catalogue │
-                └────────┬────────┘
-                         │
-                         ▼
-                  Catalogue match
+FITS pixels
+     │
+     ├──────────────► Scientific analysis
+     │                  │
+     │                  ├── Statistics
+     │                  ├── Source detection
+     │                  ├── Photometry
+     │                  └── Astrometry
+     │
+     └──────────────► Visualisation
+                        │
+                        ├── Stretch
+                        ├── Colour map
+                        └── PNG
 ```
 
-This makes it possible to associate an observed source with existing catalogue information.
-
-For example, a detected star could potentially be matched with a Gaia catalogue entry containing additional astrometric or photometric information.
-
-The cross-match radius determines how close a catalogue source must be to the detected sky position to be considered a match.
+A visual stretch or colour map therefore does not modify the underlying scientific data.
 
 ---
 
-# Image stacking
+# Commands
 
-Astronomical imaging often involves taking multiple exposures of the same field.
+The main development commands are:
 
-A single exposure may contain substantial noise, while genuine astronomical signal is repeated across exposures.
+```bash
+# Build
+dotnet build AstroLab.slnx
 
-Combining the images can therefore improve the signal-to-noise ratio.
+# Run tests
+dotnet test src/AstroLab.Tests
 
-AstroLab supports mean and median stacking.
+# Run the API
+dotnet run --project src/AstroLab.Api
 
-Conceptually:
+# Build Docker image
+docker build -t astrolab-api .
+
+# Run Docker container
+docker run -p 8080:8080 -v astrolab-storage:/app/storage astrolab-api
+```
+
+---
+
+# Project Documentation
+
+The repository contains three complementary sources of documentation:
+
+### `README.md`
+
+Practical documentation for understanding and using the running AstroLab API.
+
+### `spec.md`
+
+The authoritative engineering and architectural specification. It defines the project's requirements, coding standards, architectural constraints, implementation patterns, and testing requirements.
+
+### `CLAUDE.md`
+
+Development guidance for AI coding agents working within the repository. It complements `spec.md` rather than duplicating it.
+
+---
+
+## AstroLab at a Glance
 
 ```text
-Exposure 1 ─┐
-Exposure 2 ─┤
-Exposure 3 ─┼──► stack ──► improved image
-Exposure 4 ─┤
-Exposure 5 ─┘
+                    ┌──────────────────────┐
+                    │      ESO / MAST      │
+                    │       Archives       │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+┌─────────────────┐     ┌───────────────┐
+│  Telescope FITS │────►│ Staged FITS   │
+│   / Local File  │     │    Dataset    │
+└─────────────────┘     └───────┬───────┘
+                                │
+             ┌──────────────────┼──────────────────┐
+             │                  │                  │
+             ▼                  ▼                  ▼
+          Images          Spectroscopy        Time Series
+             │                  │                  │
+       ┌─────┼─────┐            │            ┌─────┼─────┐
+       │     │     │            │            │     │     │
+       ▼     ▼     ▼            ▼            ▼     ▼     ▼
+     WCS  Sources Photo      Lines        Detrend Period Transit
+       │     │     │            │            │
+       └─────┼─────┘            │            │
+             │                  │            │
+             └──────────┬───────┴────────────┘
+                        ▼
+                  Measurements
+                        │
+          ┌─────────────┼─────────────┐
+          ▼             ▼             ▼
+      Stars         Galaxies      Physical
+      Colour        Morphology    Properties
+                        │
+                        ▼
+                   Catalogues
+                        │
+                        ▼
+                  VizieR / Gaia
 ```
 
-Median stacking can also help reject isolated anomalous pixels or transient artefacts, while mean stacking preserves the average signal.
-
-Before stacking, images may need to be aligned so that the same astronomical source occupies the same position in every frame.
-
----
-
-# What AstroLab is trying to provide
-
-AstroLab is not intended to be a replacement for the complete ecosystem of professional astronomy software.
-
-Instead, it provides a coherent API around a set of fundamental observational-astronomy workflows:
-
-```text
-             Astronomical observation
-                       │
-                       ▼
-                    FITS
-                       │
-             ┌─────────┴─────────┐
-             │                   │
-          Image              Time series
-             │                   │
-       ┌─────┼─────┐          Light curve
-       │     │     │             │
-      WCS  Sources Photometry  Periodicity
-       │     │                   │
-       │     └──► Measurements  Transits
-       │
-       └──► Sky coordinates
-               │
-               ▼
-           Catalogues
-
-             Spectroscopic data
-                       │
-                       ▼
-                 1D spectrum
-                       │
-              ┌────────┼────────┐
-              │        │        │
-          Lines    Redshift  Classification
-              │
-              ▼
-        Physical information
-```
-
-The aim is to make these workflows available through a single REST API while keeping the underlying scientific calculations explicit and composable.
-
-In other words, AstroLab takes you from:
-
-> **"I have an astronomical FITS file."**
-
-to:
-
-> **"I can inspect it, see what it contains, locate objects on the sky, measure their light, analyse their spectra or variability, and compare them with astronomical catalogues."**
-
----
+AstroLab brings the complete path from **astronomical FITS data to usable scientific measurements** into a single .NET API.

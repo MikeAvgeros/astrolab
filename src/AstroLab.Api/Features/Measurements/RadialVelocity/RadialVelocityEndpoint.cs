@@ -25,6 +25,6 @@ public static class RadialVelocityEndpoint
         var velocityResult = RadialVelocityEstimator.EstimateKilometersPerSecond(request.ObservedWavelengthNm, request.RestWavelengthNm);
 
         return velocityResult.ToApiResult(radialVelocityKmPerSec =>
-            Results.Ok(RadialVelocityResponse.Create(fileId, radialVelocityKmPerSec)));
+            Results.Ok(RadialVelocityResponse.Create(fileId, radialVelocityKmPerSec, RadialVelocityEstimator.MethodName)));
     }
 }

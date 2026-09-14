@@ -1,4 +1,6 @@
 using AstroLab.Core.Astrometry;
+using AstroLab.Core.Fits;
+using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Infrastructure.Storage;
 
@@ -10,6 +12,8 @@ namespace AstroLab.Api.Features.Measurements.SurfaceBrightness;
 /// </summary>
 public static class SurfaceBrightnessEndpoint
 {
+    private const string GainKeyword = "GAIN";
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapSurfaceBrightnessEndpoint()
@@ -48,8 +52,27 @@ public static class SurfaceBrightnessEndpoint
             return apertureResult.Error.ToProblem();
         }
 
+        var statsResult = ImageStatistics.Compute(dataset.Pixels);
+
+        if (statsResult.IsFailure)
+        {
+            return statsResult.Error.ToProblem();
+        }
+
+        var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
+
+        var gain = ResolveHeaderGain(dataset.Hdu.Header);
+
+        var fluxUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
+            apertureResult.Value.Flux, apertureResult.Value.Area, skySigma, gain);
+
+        if (fluxUncertaintyResult.IsFailure)
+        {
+            return fluxUncertaintyResult.Error.ToProblem();
+        }
+
         var magnitudeResult = InstrumentalPhotometry.ComputeMagnitude(
-            apertureResult.Value.Flux, fluxUncertainty: 0.0, InstrumentalPhotometry.DefaultZeroPoint);
+            apertureResult.Value.Flux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
 
         if (magnitudeResult.IsFailure)
         {
@@ -66,8 +89,17 @@ public static class SurfaceBrightnessEndpoint
         var wcs = wcsResult.Value;
 
         var surfaceBrightnessResult = InstrumentalPhotometry.ComputeSurfaceBrightness(
-            magnitudeResult.Value.Magnitude, apertureResult.Value.Area, wcs.PixelScaleXDegrees, wcs.PixelScaleYDegrees);
+            magnitudeResult.Value.Magnitude, magnitudeResult.Value.MagnitudeUncertainty,
+            apertureResult.Value.Area, wcs.PixelScaleXDegrees, wcs.PixelScaleYDegrees);
 
-        return surfaceBrightnessResult.ToApiResult(surfaceBrightness => Results.Ok(SurfaceBrightnessResponse.Create(fileId, surfaceBrightness)));
+        return surfaceBrightnessResult.ToApiResult(surfaceBrightness => Results.Ok(SurfaceBrightnessResponse.Create(
+            fileId, surfaceBrightness.SurfaceBrightness, surfaceBrightness.SurfaceBrightnessUncertainty, InstrumentalPhotometry.DefaultZeroPoint)));
+    }
+
+    private static double? ResolveHeaderGain(FitsHeader header)
+    {
+        var gainResult = header.GetReal(GainKeyword);
+
+        return gainResult.IsSuccess ? gainResult.Value : null;
     }
 }

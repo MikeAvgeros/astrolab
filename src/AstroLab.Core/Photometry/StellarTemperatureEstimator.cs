@@ -9,6 +9,8 @@ namespace AstroLab.Core.Photometry;
 /// </summary>
 public static class StellarTemperatureEstimator
 {
+    public const string MethodName = "Ballesteros (2012) B-V colour-temperature relation";
+
     private const double ScaleKelvin = 4600.0;
     private const double FirstTermOffset = 1.7;
     private const double SecondTermOffset = 0.62;

@@ -1,3 +1,5 @@
+using AstroLab.Core.Fits;
+using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Core.Result;
 using AstroLab.Infrastructure.Storage;
@@ -13,6 +15,8 @@ namespace AstroLab.Api.Features.Measurements.StellarColour;
 /// </summary>
 public static class StellarColourEndpoint
 {
+    private const string GainKeyword = "GAIN";
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapStellarColourEndpoint()
@@ -59,15 +63,22 @@ public static class StellarColourEndpoint
             return secondaryMagnitudeResult.Error.ToProblem();
         }
 
-        var primaryMagnitude = primaryMagnitudeResult.Value;
+        var (primaryMagnitude, primaryMagnitudeUncertainty) = primaryMagnitudeResult.Value;
 
-        var secondaryMagnitude = secondaryMagnitudeResult.Value;
+        var (secondaryMagnitude, secondaryMagnitudeUncertainty) = secondaryMagnitudeResult.Value;
+
+        var (colourIndex, colourIndexUncertainty) = InstrumentalPhotometry.ComputeDifferentialMagnitude(
+            primaryMagnitude, primaryMagnitudeUncertainty, secondaryMagnitude, secondaryMagnitudeUncertainty);
 
         return Results.Ok(StellarColourResponse.Create(
-            fileId, request.ComparisonFileId, primaryMagnitude, secondaryMagnitude, primaryMagnitude - secondaryMagnitude));
+            fileId, request.ComparisonFileId,
+            primaryMagnitude, primaryMagnitudeUncertainty,
+            secondaryMagnitude, secondaryMagnitudeUncertainty,
+            colourIndex, colourIndexUncertainty,
+            InstrumentalPhotometry.DefaultZeroPoint));
     }
 
-    private static Result<double> MeasureInstrumentalMagnitude(
+    private static Result<(double Magnitude, double MagnitudeUncertainty)> MeasureInstrumentalMagnitude(
         FitsDataset dataset, double centerX, double centerY, double apertureRadius)
     {
         var (width, height) = dataset.Image.Resolve2DDimensions();
@@ -76,12 +87,36 @@ public static class StellarColourEndpoint
 
         if (apertureResult.IsFailure)
         {
-            return Result<double>.Failure(apertureResult.Error);
+            return Result<(double Magnitude, double MagnitudeUncertainty)>.Failure(apertureResult.Error);
         }
 
-        var magnitudeResult = InstrumentalPhotometry.ComputeMagnitude(
-            apertureResult.Value.Flux, fluxUncertainty: 0.0, InstrumentalPhotometry.DefaultZeroPoint);
+        var statsResult = ImageStatistics.Compute(dataset.Pixels);
 
-        return magnitudeResult.Map(magnitude => magnitude.Magnitude);
+        if (statsResult.IsFailure)
+        {
+            return Result<(double Magnitude, double MagnitudeUncertainty)>.Failure(statsResult.Error);
+        }
+
+        var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
+
+        var gain = ResolveHeaderGain(dataset.Hdu.Header);
+
+        var fluxUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
+            apertureResult.Value.Flux, apertureResult.Value.Area, skySigma, gain);
+
+        if (fluxUncertaintyResult.IsFailure)
+        {
+            return Result<(double Magnitude, double MagnitudeUncertainty)>.Failure(fluxUncertaintyResult.Error);
+        }
+
+        return InstrumentalPhotometry.ComputeMagnitude(
+            apertureResult.Value.Flux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
+    }
+
+    private static double? ResolveHeaderGain(FitsHeader header)
+    {
+        var gainResult = header.GetReal(GainKeyword);
+
+        return gainResult.IsSuccess ? gainResult.Value : null;
     }
 }

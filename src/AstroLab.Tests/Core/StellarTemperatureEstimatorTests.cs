@@ -62,4 +62,10 @@ public class StellarTemperatureEstimatorTests
 
         Assert.True(result.Value > 0.0);
     }
+
+    [Fact]
+    public void MethodName_IsNotEmpty()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(StellarTemperatureEstimator.MethodName));
+    }
 }

@@ -20,6 +20,8 @@ namespace AstroLab.Core.Sources;
 /// </summary>
 public static class GalaxyMorphologyAnalyzer
 {
+    public const string MethodName = "Concentration index (R80/R20) with circularized flux-weighted second-moment shape";
+
     private const double EllipticalConcentrationThreshold = 2.6;
     private const double AnalysisRadiusMultiple = 3.0;
     private const double BackgroundAnnulusMultiple = 1.5;
@@ -65,7 +67,9 @@ public static class GalaxyMorphologyAnalyzer
             concentration => concentration >= EllipticalConcentrationThreshold ? EllipticalMorphologicalType : SpiralMorphologicalType,
             _ => IrregularMorphologicalType);
 
-        return GalaxyMorphologyEstimate.Create(effectiveRadiusPixels, ellipticity, morphologicalType);
+        var concentrationIndex = concentrationResult.IsSuccess ? concentrationResult.Value : (double?)null;
+
+        return GalaxyMorphologyEstimate.Create(effectiveRadiusPixels, ellipticity, morphologicalType, concentrationIndex);
     }
 
     private static int FindNearestCandidateIndex(ImmutableArray<SourceCandidate> candidates, double centerX, double centerY)

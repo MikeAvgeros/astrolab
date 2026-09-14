@@ -26,6 +26,7 @@ public static class PhysicalSizeEndpoint
         var physicalSizeResult = PhysicalSizeCalculator.ComputeAstronomicalUnits(request.AngularSizeArcsec, request.DistanceParsecs);
 
         return physicalSizeResult.ToApiResult(physicalSizeAu =>
-            Results.Ok(PhysicalSizeResponse.Create(request.AngularSizeArcsec, request.DistanceParsecs, physicalSizeAu)));
+            Results.Ok(PhysicalSizeResponse.Create(
+                request.AngularSizeArcsec, request.DistanceParsecs, physicalSizeAu, PhysicalSizeCalculator.MethodName)));
     }
 }

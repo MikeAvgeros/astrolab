@@ -474,6 +474,15 @@ Time-Series Analysis
 
 Malformed FITS metadata MUST NOT result in negative or nonsensical skip distances or buffer sizes. Numeric sizes derived from FITS headers MUST be validated and bounded before being used for I/O.
 
+An endpoint that reports a measured, instrumental, or model-derived scientific value MUST expose, where applicable to that value:
+
+- explicit physical units (via the property name or an accompanying unit field);
+- its propagated uncertainty, computed from an existing Core algorithm — an endpoint MUST NOT report a fabricated or hard-coded zero uncertainty, and MUST simply omit the field when Core has no statistically valid way to derive one (e.g. a single-line-pair redshift, or a calibration relation with no known scatter model);
+- the estimation method or algorithm used, when the value is a model-derived estimate rather than a direct measurement; and
+- any quality indicator the underlying algorithm already produces (e.g. a confidence score or a fit's underlying evidence value).
+
+This MUST NOT be treated as licence to invent Core-level statistics that do not exist; it only requires surfacing what Core already computes and discarding nothing.
+
 ### 5.5 Deployment
 
 **Location:** `Dockerfile` (repo root)

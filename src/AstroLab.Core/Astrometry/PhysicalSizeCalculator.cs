@@ -10,6 +10,8 @@ namespace AstroLab.Core.Astrometry;
 /// </summary>
 public static class PhysicalSizeCalculator
 {
+    public const string MethodName = "Small-angle relation: size (AU) = angular size (arcsec) × distance (pc)";
+
     public static Result<double> ComputeAstronomicalUnits(double angularSizeArcsec, double distanceParsecs)
     {
         if (angularSizeArcsec <= 0.0 || !double.IsFinite(angularSizeArcsec))

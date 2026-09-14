@@ -14,6 +14,8 @@ namespace AstroLab.Core.Spectroscopy;
 /// </summary>
 public static class SpectralTypeClassifier
 {
+    public const string MethodName = "Line-density classification (OBAFGKM)";
+
     private static readonly (string SpectralType, double MaximumLineDensity)[] Bands =
     [
         ("O", 0.005),

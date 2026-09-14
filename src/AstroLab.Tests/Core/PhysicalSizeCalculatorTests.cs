@@ -43,4 +43,10 @@ public class PhysicalSizeCalculatorTests
 
         Assert.Equal("astrometry.physicalsize.invalid_distance", result.Error.Code);
     }
+
+    [Fact]
+    public void MethodName_IsNotEmpty()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(PhysicalSizeCalculator.MethodName));
+    }
 }

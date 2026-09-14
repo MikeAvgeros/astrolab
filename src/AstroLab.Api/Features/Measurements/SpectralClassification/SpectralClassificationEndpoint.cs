@@ -43,6 +43,6 @@ public static class SpectralClassificationEndpoint
         var classifyResult = SpectralTypeClassifier.Classify(extractResult.Value);
 
         return classifyResult.ToApiResult(estimate =>
-            Results.Ok(SpectralClassificationResponse.Create(fileId, estimate.SpectralType, estimate.Confidence)));
+            Results.Ok(SpectralClassificationResponse.Create(fileId, estimate.SpectralType, estimate.Confidence, SpectralTypeClassifier.MethodName)));
     }
 }

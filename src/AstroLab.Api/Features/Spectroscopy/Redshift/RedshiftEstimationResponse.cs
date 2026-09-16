@@ -2,7 +2,7 @@ namespace AstroLab.Api.Features.Spectroscopy.Redshift;
 
 public sealed record RedshiftEstimationResponse
 {
-    private RedshiftEstimationResponse(string fileId, double redshift, double uncertainty, string method)
+    private RedshiftEstimationResponse(string fileId, double redshift, double? uncertainty, string method)
     {
         FileId = fileId;
         Redshift = redshift;
@@ -13,13 +13,12 @@ public sealed record RedshiftEstimationResponse
     public string FileId { get; }
 
     public double Redshift { get; }
-
-    public double Uncertainty { get; }
-
-    /// <summary>Either "line_pairs" or "cross_correlation", depending on which inputs were supplied.</summary>
+    
+    public double? Uncertainty { get; }
+    
     public string Method { get; }
 
-    public static RedshiftEstimationResponse Create(string fileId, double redshift, double uncertainty, string method)
+    public static RedshiftEstimationResponse Create(string fileId, double redshift, double? uncertainty, string method)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 

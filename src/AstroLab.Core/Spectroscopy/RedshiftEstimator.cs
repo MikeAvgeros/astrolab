@@ -5,13 +5,15 @@ namespace AstroLab.Core.Spectroscopy;
 /// <summary>
 /// Pure redshift estimation from paired observed/rest-frame spectral line wavelengths: the mean
 /// fractional wavelength shift z = (observed - rest) / rest across all supplied line pairs, with
-/// the standard error of that mean as an uncertainty estimate.
+/// the standard error of that mean as an uncertainty estimate. The standard error of the mean is
+/// undefined for a single line pair (there is no sample scatter to measure), so
+/// <c>Uncertainty</c> is <see langword="null"/> rather than a fabricated zero in that case.
 /// </summary>
 public static class RedshiftEstimator
 {
     private const int MinimumSampleSizeForUncertainty = 2;
 
-    public static Result<(double Redshift, double Uncertainty)> Estimate(
+    public static Result<(double Redshift, double? Uncertainty)> Estimate(
         ReadOnlySpan<double> observedWavelengths, ReadOnlySpan<double> restWavelengths)
     {
         if (observedWavelengths.Length != restWavelengths.Length)
@@ -51,7 +53,7 @@ public static class RedshiftEstimator
 
         var mean = Mean(shifts);
 
-        var uncertainty = shifts.Length < MinimumSampleSizeForUncertainty ? 0.0 : StandardErrorOfMean(shifts, mean);
+        var uncertainty = shifts.Length < MinimumSampleSizeForUncertainty ? (double?)null : StandardErrorOfMean(shifts, mean);
 
         return (mean, uncertainty);
     }

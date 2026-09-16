@@ -80,6 +80,6 @@ public sealed record FitsQualityResponse
             report.Min, report.Max, report.Mean, report.StdDev,
             report.EstimatedBackground, report.EstimatedNoise, report.DynamicRange,
             report.SaturationThreshold, report.SaturationThresholdFromHeader, report.SaturatedPixelCount, report.SaturatedPixelFraction,
-            report.UsablePixelFraction, report.QualityFlags.ToImmutableList());
+            report.UsablePixelFraction, [.. report.QualityFlags]);
     }
 }

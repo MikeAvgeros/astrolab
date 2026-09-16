@@ -9,18 +9,20 @@ namespace AstroLab.Core.Sources;
 /// requested pixel position. Effective radius and ellipticity come from the same flux-weighted
 /// second-moment shape analysis as <see cref="SourceShapeAnalyzer"/>, circularized as
 /// sqrt(semiMajorAxis * semiMinorAxis). The morphological type is a concentration-index
-/// classification (C = R80/R20, the ratio of the radii enclosing 80% and 20% of the source's
+/// classification (C = R90/R50, the ratio of the radii enclosing 90% and 50% of the source's
 /// curve-of-growth flux) — a standard, lightweight substitute for a full non-linear Sersic profile
-/// fit used for automated galaxy classification (e.g. Strateva et al. 2001; Conselice 2003), since a
+/// fit used for automated galaxy classification (Strateva et al. 2001; Shimasaku et al. 2001), since a
 /// de Vaucouleurs (n=4, elliptical) profile is far more centrally concentrated than an exponential
-/// (n=1, disk) profile carrying the same total flux. When the concentration index cannot be measured
-/// (the source sits too close to the image edge, or encloses no net positive flux), the
+/// (n=1, disk) profile carrying the same total flux. The classification threshold of 2.6 is the
+/// published dividing line for this specific R90/R50 ratio; it does not apply to other concentration
+/// definitions (e.g. Conselice 2003's C = 5*log10(R80/R20)). When the concentration index cannot be
+/// measured (the source sits too close to the image edge, or encloses no net positive flux), the
 /// morphological type falls back to "Irregular" rather than failing the whole estimate, since the
 /// effective radius and ellipticity remain meaningful on their own.
 /// </summary>
 public static class GalaxyMorphologyAnalyzer
 {
-    public const string MethodName = "Concentration index (R80/R20) with circularized flux-weighted second-moment shape";
+    public const string MethodName = "Concentration index (R90/R50) with circularized flux-weighted second-moment shape";
 
     private const double EllipticalConcentrationThreshold = 2.6;
     private const double AnalysisRadiusMultiple = 3.0;
@@ -28,8 +30,8 @@ public static class GalaxyMorphologyAnalyzer
     private const double MinimumEffectiveRadiusPixels = 1.0;
     private const int CurveOfGrowthSampleCount = 12;
     private const double MinimumSampleFraction = 0.15;
-    private const double LowerConcentrationFraction = 0.20;
-    private const double UpperConcentrationFraction = 0.80;
+    private const double LowerConcentrationFraction = 0.50;
+    private const double UpperConcentrationFraction = 0.90;
     private const string IrregularMorphologicalType = "Irregular";
     private const string EllipticalMorphologicalType = "Elliptical";
     private const string SpiralMorphologicalType = "Spiral";
@@ -149,17 +151,17 @@ public static class GalaxyMorphologyAnalyzer
                 "sources.galaxymorphology.non_positive_flux", "No positive net flux was enclosed within the analysis aperture.");
         }
 
-        var r20 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, LowerConcentrationFraction);
+        var r50 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, LowerConcentrationFraction);
 
-        var r80 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, UpperConcentrationFraction);
+        var r90 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, UpperConcentrationFraction);
 
-        if (r20 <= 0.0)
+        if (r50 <= 0.0)
         {
             return Error.Validation(
                 "sources.galaxymorphology.compact_source", "The source's flux is too centrally compact to resolve a concentration index.");
         }
 
-        return r80 / r20;
+        return r90 / r50;
     }
 
     private static double MaxRadiusWithinBounds(int width, int height, double centerX, double centerY) =>

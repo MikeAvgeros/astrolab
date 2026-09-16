@@ -40,10 +40,11 @@ public static class SegmentationEndpoint
 
         return segmentationResult.ToApiResult(segments => Results.Ok(SegmentationResponse.Create(
             fileId,
-            segments
-                .Select(segment => SegmentDto.Create(
-                    segment.SegmentId, segment.PixelCount, segment.CentroidX, segment.CentroidY,
-                    segment.MinX, segment.MinY, segment.MaxX, segment.MaxY))
-                .ToImmutableList())));
+            [
+                .. segments
+                    .Select(segment => SegmentDto.Create(
+                        segment.SegmentId, segment.PixelCount, segment.CentroidX, segment.CentroidY,
+                        segment.MinX, segment.MinY, segment.MaxX, segment.MaxY))
+            ])));
     }
 }

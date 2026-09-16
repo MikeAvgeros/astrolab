@@ -40,6 +40,18 @@ public static class FitsCardParser
             return FitsKeyword.Create(name, FitsValue.None, null);
         }
 
+        if (name == "HIERARCH")
+        {
+            return ParseHierarchCard(rest);
+        }
+
+        if (name == "CONTINUE")
+        {
+            var (continuationValue, continuationComment) = ParseValueAndComment(rest[2..]);
+
+            return FitsKeyword.Create(name, continuationValue, continuationComment);
+        }
+
         var hasValueIndicator = card[ValueIndicatorColumn] == '=' && card[ValueIndicatorColumn + 1] == ' ';
 
         if (!hasValueIndicator)
@@ -55,6 +67,29 @@ public static class FitsCardParser
 
         return FitsKeyword.Create(name, value, comment);
     }
+    
+    private static Result<FitsKeyword> ParseHierarchCard(ReadOnlySpan<char> rest)
+    {
+        var equalsIndex = rest.IndexOf('=');
+
+        if (equalsIndex < 0)
+        {
+            var path = NormalizeHierarchPath(rest);
+
+            return FitsKeyword.Create(path.Length == 0 ? "HIERARCH" : path, FitsValue.None, null);
+        }
+
+        var normalizedPath = NormalizeHierarchPath(rest[..equalsIndex]);
+
+        var name = normalizedPath.Length == 0 ? "HIERARCH" : normalizedPath;
+
+        var (value, comment) = ParseValueAndComment(rest[(equalsIndex + 1)..]);
+
+        return FitsKeyword.Create(name, value, comment);
+    }
+
+    private static string NormalizeHierarchPath(ReadOnlySpan<char> path) =>
+        string.Join(' ', path.ToString().ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     private static (FitsValue Value, string? Comment) ParseValueAndComment(ReadOnlySpan<char> field)
     {

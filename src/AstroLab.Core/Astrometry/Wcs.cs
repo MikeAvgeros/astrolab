@@ -3,9 +3,6 @@ using AstroLab.Core.Result;
 
 namespace AstroLab.Core.Astrometry;
 
-// FITS WCS solution for a 2D image HDU (Calabretta & Greisen 2002, Papers I & II), supporting
-// conversion between pixel and celestial (RA/Dec) coordinates for the Tan, Sin, and Arc zenithal
-// projections.
 public readonly record struct Wcs
 {
     private const double DegreesToRadians = Math.PI / 180.0;
@@ -21,6 +18,12 @@ public readonly record struct Wcs
     private const double DefaultPcOffDiagonal = 0.0;
     private const double DefaultRotationDegrees = 0.0;
     private const double DefaultCdComponent = 0.0;
+    
+    private const double SupportedLonPoleDegrees = 180.0;
+    private const double DefaultLonPoleAtPoleDegrees = 0.0;
+    private const double LonPoleToleranceDegrees = 1e-6;
+    
+    private const double RelativeSingularityTolerance = 1e-10;
 
     private Wcs(
         string cType1, string cType2, WcsProjection projection,
@@ -80,9 +83,9 @@ public readonly record struct Wcs
 
     public double ReferencePixelY => CrPix2 - PixelCenterOffset;
 
-    public double PixelScaleXDegrees => Math.Sqrt((Cd11 * Cd11) + (Cd21 * Cd21));
+    public double PixelScaleXDegrees => Math.Sqrt(Cd11 * Cd11 + Cd21 * Cd21);
 
-    public double PixelScaleYDegrees => Math.Sqrt((Cd12 * Cd12) + (Cd22 * Cd22));
+    public double PixelScaleYDegrees => Math.Sqrt(Cd12 * Cd12 + Cd22 * Cd22);
 
     public double PixelScaleXArcsecPerPixel => PixelScaleXDegrees * ArcsecondsPerDegree;
 
@@ -90,9 +93,19 @@ public readonly record struct Wcs
 
     public double RotationDegrees => Math.Atan2(Cd21, Cd11) * RadiansToDegrees;
 
-    public double Determinant => (Cd11 * Cd22) - (Cd12 * Cd21);
+    public double Determinant => Cd11 * Cd22 - Cd12 * Cd21;
 
     public bool IsMirrored => Determinant < 0.0;
+
+    public bool IsInvertible
+    {
+        get
+        {
+            var normSquared = Cd11 * Cd11 + Cd12 * Cd12 + Cd21 * Cd21 + Cd22 * Cd22;
+
+            return normSquared > 0.0 && Math.Abs(Determinant) > RelativeSingularityTolerance * normSquared;
+        }
+    }
 
     public Result<(double RightAscension, double Declination)> PixelToWorld(double pixelX, double pixelY)
     {
@@ -196,12 +209,13 @@ public readonly record struct Wcs
 
         var iwc2 = LatitudeAxisIndex == 0 ? xDegrees : yDegrees;
 
-        var determinant = Determinant;
-
-        if (determinant == 0.0)
+        if (!IsInvertible)
         {
-            return Error.Validation("astrometry.singular_transform", "The WCS linear transform matrix is singular and cannot be inverted.");
+            return Error.Validation(
+                "astrometry.singular_transform", "The WCS linear transform matrix is singular or too ill-conditioned to invert reliably.");
         }
+
+        var determinant = Determinant;
 
         var p1 = (Cd22 * iwc1 - Cd12 * iwc2) / determinant;
 
@@ -281,6 +295,15 @@ public readonly record struct Wcs
 
         var (cd11, cd12, cd21, cd22) = linearTransformResult.Value;
 
+        var referenceDeclination = latitudeAxisIndex == 0 ? crVal1.Value : crVal2.Value;
+
+        var lonPoleCheck = ValidateLonPole(header, referenceDeclination);
+
+        if (lonPoleCheck.IsFailure)
+        {
+            return Result<Wcs>.Failure(lonPoleCheck.Error);
+        }
+
         var radeSysResult = header.GetString("RADESYS");
 
         var radeSys = radeSysResult.IsSuccess ? radeSysResult.Value : null;
@@ -344,6 +367,26 @@ public readonly record struct Wcs
             WcsAxisKind.Latitude when axis2Kind == WcsAxisKind.Longitude => (1, 0),
             _ => null
         };
+    }
+
+    private static Result<Unit> ValidateLonPole(FitsHeader header, double referenceDeclination)
+    {
+        var defaultLonPole = Math.Abs(referenceDeclination - MaxDeclinationDegrees) < LonPoleToleranceDegrees
+            ? DefaultLonPoleAtPoleDegrees
+            : SupportedLonPoleDegrees;
+
+        var lonPoleResult = header.GetReal("LONPOLE");
+
+        var lonPole = lonPoleResult.IsSuccess ? NormalizeDegrees(lonPoleResult.Value) : defaultLonPole;
+
+        if (Math.Abs(lonPole - SupportedLonPoleDegrees) > LonPoleToleranceDegrees)
+        {
+            return Error.NotImplemented(
+                "astrometry.unsupported_lonpole",
+                $"LONPOLE={lonPole:G6} is not yet supported; only the standard default of {SupportedLonPoleDegrees:G6} degrees is currently implemented.");
+        }
+
+        return Unit.Value;
     }
 
     private static Result<(double Cd11, double Cd12, double Cd21, double Cd22)> ReadLinearTransform(FitsHeader header)

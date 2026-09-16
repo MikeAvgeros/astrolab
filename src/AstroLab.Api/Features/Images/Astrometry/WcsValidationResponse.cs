@@ -41,6 +41,6 @@ public sealed record WcsValidationResponse
 
         return new WcsValidationResponse(
             fileId, report.IsValid, report.IsInvertible, report.Determinant, report.SkewDegrees,
-            report.PixelScaleRatio, report.RoundTripErrorPixels, report.Issues.ToImmutableList());
+            report.PixelScaleRatio, report.RoundTripErrorPixels, [.. report.Issues]);
     }
 }

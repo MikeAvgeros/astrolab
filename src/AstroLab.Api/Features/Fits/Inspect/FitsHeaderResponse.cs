@@ -37,7 +37,7 @@ public sealed record FitsHeaderResponse
                 hdu.Type,
                 ExtensionName(hdu.Header),
                 hdu.Image?.BitPix,
-                (hdu.Image?.NAxes ?? ImmutableArray<int>.Empty).ToImmutableList(),
+                [.. hdu.Image?.NAxes ?? ImmutableArray<int>.Empty],
                 ToKeywordDtos(hdu.Header)))
             .ToImmutableList();
 
@@ -58,7 +58,8 @@ public sealed record FitsHeaderResponse
     }
 
     private static ImmutableList<FitsKeywordDto> ToKeywordDtos(FitsHeader header) =>
-        header
+    [
+        .. header
             .Select(keyword => FitsKeywordDto.Create(keyword.Name, keyword.Value.ToString(), keyword.Comment))
-            .ToImmutableList();
+    ];
 }

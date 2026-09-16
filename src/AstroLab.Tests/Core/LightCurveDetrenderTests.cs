@@ -68,6 +68,20 @@ public class LightCurveDetrenderTests
     }
 
     [Fact]
+    public void Detrend_Median_RejectsUnsortedTime()
+    {
+        ReadOnlySpan<double> time = [0.0, 2.0, 1.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+
+        ReadOnlySpan<double> flux = [10.0, 10.0, 10.0, 10.0, 50.0, 10.0, 10.0, 10.0, 10.0];
+
+        var result = LightCurveDetrender.Detrend(time, flux, "median");
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("timeseries.detrend.unsorted_time", result.Error.Code);
+    }
+
+    [Fact]
     public void Detrend_Median_RejectsSeriesShorterThanThreePoints()
     {
         ReadOnlySpan<double> time = [0.0, 1.0];

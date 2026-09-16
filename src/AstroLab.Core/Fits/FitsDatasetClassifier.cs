@@ -13,15 +13,17 @@ namespace AstroLab.Core.Fits;
 public static class FitsDatasetClassifier
 {
     private const string TimeColumnName = "TIME";
-    private const string FluxColumnName = "FLUX";
     private const string TotalFieldsKeyword = "TFIELDS";
     private const string DispersionAxisKeyword = "DISPAXIS";
     private const int FirstFieldNumber = 1;
     private const int NoFields = 0;
     private const int SingleAxisDimension = 1;
     private const int MinimumTimeSeriesFieldCount = 2;
-
-    private static readonly string[] SpectralCTypePrefixes = ["WAVE", "FREQ", "ENER", "AWAV", "VELO"];
+    
+    private static readonly string[] MeasurementColumnNames = ["FLUX", "MAG", "RATE", "COUNTS", "SAP_FLUX", "PDCSAP_FLUX"];
+    
+    private static readonly string[] SpectralCTypePrefixes =
+        ["WAVE", "FREQ", "ENER", "AWAV", "VELO", "VRAD", "VOPT", "ZOPT", "BETA", "WAVN"];
 
     public static FitsDatasetKind Classify(IReadOnlyList<HduDescriptor> hdus)
     {
@@ -113,7 +115,8 @@ public static class FitsDatasetClassifier
             return false;
         }
 
-        return HasColumn(hdu.Header, fieldCount, TimeColumnName) && HasColumn(hdu.Header, fieldCount, FluxColumnName);
+        return HasColumn(hdu.Header, fieldCount, TimeColumnName) &&
+            MeasurementColumnNames.Any(measurementColumnName => HasColumn(hdu.Header, fieldCount, measurementColumnName));
     }
 
     private static bool HasColumn(FitsHeader header, long fieldCount, string columnName)

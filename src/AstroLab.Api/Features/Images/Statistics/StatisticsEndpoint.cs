@@ -65,6 +65,6 @@ public static class StatisticsEndpoint
 
         return Results.Ok(ImageStatisticsResponse.Create(
             fileId, stats.Min, stats.Max, stats.Mean, median, stats.StdDev, stats.ValidPixelCount, stats.TotalPixelCount,
-            stats.InvalidPixelCount, stats.DeadPixelPercentage, skyBackground.SkySigma, percentileDtos.ToImmutableList()));
+            stats.InvalidPixelCount, stats.DeadPixelPercentage, skyBackground.SkySigma, [.. percentileDtos]));
     }
 }

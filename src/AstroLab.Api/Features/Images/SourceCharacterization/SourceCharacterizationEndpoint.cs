@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using AstroLab.Core.Sources;
 using AstroLab.Infrastructure.Storage;
 
@@ -42,9 +41,11 @@ public static class SourceCharacterizationEndpoint
 
         return shapesResult.ToApiResult(shapes => Results.Ok(SourceCharacterizationResponse.Create(
             fileId,
-            shapes
-                .Select(shape => SourceShapeDto.Create(
-                    shape.Id, shape.SemiMajorAxisPixels, shape.SemiMinorAxisPixels, shape.Ellipticity, shape.PositionAngleDegrees))
-                .ToImmutableList())));
+            [
+                .. shapes
+                    .Select(shape => SourceShapeDto.Create(
+                        shape.Id, shape.SemiMajorAxisPixels, shape.SemiMinorAxisPixels, shape.Ellipticity,
+                        shape.PositionAngleDegrees))
+            ])));
     }
 }

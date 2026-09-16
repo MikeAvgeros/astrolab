@@ -22,6 +22,14 @@ public static class SpectrumComparer
             return Error.Validation("spectroscopy.compare.empty_spectrum", "The spectra contain no bins to compare.");
         }
 
+        for (var i = 0; i < fluxA.Length; i++)
+        {
+            if (!double.IsFinite(fluxA[i]) || !double.IsFinite(fluxB[i]))
+            {
+                return Error.Validation("spectroscopy.compare.non_finite_value", "Flux values must be finite.");
+            }
+        }
+
         var meanA = Mean(fluxA);
 
         var meanB = Mean(fluxB);

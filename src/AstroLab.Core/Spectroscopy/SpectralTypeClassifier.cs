@@ -24,7 +24,7 @@ public static class SpectralTypeClassifier
         ("F", 0.028),
         ("G", 0.040),
         ("K", 0.055),
-        ("M", double.PositiveInfinity),
+        ("M", double.PositiveInfinity)
     ];
 
     public static Result<(string SpectralType, double Confidence)> Classify(

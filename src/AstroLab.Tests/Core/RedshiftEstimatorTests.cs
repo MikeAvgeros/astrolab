@@ -5,7 +5,7 @@ namespace AstroLab.Tests.Core;
 public class RedshiftEstimatorTests
 {
     [Fact]
-    public void Estimate_SingleLinePair_ComputesExactRedshiftWithZeroUncertainty()
+    public void Estimate_SingleLinePair_ComputesExactRedshiftWithUndefinedUncertainty()
     {
         ReadOnlySpan<double> observed = [505.0];
 
@@ -17,7 +17,7 @@ public class RedshiftEstimatorTests
 
         Assert.Equal(0.01, result.Value.Redshift, precision: 9);
 
-        Assert.Equal(0.0, result.Value.Uncertainty, precision: 9);
+        Assert.Null(result.Value.Uncertainty);
     }
 
     [Fact]
@@ -33,7 +33,9 @@ public class RedshiftEstimatorTests
 
         Assert.Equal(0.015, result.Value.Redshift, precision: 9);
 
-        Assert.Equal(0.005, result.Value.Uncertainty, precision: 9);
+        Assert.NotNull(result.Value.Uncertainty);
+
+        Assert.Equal(0.005, result.Value.Uncertainty!.Value, precision: 9);
     }
 
     [Fact]

@@ -6,7 +6,9 @@ namespace AstroLab.Core.TimeSeries;
 /// Pure (non-generalized) Lomb-Scargle periodogram (Press &amp; Rybicki 1989 formulation) for
 /// detecting periodic signals in an unevenly-sampled, already-detrended flux series. Searches a
 /// linear grid of trial periods between <c>minPeriod</c> and <c>maxPeriod</c> and reports the period
-/// whose normalized power is highest.
+/// whose normalized power is highest. Power is normalized by the sample variance (dividing the sum
+/// of squared deviations by N-1), matching the standard Lomb-Scargle normalization used by the
+/// Horne &amp; Baliunas (1986) false-alarm-probability approximation in <see cref="SearchFull"/>.
 /// </summary>
 public static class LombScarglePeriodogram
 {
@@ -49,22 +51,31 @@ public static class LombScarglePeriodogram
             return Error.Validation("timeseries.periodsearch.invalid_grid_size", "gridSize must be at least 2.");
         }
 
+        var finiteError = ValidateFinite(time, flux);
+
+        if (finiteError is not null)
+        {
+            return finiteError.Value;
+        }
+
         var mean = Mean(flux);
 
-        var variance = 0.0;
+        var sumSquaredDeviation = 0.0;
 
         foreach (var value in flux)
         {
             var deviation = value - mean;
 
-            variance += deviation * deviation;
+            sumSquaredDeviation += deviation * deviation;
         }
 
-        if (variance <= 0.0)
+        if (sumSquaredDeviation <= 0.0)
         {
             return Error.Validation(
                 "timeseries.periodsearch.constant_flux", "The flux series is constant, so no periodic signal can be detected.");
         }
+
+        var sampleVariance = sumSquaredDeviation / (time.Length - 1);
 
         var bestPeriod = minPeriod;
 
@@ -76,7 +87,7 @@ public static class LombScarglePeriodogram
         {
             var period = minPeriod + (k * periodStep);
 
-            var power = ComputePower(time, flux, mean, variance, period);
+            var power = ComputePower(time, flux, mean, sampleVariance, period);
 
             if (double.IsFinite(power) && power > bestPower)
             {
@@ -122,22 +133,31 @@ public static class LombScarglePeriodogram
             return Error.Validation("timeseries.periodsearch.invalid_grid_size", "gridSize must be at least 2.");
         }
 
+        var finiteError = ValidateFinite(time, flux);
+
+        if (finiteError is not null)
+        {
+            return finiteError.Value;
+        }
+
         var mean = Mean(flux);
 
-        var variance = 0.0;
+        var sumSquaredDeviation = 0.0;
 
         foreach (var value in flux)
         {
             var deviation = value - mean;
 
-            variance += deviation * deviation;
+            sumSquaredDeviation += deviation * deviation;
         }
 
-        if (variance <= 0.0)
+        if (sumSquaredDeviation <= 0.0)
         {
             return Error.Validation(
                 "timeseries.periodsearch.constant_flux", "The flux series is constant, so no periodic signal can be detected.");
         }
+
+        var sampleVariance = sumSquaredDeviation / (time.Length - 1);
 
         var periods = new double[gridSize];
 
@@ -153,7 +173,7 @@ public static class LombScarglePeriodogram
         {
             var period = minPeriod + k * periodStep;
 
-            var power = ComputePower(time, flux, mean, variance, period);
+            var power = ComputePower(time, flux, mean, sampleVariance, period);
 
             var clampedPower = double.IsFinite(power) ? Math.Max(power, 0.0) : 0.0;
 
@@ -168,10 +188,8 @@ public static class LombScarglePeriodogram
                 bestPeriod = period;
             }
         }
-
-        var normalizedBestPower = bestPower * time.Length;
-
-        var falseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-normalizedBestPower), gridSize), 0.0, 1.0);
+        
+        var falseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-bestPower), gridSize), 0.0, 1.0);
 
         return (bestPeriod, Math.Max(bestPower, 0.0), periods, powers, falseAlarmProbability);
     }
@@ -183,6 +201,14 @@ public static class LombScarglePeriodogram
             return Error.Validation(
                 "timeseries.periodsearch.series_too_short",
                 $"At least {MinimumPoints} points are required to suggest a period search range.");
+        }
+
+        foreach (var t in time)
+        {
+            if (!double.IsFinite(t))
+            {
+                return Error.Validation("timeseries.periodsearch.non_finite_value", "Time values must be finite.");
+            }
         }
 
         var sorted = time.ToArray();
@@ -230,7 +256,7 @@ public static class LombScarglePeriodogram
         return (minPeriod, maxPeriod);
     }
 
-    private static double ComputePower(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double mean, double variance, double period)
+    private static double ComputePower(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double mean, double sampleVariance, double period)
     {
         var angularFrequency = 2.0 * Math.PI / period;
 
@@ -279,7 +305,7 @@ public static class LombScarglePeriodogram
             return 0.0;
         }
 
-        return 0.5 * (sumC * sumC / sumCc + sumS * sumS / sumSs) / variance;
+        return 0.5 * (sumC * sumC / sumCc + sumS * sumS / sumSs) / sampleVariance;
     }
 
     private static double Mean(ReadOnlySpan<double> values)
@@ -292,5 +318,18 @@ public static class LombScarglePeriodogram
         }
 
         return sum / values.Length;
+    }
+
+    private static Error? ValidateFinite(ReadOnlySpan<double> time, ReadOnlySpan<double> flux)
+    {
+        for (var i = 0; i < time.Length; i++)
+        {
+            if (!double.IsFinite(time[i]) || !double.IsFinite(flux[i]))
+            {
+                return Error.Validation("timeseries.periodsearch.non_finite_value", "Time and flux values must be finite.");
+            }
+        }
+
+        return null;
     }
 }

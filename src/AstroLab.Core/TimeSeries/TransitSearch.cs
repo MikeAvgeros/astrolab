@@ -45,6 +45,14 @@ public static class TransitSearch
             return Error.Validation("timeseries.transit.invalid_max_period", "maxPeriod must be finite and greater than minPeriod.");
         }
 
+        for (var i = 0; i < time.Length; i++)
+        {
+            if (!double.IsFinite(time[i]) || !double.IsFinite(flux[i]))
+            {
+                return Error.Validation("timeseries.transit.non_finite_value", "Time and flux values must be finite.");
+            }
+        }
+
         var median = Median(flux);
 
         if (median <= 0.0)

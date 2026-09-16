@@ -66,6 +66,18 @@ public class TimeSeriesTableDescriptorTests
     }
 
     [Fact]
+    public void Resolve_TableWithTimeAndMagColumns_ResolvesMagAsTheMeasurementColumn()
+    {
+        var hdu = BuildTableHdu(42, "TIME", "MAG");
+
+        var result = TimeSeriesTableDescriptor.Resolve(hdu);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value.TimeColumnNumber);
+        Assert.Equal(2, result.Value.FluxColumnNumber);
+    }
+
+    [Fact]
     public void Resolve_MissingFluxColumn_ReturnsValidationFailure()
     {
         var hdu = BuildTableHdu(10, "TIME", "RA");

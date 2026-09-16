@@ -29,7 +29,7 @@ public static class WcsValidator
 
         var determinant = wcs.Determinant;
 
-        var isInvertible = determinant != 0.0;
+        var isInvertible = wcs.IsInvertible;
 
         var skewDegrees = ComputeSkewDegrees(wcs);
 

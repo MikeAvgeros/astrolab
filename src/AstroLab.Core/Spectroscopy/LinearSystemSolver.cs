@@ -34,7 +34,7 @@ internal static class LinearSystemSolver
                 }
             }
 
-            if (largestPivotMagnitude < SingularSystemTolerance)
+            if (largestPivotMagnitude < SingularSystemTolerance || double.IsNaN(largestPivotMagnitude))
             {
                 return Error.Validation(singularSystemErrorCode, singularSystemErrorMessage);
             }

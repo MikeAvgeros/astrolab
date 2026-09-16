@@ -34,8 +34,8 @@ public sealed record ImageHistogramResponse
 
         return new ImageHistogramResponse(
             fileId,
-            histogram.BinEdges.ToImmutableList(),
-            histogram.Counts.ToImmutableList(),
+            [.. histogram.BinEdges],
+            [.. histogram.Counts],
             histogram.BinCount,
             histogram.ValidPixelCount);
     }

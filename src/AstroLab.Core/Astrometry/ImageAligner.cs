@@ -30,6 +30,14 @@ public static class ImageAligner
                 "images.align.invalid_pixel_scale", "Both images must have a positive, finite WCS pixel scale to compute an alignment transform.");
         }
 
+        if (target.IsMirrored != reference.IsMirrored)
+        {
+            return Error.Validation(
+                "images.align.mismatched_parity",
+                "The target and reference WCS solutions have opposite parity (one is mirrored relative to the other); " +
+                "a similarity transform of rotation, uniform scale, and translation cannot register them without an additional reflection.");
+        }
+
         var scale = targetScale / referenceScale;
 
         var rotationDegrees = NormalizeRotationDegrees(reference.RotationDegrees - target.RotationDegrees);

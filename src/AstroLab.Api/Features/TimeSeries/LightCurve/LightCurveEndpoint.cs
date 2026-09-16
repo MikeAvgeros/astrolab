@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.TimeSeries.LightCurve;
@@ -20,6 +19,6 @@ public static class LightCurveEndpoint
         var lightCurveResult = await datasetReader.LoadLightCurveAsync(fileId, cancellationToken);
 
         return lightCurveResult.ToApiResult(data => Results.Ok(
-            LightCurveResponse.Create(fileId, data.Time.ToImmutableList(), data.Flux.ToImmutableList())));
+            LightCurveResponse.Create(fileId, [.. data.Time], [.. data.Flux])));
     }
 }

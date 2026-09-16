@@ -30,6 +30,14 @@ public static class SpectralLineDetector
             return Error.Validation("spectroscopy.lines.invalid_threshold", "significanceSigma must be a finite, positive value.");
         }
 
+        foreach (var value in spectrum)
+        {
+            if (!double.IsFinite(value))
+            {
+                return Error.Validation("spectroscopy.lines.non_finite_value", "Spectrum values must be finite.");
+            }
+        }
+
         var (continuum, sigma) = RobustSpectrumStatistics.Compute(spectrum);
 
         var thresholdValue = significanceSigma * sigma;

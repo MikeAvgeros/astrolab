@@ -286,6 +286,105 @@ public class WcsTests
     }
 
     [Fact]
+    public void FromHeader_WithDefaultImplicitLonPole_Succeeds()
+    {
+        var result = Wcs.FromHeader(BuildTanHeader());
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public void FromHeader_WithExplicitStandardLonPole_Succeeds()
+    {
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                  0.0",
+            "CDELT1  =              -0.0001",
+            "CDELT2  =               0.0001",
+            "LONPOLE =                180.0");
+
+        var result = Wcs.FromHeader(header);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public void FromHeader_WithNonDefaultLonPole_ReturnsNotImplemented()
+    {
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                  0.0",
+            "CDELT1  =              -0.0001",
+            "CDELT2  =               0.0001",
+            "LONPOLE =                 90.0");
+
+        var result = Wcs.FromHeader(header);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.unsupported_lonpole", result.Error.Code);
+    }
+
+    [Fact]
+    public void FromHeader_WithReferenceAtCelestialPoleAndNoExplicitLonPole_ReturnsNotImplemented()
+    {
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                 90.0",
+            "CDELT1  =              -0.0001",
+            "CDELT2  =               0.0001");
+
+        var result = Wcs.FromHeader(header);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.unsupported_lonpole", result.Error.Code);
+    }
+
+    [Fact]
+    public void WorldToPixel_OnNearSingularButNonZeroCdMatrix_ReturnsSingularTransform()
+    {
+        // CD1_1 == CD1_2 == CD2_1, and CD2_2 is CD2_1 perturbed by only a relative 1e-11 (well below
+        // the RelativeSingularityTolerance of 1e-10 used for the determinant-to-norm ratio), so the
+        // matrix is deliberately near-singular (determinant ~1e-19) without being exactly zero.
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                 50.0",
+            "CRPIX2  =                 50.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                  0.0",
+            "CD1_1   =                 0.0001",
+            "CD1_2   =                 0.0001",
+            "CD2_1   =                 0.0001",
+            "CD2_2   =    0.00010000000000100001");
+
+        var wcs = Wcs.FromHeader(header).Value;
+
+        Assert.NotEqual(0.0, wcs.Determinant);
+
+        Assert.False(wcs.IsInvertible);
+
+        var result = wcs.WorldToPixel(wcs.ReferenceRightAscension, wcs.ReferenceDeclination + 0.001);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.singular_transform", result.Error.Code);
+    }
+
+    [Fact]
     public void FromHeader_ExposesReferenceAndScaleMetadata()
     {
         var wcs = Wcs.FromHeader(BuildTanHeader(0.0004)).Value;

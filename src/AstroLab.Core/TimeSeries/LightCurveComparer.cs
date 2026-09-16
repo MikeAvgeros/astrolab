@@ -3,19 +3,36 @@ using AstroLab.Core.Result;
 namespace AstroLab.Core.TimeSeries;
 
 /// <summary>
-/// Pure comparison of two paired flux series (assumed already time-aligned sample-for-sample):
-/// their Pearson correlation coefficient, the mean instrumental-magnitude offset between them
+/// Pure comparison of two paired flux series that MUST already be time-aligned sample-for-sample
+/// (e.g. simultaneous target/comparison-star photometry from the same exposures): their Pearson
+/// correlation coefficient, the mean instrumental-magnitude offset between them
 /// (using <see cref="Photometry.InstrumentalPhotometry.DefaultZeroPoint"/>, which cancels out in
 /// the pairwise difference regardless of its value), the ratio of their mean flux levels, and the
-/// ratio of their flux standard deviations (a simple variability comparison).
+/// ratio of their flux standard deviations (a simple variability comparison). The corresponding
+/// time arrays are required and checked for exact alignment so that two unrelated light curves
+/// that merely share a sample count are not silently compared index-for-index.
 /// </summary>
 public static class LightCurveComparer
 {
     private const double MagnitudeScaleFactor = 2.5;
 
     public static Result<(double CorrelationCoefficient, double MeanMagnitudeDifference, double FluxRatio, double VariabilityRatio)> Compare(
-        ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
+        ReadOnlySpan<double> timeA, ReadOnlySpan<double> fluxA, ReadOnlySpan<double> timeB, ReadOnlySpan<double> fluxB)
     {
+        if (timeA.Length != fluxA.Length)
+        {
+            return Error.Validation(
+                "timeseries.compare.primary_length_mismatch",
+                $"The primary light curve's time length ({timeA.Length}) must equal its flux length ({fluxA.Length}).");
+        }
+
+        if (timeB.Length != fluxB.Length)
+        {
+            return Error.Validation(
+                "timeseries.compare.comparison_length_mismatch",
+                $"The comparison light curve's time length ({timeB.Length}) must equal its flux length ({fluxB.Length}).");
+        }
+
         if (fluxA.Length != fluxB.Length)
         {
             return Error.Validation(
@@ -26,6 +43,21 @@ public static class LightCurveComparer
         if (fluxA.IsEmpty)
         {
             return Error.Validation("timeseries.compare.empty_series", "The light curves contain no points to compare.");
+        }
+
+        for (var i = 0; i < timeA.Length; i++)
+        {
+            if (!double.IsFinite(timeA[i]) || !double.IsFinite(fluxA[i]) || !double.IsFinite(timeB[i]) || !double.IsFinite(fluxB[i]))
+            {
+                return Error.Validation("timeseries.compare.non_finite_value", "Time and flux values must be finite.");
+            }
+
+            if (timeA[i] != timeB[i])
+            {
+                return Error.Validation(
+                    "timeseries.compare.time_misaligned",
+                    $"The light curves are not time-aligned sample-for-sample: primary time {timeA[i]} does not match comparison time {timeB[i]} at index {i}.");
+            }
         }
 
         var momentsResult = ComputeMoments(fluxA, fluxB);

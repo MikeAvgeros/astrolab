@@ -41,6 +41,16 @@ public class FitsDatasetClassifierTests
         "NAXIS1  =                  256",
         "END");
 
+    private static HduDescriptor MultiAxisImageWithCtype(int index, string ctype) => BuildHdu(
+        index,
+        "XTENSION= 'IMAGE   '",
+        "BITPIX  =                  -32",
+        "NAXIS   =                    2",
+        "NAXIS1  =                  256",
+        "NAXIS2  =                    1",
+        $"CTYPE1  = '{ctype,-8}'",
+        "END");
+
     private static HduDescriptor TableHdu(int index, int fieldCount, params string[] columnNames)
     {
         var cards = new List<string>
@@ -105,6 +115,16 @@ public class FitsDatasetClassifierTests
     public void Classify_TableWithTimeAndMeasurementColumn_ReturnsTimeSeries()
     {
         var hdus = new[] { PrimaryHdu(), TableHdu(1, 2, "TIME", "FLUX") };
+
+        Assert.Equal(FitsDatasetKind.TimeSeries, FitsDatasetClassifier.Classify(hdus));
+
+        Assert.True(FitsDatasetClassifier.EnsureKind(hdus, FitsDatasetKind.TimeSeries).IsSuccess);
+    }
+
+    [Fact]
+    public void Classify_TableWithTimeAndMagColumn_ReturnsTimeSeries()
+    {
+        var hdus = new[] { PrimaryHdu(), TableHdu(1, 2, "TIME", "MAG") };
 
         Assert.Equal(FitsDatasetKind.TimeSeries, FitsDatasetClassifier.Classify(hdus));
 
@@ -183,6 +203,21 @@ public class FitsDatasetClassifierTests
         Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.TimeSeries));
 
         Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Table));
+
+        Assert.False(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Image));
+    }
+
+    [Theory]
+    [InlineData("VRAD")]
+    [InlineData("VOPT")]
+    [InlineData("ZOPT")]
+    [InlineData("BETA")]
+    [InlineData("WAVN")]
+    public void MatchesKind_MultiAxisImageWithSpectralCtype_MatchesSpectrumNotImage(string ctype)
+    {
+        var hdu = MultiAxisImageWithCtype(1, ctype);
+
+        Assert.True(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Spectrum));
 
         Assert.False(FitsDatasetClassifier.MatchesKind(hdu, FitsDatasetKind.Image));
     }

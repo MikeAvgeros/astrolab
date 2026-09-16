@@ -36,6 +36,14 @@ public static class ContinuumFitter
             return Error.Validation("spectroscopy.continuum.invalid_degree", "polynomialDegree must be non-negative.");
         }
 
+        for (var i = 0; i < x.Length; i++)
+        {
+            if (!double.IsFinite(x[i]) || !double.IsFinite(flux[i]))
+            {
+                return Error.Validation("spectroscopy.continuum.non_finite_value", "x and flux values must be finite.");
+            }
+        }
+
         var minimumPoints = polynomialDegree + 1;
 
         var included = new bool[x.Length];

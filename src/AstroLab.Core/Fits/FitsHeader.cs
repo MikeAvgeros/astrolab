@@ -95,14 +95,46 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
 
             }
 
-            keywords.Add(parsed.Value);
+            var keyword = parsed.Value;
 
-            if (parsed.Value.Name == "END")
+            if (keyword.Name == "CONTINUE" && keywords.Count > 0 && TryMergeContinuation(keywords[^1], keyword, out var merged))
+            {
+                keywords[^1] = merged;
+            }
+            else
+            {
+                keywords.Add(keyword);
+            }
+
+            if (keyword.Name == "END")
             {
                 return new FitsHeader([.. keywords]);
             }
         }
 
         return Error.Validation("fits.header.missing_end", "Header block did not contain a terminating END card.");
+    }
+    
+    private static bool TryMergeContinuation(FitsKeyword previous, FitsKeyword continuation, out FitsKeyword merged)
+    {
+        merged = previous;
+
+        if (previous.Value.Kind != FitsValueKind.String || continuation.Value.Kind != FitsValueKind.String)
+        {
+            return false;
+        }
+
+        var previousString = previous.Value.AsString;
+
+        if (!previousString.EndsWith('&'))
+        {
+            return false;
+        }
+
+        var combined = previousString[..^1] + continuation.Value.AsString;
+
+        merged = FitsKeyword.Create(previous.Name, FitsValue.OfString(combined), continuation.Comment ?? previous.Comment);
+
+        return true;
     }
 }

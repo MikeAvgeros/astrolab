@@ -43,6 +43,38 @@ public class PhotometricUncertaintyTests
     }
 
     [Fact]
+    public void EstimateFluxUncertainty_WithGainAndReadNoise_DoesNotDoubleCountReadNoiseAlreadyInMeasuredSkySigma()
+    {
+        var withGainOnlyResult = PhotometricUncertainty.EstimateFluxUncertainty(
+            netFlux: 1000.0, apertureArea: 25.0, skyBackgroundSigma: 5.0, detectorGain: 2.0);
+
+        var withGainAndReadNoiseResult = PhotometricUncertainty.EstimateFluxUncertainty(
+            netFlux: 1000.0, apertureArea: 25.0, skyBackgroundSigma: 5.0, detectorGain: 2.0, readNoiseElectrons: 4.0);
+
+        Assert.True(withGainOnlyResult.IsSuccess);
+
+        Assert.True(withGainAndReadNoiseResult.IsSuccess);
+
+        // skyBackgroundSigma is measured directly from the image, so it already includes the read
+        // noise physically present in the data. Since it is large enough to already account for the
+        // supplied read noise, supplying readNoiseElectrons on top must not change the result.
+        Assert.Equal(withGainOnlyResult.Value, withGainAndReadNoiseResult.Value, precision: 9);
+    }
+
+    [Fact]
+    public void EstimateFluxUncertainty_WithReadNoiseExceedingMeasuredSkySigma_UsesReadNoiseAsAFloor()
+    {
+        var result = PhotometricUncertainty.EstimateFluxUncertainty(
+            netFlux: 0.0, apertureArea: 25.0, skyBackgroundSigma: 0.1, detectorGain: 2.0, readNoiseElectrons: 10.0);
+
+        Assert.True(result.IsSuccess);
+
+        var expectedReadNoiseVariance = 25.0 * (10.0 * 10.0) / (2.0 * 2.0);
+
+        Assert.Equal(Math.Sqrt(expectedReadNoiseVariance), result.Value, precision: 9);
+    }
+
+    [Fact]
     public void EstimateFluxUncertainty_RejectsNonPositiveApertureArea()
     {
         var result = PhotometricUncertainty.EstimateFluxUncertainty(netFlux: 1000.0, apertureArea: 0.0, skyBackgroundSigma: 2.0);

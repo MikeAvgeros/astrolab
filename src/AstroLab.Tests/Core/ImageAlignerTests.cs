@@ -73,6 +73,51 @@ public class ImageAlignerTests
     }
 
     [Fact]
+    public void AlignByWcs_OnMismatchedParity_ReturnsValidationError()
+    {
+        var target = BuildWcs(crPix1: 1.0, crPix2: 1.0, crVal1: 180.0, crVal2: 0.0, cdelt: 0.0001);
+
+        // Both CDELT values positive (rather than the usual CDELT1 negative / CDELT2 positive
+        // convention) gives this WCS the opposite parity (non-negative determinant) from `target`.
+        var reference = BuildMirroredWcs(crPix1: 11.0, crPix2: 21.0, crVal1: 180.0, crVal2: 0.0, cdelt: 0.0001);
+
+        Assert.NotEqual(target.IsMirrored, reference.IsMirrored);
+
+        var result = ImageAligner.AlignByWcs(target, reference);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("images.align.mismatched_parity", result.Error.Code);
+    }
+
+    private static Wcs BuildMirroredWcs(double crPix1, double crPix2, double crVal1, double crVal2, double cdelt) =>
+        BuildWcsWithCdelt1Sign(crPix1, crPix2, crVal1, crVal2, cdelt, cdelt1Positive: true);
+
+    private static Wcs BuildWcsWithCdelt1Sign(
+        double crPix1, double crPix2, double crVal1, double crVal2, double cdelt, bool cdelt1Positive)
+    {
+        string[] cards =
+        [
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            $"CRPIX1  =                {crPix1}",
+            $"CRPIX2  =                {crPix2}",
+            $"CRVAL1  =                {crVal1}",
+            $"CRVAL2  =                {crVal2}",
+            $"CDELT1  =                {(cdelt1Positive ? cdelt : -cdelt)}",
+            $"CDELT2  =                {cdelt}",
+            "RADESYS = 'ICRS    '",
+            "END",
+        ];
+
+        var block = Encoding.ASCII.GetBytes(string.Concat(Array.ConvertAll(cards, PadCard)));
+
+        var header = FitsHeader.Parse(block).Value;
+
+        return Wcs.FromHeader(header).Value;
+    }
+
+    [Fact]
     public void AlignBySourceCentroids_AveragesPerAxisOffsetOverMatchedPairs()
     {
         ImmutableArray<DetectedSource> targetSources = [Source(10.0, 10.0, 1), Source(20.0, 30.0, 2)];

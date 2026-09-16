@@ -49,7 +49,7 @@ public static class CompareEndpoint
 
             var comparison = comparisonResult.Value;
 
-            var compareResult = LightCurveComparer.Compare(primary.Flux, comparison.Flux);
+            var compareResult = LightCurveComparer.Compare(primary.Time, primary.Flux, comparison.Time, comparison.Flux);
 
             if (compareResult.IsFailure)
             {

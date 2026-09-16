@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using AstroLab.Core.Fits;
 
@@ -86,6 +87,68 @@ public class FitsHeaderTests
     }
 
     [Fact]
+    public void Parse_HierarchCard_ProducesKeywordNamedByThePath()
+    {
+        var result = FitsCardParser.Parse(PadCard("HIERARCH ESO INS FILT1 NAME = 'R       ' / filter name"));
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal("ESO INS FILT1 NAME", result.Value.Name);
+
+        Assert.Equal(FitsValueKind.String, result.Value.Value.Kind);
+
+        Assert.Equal("R", result.Value.Value.AsString);
+
+        Assert.Equal("filter name", result.Value.Comment);
+    }
+
+    [Fact]
+    public void HeaderParse_MultipleHierarchCards_AreAllIndependentlyAddressable()
+    {
+        var block = BuildHeaderBlock(
+            "HIERARCH ESO INS FILT1 NAME = 'R       ' / filter name",
+            "HIERARCH ESO TEL AIRM START =                  1.2 / airmass",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        Assert.Equal("R", header.GetString("ESO INS FILT1 NAME").Value);
+
+        Assert.Equal(1.2, header.GetReal("ESO TEL AIRM START").Value, precision: 6);
+    }
+
+    [Fact]
+    public void HeaderParse_ContinuedLongString_ConcatenatesAcrossContinueCards()
+    {
+        var block = BuildHeaderBlock(
+            "LONGSTRN= 'This is the first part of a &'  / first part",
+            "CONTINUE  'long string value.'             / second part",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        Assert.Equal(1, header.Count(k => k.Name == "LONGSTRN"));
+
+        Assert.Equal("This is the first part of a long string value.", header.GetString("LONGSTRN").Value);
+
+        Assert.Equal("second part", header.First(k => k.Name == "LONGSTRN").Comment);
+    }
+
+    [Fact]
+    public void HeaderParse_ContinuedLongStringAcrossMultipleContinueCards_ConcatenatesAllSegments()
+    {
+        var block = BuildHeaderBlock(
+            "LONGSTRN= 'aaa&'",
+            "CONTINUE  'bbb&'",
+            "CONTINUE  'ccc'",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        Assert.Equal("aaabbbccc", header.GetString("LONGSTRN").Value);
+    }
+
+    [Fact]
     public void Parse_WrongCardLength_Fails()
     {
         var result = FitsCardParser.Parse("TOO SHORT");
@@ -161,6 +224,82 @@ public class FitsHeaderTests
         Assert.Equal(0.0, descriptor.Value.BZero, precision: 6);
 
         Assert.Equal(1.0, descriptor.Value.BScale, precision: 6);
+    }
+
+    [Fact]
+    public void FitsImageDescriptor_FromHeader_RejectsNaxisAboveStandardLimit()
+    {
+        var block = BuildHeaderBlock(
+            "SIMPLE  =                    T",
+            "BITPIX  =                    8",
+            "NAXIS   =                 1000",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        var descriptor = FitsImageDescriptor.FromHeader(header);
+
+        Assert.True(descriptor.IsFailure);
+
+        Assert.Equal("fits.header.invalid_naxis", descriptor.Error.Code);
+    }
+
+    [Fact]
+    public void FitsImageDescriptor_FromHeader_RejectsPixelCountOverflow()
+    {
+        var block = BuildHeaderBlock(
+            "SIMPLE  =                    T",
+            "BITPIX  =                    8",
+            "NAXIS   =                    3",
+            "NAXIS1  =           2000000000",
+            "NAXIS2  =           2000000000",
+            "NAXIS3  =           2000000000",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        var descriptor = FitsImageDescriptor.FromHeader(header);
+
+        Assert.True(descriptor.IsFailure);
+
+        Assert.Equal("fits.header.image_too_large", descriptor.Error.Code);
+    }
+
+    [Fact]
+    public void FitsImageDescriptor_FromHeader_RejectsBitPixValueThatWrapsToAValidValue()
+    {
+        var block = BuildHeaderBlock(
+            "SIMPLE  =                    T",
+            "BITPIX  =           4294967304",
+            "NAXIS   =                    0",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        var descriptor = FitsImageDescriptor.FromHeader(header);
+
+        Assert.True(descriptor.IsFailure);
+
+        Assert.Equal("fits.header.invalid_bitpix", descriptor.Error.Code);
+    }
+
+    [Fact]
+    public void FitsImageDescriptor_FromHeader_RejectsWrongTypedBzero()
+    {
+        var block = BuildHeaderBlock(
+            "SIMPLE  =                    T",
+            "BITPIX  =                    8",
+            "NAXIS   =                    0",
+            "BZERO   = 'not-a-number'",
+            "END");
+
+        var header = FitsHeader.Parse(block).Value;
+
+        var descriptor = FitsImageDescriptor.FromHeader(header);
+
+        Assert.True(descriptor.IsFailure);
+
+        Assert.Equal("fits.header.keyword_wrong_type", descriptor.Error.Code);
     }
 
     [Fact]

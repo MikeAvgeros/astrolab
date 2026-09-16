@@ -8,9 +8,11 @@ public readonly record struct TimeSeriesTableDescriptor
     private const string TotalFieldsKeyword = "TFIELDS";
     private const string RowCountKeyword = "NAXIS2";
     private const string TimeColumnName = "TIME";
-    private const string FluxColumnName = "FLUX";
     private const int FirstFieldNumber = 1;
     private const int ScalarRepeatCount = 1;
+
+    private static readonly string[] MeasurementColumnNames =
+        ["FLUX", "MAG", "RATE", "COUNTS", "SAP_FLUX", "PDCSAP_FLUX"];
 
     private TimeSeriesTableDescriptor(long rowCount, int timeColumnNumber, int fluxColumnNumber)
     {
@@ -60,7 +62,7 @@ public readonly record struct TimeSeriesTableDescriptor
             return Result<TimeSeriesTableDescriptor>.Failure(timeColumnResult.Error);
         }
 
-        var fluxColumnResult = FindColumn(hdu.Header, (int)fieldCountResult.Value, FluxColumnName);
+        var fluxColumnResult = FindMeasurementColumn(hdu.Header, (int)fieldCountResult.Value);
 
         if (fluxColumnResult.IsFailure)
         {
@@ -68,6 +70,23 @@ public readonly record struct TimeSeriesTableDescriptor
         }
 
         return new TimeSeriesTableDescriptor(rowCountResult.Value, timeColumnResult.Value, fluxColumnResult.Value);
+    }
+
+    private static Result<int> FindMeasurementColumn(FitsHeader header, int fieldCount)
+    {
+        foreach (var candidateName in MeasurementColumnNames)
+        {
+            var columnResult = FindColumn(header, fieldCount, candidateName);
+            
+            if (columnResult.IsSuccess || columnResult.Error.Code != "fits.data.missing_column")
+            {
+                return columnResult;
+            }
+        }
+
+        return Error.Validation(
+            "fits.data.missing_column",
+            $"Table does not contain a recognized measurement column (tried: {string.Join(", ", MeasurementColumnNames)}).");
     }
 
     private static Result<int> FindColumn(FitsHeader header, int fieldCount, string columnName)

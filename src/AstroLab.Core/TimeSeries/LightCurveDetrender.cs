@@ -27,10 +27,18 @@ public static class LightCurveDetrender
             return Error.Validation("timeseries.detrend.empty_series", "The light curve contains no points to detrend.");
         }
 
+        for (var i = 0; i < time.Length; i++)
+        {
+            if (!double.IsFinite(time[i]) || !double.IsFinite(flux[i]))
+            {
+                return Error.Validation("timeseries.detrend.non_finite_value", "Time and flux values must be finite.");
+            }
+        }
+
         return method.Trim().ToLowerInvariant() switch
         {
             "linear" => DetrendLinear(time, flux),
-            "median" => DetrendMovingMedian(flux),
+            "median" => DetrendMovingMedian(time, flux),
             _ => Error.Validation(
                 "timeseries.detrend.unknown_method",
                 $"Unknown detrend method '{method}'. Supported methods: 'linear', 'median'."),
@@ -76,13 +84,23 @@ public static class LightCurveDetrender
         return detrended;
     }
 
-    private static Result<double[]> DetrendMovingMedian(ReadOnlySpan<double> flux)
+    private static Result<double[]> DetrendMovingMedian(ReadOnlySpan<double> time, ReadOnlySpan<double> flux)
     {
         if (flux.Length < MinimumPointsForMovingMedian)
         {
             return Error.Validation(
                 "timeseries.detrend.series_too_short",
                 $"At least {MinimumPointsForMovingMedian} points are required for moving-median detrending.");
+        }
+        
+        for (var i = 1; i < time.Length; i++)
+        {
+            if (time[i] < time[i - 1])
+            {
+                return Error.Validation(
+                    "timeseries.detrend.unsorted_time",
+                    "Moving-median detrending requires the time values to be sorted in non-decreasing order.");
+            }
         }
 
         var halfWindow = MovingMedianWindowPoints / 2;

@@ -6,6 +6,10 @@ namespace AstroLab.Core.TimeSeries;
 /// Pure light-curve variability analysis: summarizes a flux series with the standard
 /// dispersion/variability statistics (mean, median, standard deviation, amplitude, RMS, and
 /// median absolute deviation) used to characterize how much a source's brightness varies.
+/// <c>Rms</c> is the RMS scatter about the mean (the conventional light-curve "RMS" variability
+/// statistic), not the RMS of the raw flux values, so it is dominated by variability rather than by
+/// the source's baseline brightness; it is therefore numerically identical to
+/// <c>StandardDeviation</c>, exposed under both names for convention.
 /// </summary>
 public static class LightCurveVariabilityAnalyzer
 {
@@ -16,11 +20,17 @@ public static class LightCurveVariabilityAnalyzer
             return Error.Validation("timeseries.variability.empty_series", "The light curve contains no points to analyze.");
         }
 
+        foreach (var value in flux)
+        {
+            if (!double.IsFinite(value))
+            {
+                return Error.Validation("timeseries.variability.non_finite_value", "Flux values must be finite.");
+            }
+        }
+
         var mean = Mean(flux);
 
         var sumSquaredDeviation = 0.0;
-
-        var sumSquared = 0.0;
 
         var min = flux[0];
 
@@ -32,8 +42,6 @@ public static class LightCurveVariabilityAnalyzer
 
             sumSquaredDeviation += deviation * deviation;
 
-            sumSquared += value * value;
-
             min = Math.Min(min, value);
 
             max = Math.Max(max, value);
@@ -41,7 +49,7 @@ public static class LightCurveVariabilityAnalyzer
 
         var standardDeviation = Math.Sqrt(sumSquaredDeviation / flux.Length);
 
-        var rms = Math.Sqrt(sumSquared / flux.Length);
+        var rms = standardDeviation;
 
         var amplitude = max - min;
 

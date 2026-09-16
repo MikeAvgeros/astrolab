@@ -4,10 +4,15 @@ namespace AstroLab.Core.Photometry;
 
 /// <summary>
 /// Pure propagation of aperture-photometry flux uncertainty and signal-to-noise ratio. When a
-/// detector gain (and optionally read noise) is supplied, uncertainty follows the standard CCD
-/// equation (source shot noise + sky-background noise + read noise, all in ADU). Without a gain,
-/// this falls back to the sky-noise-dominated estimate already used elsewhere in the codebase
-/// (<see cref="InstrumentalPhotometry.EstimateFluxUncertainty"/>).
+/// detector gain is supplied, uncertainty follows the CCD equation (source shot noise + background
+/// noise, all in ADU). Without a gain, this falls back to the sky-noise-dominated estimate already
+/// used elsewhere in the codebase (<see cref="InstrumentalPhotometry.EstimateFluxUncertainty"/>).
+/// <paramref name="skyBackgroundSigma"/> is expected to be measured directly from the image's
+/// background pixels (e.g. <see cref="Imaging.ImageStatistics.ComputeSkyBackground"/>), so it
+/// already reflects every noise source physically present there, including read noise. An optional
+/// <paramref name="readNoiseElectrons"/> is therefore subtracted from the measured background
+/// variance (in quadrature) before being added back as its own term, so a caller who also knows the
+/// detector's read noise does not have it counted twice.
 /// </summary>
 public static class PhotometricUncertainty
 {
@@ -43,11 +48,13 @@ public static class PhotometricUncertainty
 
         var sourceShotVarianceAdu = Math.Max(netFlux, 0.0) / gain;
 
-        var skyVarianceAdu = apertureArea * skyBackgroundSigma * skyBackgroundSigma;
+        var measuredBackgroundVarianceAdu = apertureArea * skyBackgroundSigma * skyBackgroundSigma;
 
         var readNoiseVarianceAdu = readNoiseElectrons is { } rn ? apertureArea * (rn * rn) / (gain * gain) : 0.0;
 
-        return Math.Sqrt(sourceShotVarianceAdu + skyVarianceAdu + readNoiseVarianceAdu);
+        var skyOnlyVarianceAdu = Math.Max(measuredBackgroundVarianceAdu - readNoiseVarianceAdu, 0.0);
+
+        return Math.Sqrt(sourceShotVarianceAdu + skyOnlyVarianceAdu + readNoiseVarianceAdu);
     }
 
     public static Result<double> ComputeSignalToNoiseRatio(double netFlux, double fluxUncertainty)

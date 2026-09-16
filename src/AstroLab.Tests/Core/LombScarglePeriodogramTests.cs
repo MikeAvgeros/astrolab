@@ -26,7 +26,9 @@ public class LombScarglePeriodogramTests
 
         Assert.True(Math.Abs(result.Value.BestPeriod - truePeriod) < 0.05, $"Expected period near {truePeriod}, got {result.Value.BestPeriod}.");
 
-        Assert.True(result.Value.Power > 0.45, $"Expected a strong periodogram peak, got power {result.Value.Power}.");
+        // For a clean, well-sampled N-point sinusoid, the standard normalized Lomb-Scargle power at
+        // the true period approaches (N-1)/2 (here, (200-1)/2 = 99.5).
+        Assert.True(result.Value.Power > 90.0, $"Expected power near (N-1)/2 = 99.5, got power {result.Value.Power}.");
     }
 
     [Fact]
@@ -95,7 +97,7 @@ public class LombScarglePeriodogramTests
 
         Assert.True(Math.Abs(search.BestPeriod - truePeriod) < 0.05, $"Expected period near {truePeriod}, got {search.BestPeriod}.");
 
-        Assert.True(search.Power > 0.45, $"Expected a strong periodogram peak, got power {search.Power}.");
+        Assert.True(search.Power > 90.0, $"Expected power near (N-1)/2 = 99.5, got power {search.Power}.");
 
         Assert.Equal(4000, search.Periods.Length);
 
@@ -109,30 +111,38 @@ public class LombScarglePeriodogramTests
     }
 
     [Fact]
-    public void SearchFull_FalseAlarmProbability_MatchesHorneBaliunasFormulaForGridSize()
+    public void SearchFull_FalseAlarmProbability_UsesNormalizedPowerDirectlyWithoutExtraScaling()
     {
-        const double truePeriod = 5.0;
+        // Deliberately small and sparsely sampled so Power stays in a numerically well-behaved
+        // range (neither so small that the false-alarm probability trivially saturates at 1, nor so
+        // large that exp(-Power) underflows to exactly 0 on both sides of the comparison below,
+        // which would make the assertion pass vacuously regardless of the scaling this test targets.
+        const double truePeriod = 10.0;
 
-        var time = new double[200];
+        var time = new double[10];
 
-        var flux = new double[200];
+        var flux = new double[10];
 
         for (var i = 0; i < time.Length; i++)
         {
-            time[i] = i * 0.25;
+            time[i] = i;
 
             flux[i] = Math.Sin(2.0 * Math.PI * time[i] / truePeriod);
         }
 
         const int gridSize = 1000;
 
-        var result = LombScarglePeriodogram.SearchFull(time, flux, minPeriod: 1.0, maxPeriod: 20.0, gridSize);
+        var result = LombScarglePeriodogram.SearchFull(time, flux, minPeriod: 2.0, maxPeriod: 20.0, gridSize);
 
         Assert.True(result.IsSuccess);
 
-        var normalizedPower = result.Value.Power * time.Length;
+        var power = result.Value.Power;
 
-        var expectedFalseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-normalizedPower), gridSize), 0.0, 1.0);
+        // FalseAlarmProbability must be the Horne & Baliunas (1986) approximation applied directly
+        // to the already-normalized Power, with no additional rescaling by sample count.
+        var expectedFalseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-power), gridSize), 0.0, 1.0);
+
+        Assert.True(expectedFalseAlarmProbability is > 0.0 and < 1.0, $"Expected a non-degenerate FAP, got {expectedFalseAlarmProbability}.");
 
         Assert.Equal(expectedFalseAlarmProbability, result.Value.FalseAlarmProbability, precision: 9);
     }

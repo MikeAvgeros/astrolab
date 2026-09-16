@@ -23,7 +23,7 @@ public class LightCurveVariabilityAnalyzerTests
 
         Assert.Equal(4.0, stats.Amplitude, precision: 9);
 
-        Assert.Equal(Math.Sqrt(55.0 / 5.0), stats.Rms, precision: 9);
+        Assert.Equal(stats.StandardDeviation, stats.Rms, precision: 9);
 
         Assert.Equal(1.0, stats.MedianAbsoluteDeviation, precision: 9);
     }
@@ -47,7 +47,7 @@ public class LightCurveVariabilityAnalyzerTests
 
         Assert.Equal(0.0, stats.Amplitude, precision: 9);
 
-        Assert.Equal(7.0, stats.Rms, precision: 9);
+        Assert.Equal(0.0, stats.Rms, precision: 9);
 
         Assert.Equal(0.0, stats.MedianAbsoluteDeviation, precision: 9);
     }

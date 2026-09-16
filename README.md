@@ -294,19 +294,10 @@ Swagger is the easiest way to inspect the available request and response models 
 
 ## Docker
 
-Build the image:
+The recommended way to run AstroLab in Docker is via Docker Compose, which builds the image and bind mounts the repository's `storage/` directory into the container:
 
 ```bash
-docker build -t astrolab-api .
-```
-
-Run it:
-
-```bash
-docker run \
-  -p 8080:8080 \
-  -v astrolab-storage:/app/storage \
-  astrolab-api
+docker compose up -d
 ```
 
 The API is then available at:
@@ -315,7 +306,25 @@ The API is then available at:
 http://localhost:8080
 ```
 
-The named Docker volume keeps staged FITS datasets outside the container lifecycle.
+Equivalently, without Compose:
+
+```bash
+docker build -t astrolab-api .
+
+docker run \
+  -p 8080:8080 \
+  -v ./storage:/app/storage \
+  astrolab-api
+```
+
+The host's `./storage` directory is bind mounted to the container's `/app/storage`, which is the container-side value of `Storage:RootPath` (set via the `Storage__RootPath` environment variable in the image). Staged FITS files therefore live on the host filesystem and survive `docker compose down` / container deletion and recreation — see [Storage](#storage) below for the full persistence model.
+
+The container runs as the non-root `app` user built into the .NET runtime image. On Docker Desktop (Windows/macOS) the bind-mounted `storage/` directory is writable by that user automatically. On native Linux hosts, ensure the host `storage/` directory is writable by the container's `app` user (uid/gid `1654` in the .NET 10 runtime image), for example:
+
+```bash
+mkdir -p storage
+chown 1654:1654 storage
+```
 
 ---
 
@@ -2235,6 +2244,39 @@ Local FITS file
 
 Files are not automatically deleted. Storage therefore needs to be managed by the host environment.
 
+## Persistent Storage in Docker
+
+AstroLab always stages FITS files as ordinary files under `Storage:RootPath`, whether running directly on a developer machine or inside Docker. There is no database or object-storage layer, and the application contains no Docker-specific storage logic — persistence is entirely a matter of how the container is run.
+
+- **Locally (`dotnet run`)**, the configured storage directory (`./storage` by default) is used directly on the host filesystem.
+- **In Docker**, `Storage:RootPath` is set to `/app/storage` inside the container, and the recommended deployment bind mounts the host's `storage/` directory into it:
+
+```text
+Host filesystem
+└── storage/
+    └── observation.fits
+            │
+            │ Docker bind mount
+            ▼
+Container
+└── /app/storage/
+    └── observation.fits
+            │
+            ▼
+       AstroLab API
+```
+
+Because the host directory *is* the container's storage directory (not a copy of it), FITS files survive `docker compose down` and container recreation without any migration or import step — the container is disposable, the `storage/` directory is not.
+
+A Docker-managed named volume is deliberately **not** used for this purpose: a bind mount keeps staged FITS files directly visible and backup-able on the host, at a normal filesystem path, rather than hidden inside Docker's storage driver.
+
+Two lifecycles to keep distinct:
+
+- **Container lifecycle** — `docker compose up` / `down`, image rebuilds, container recreation. Ephemeral by design.
+- **Host storage lifecycle** — the `storage/` directory. Deleting it **does** delete the persisted FITS data, independently of the container. Back up `storage/` like any other important data directory if its contents matter.
+
+FITS files are intentionally not stored in PostgreSQL, another database, or S3/object storage — see [`spec.md` §5.4](spec.md#54-persistent-storage-and-deployment).
+
 ---
 
 # Configuration
@@ -2434,11 +2476,8 @@ dotnet test src/AstroLab.Tests
 # Run the API
 dotnet run --project src/AstroLab.Api
 
-# Build Docker image
-docker build -t astrolab-api .
-
-# Run Docker container
-docker run -p 8080:8080 -v astrolab-storage:/app/storage astrolab-api
+# Build and run in Docker (bind mounts ./storage:/app/storage)
+docker compose up -d
 ```
 
 ---

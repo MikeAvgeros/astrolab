@@ -1,0 +1,10 @@
+services:
+  astrolab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: astrolab-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./storage:/app/storage

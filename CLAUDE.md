@@ -201,6 +201,12 @@ dotnet run --project src/AstroLab.Api
 When deployment or native dependencies are affected, also validate the container:
 
 ```bash
+docker compose up -d
+```
+
+Equivalently, without Compose:
+
+```bash
 docker build -t astrolab-api .
 docker run -p 8080:8080 -v ./storage:/app/storage astrolab-api
 ```

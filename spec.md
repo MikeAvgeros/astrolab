@@ -1,354 +1,219 @@
 # AstroLab — Project Specification
 
-This is the authoritative design and engineering reference for AstroLab. It defines the architecture, engineering requirements, coding standards, and implementation patterns that govern the repository. It is intended for both human contributors and AI coding agents.
+This is the authoritative design and engineering reference for AstroLab. It defines the architecture, engineering requirements, coding standards, domain rules, API conventions, and implementation patterns governing the repository.
 
-For day-to-day operational details such as build/test commands, the current repository layout, and local setup, see `CLAUDE.md`.
+`CLAUDE.md` provides Claude-specific working guidance, repository workflow, build/test commands, and local setup. **Do not duplicate those details here.**
 
-> **How to use this document**
->
-> - **Humans:** §1–§2 provide context; §3–§7 are the standing engineering reference.
-> - **AI agents:** Treat the **MUST** requirements in §3–§6 as hard constraints. Before completing a task, check the resulting diff against the applicable requirements.
-> - **Specific rules override general rules.** Where a section explicitly defines an exception to an earlier rule, the more specific rule applies.
-> - **Historical information:** §8 describes the original build sequence and is not an outstanding task list.
-> - **Roadmap information:** §9 lists any endpoints currently scaffolded to return HTTP 501 pending their Core implementation. When it lists entries, it _is_ an outstanding task list — do not implement an entry's scientific behaviour without also removing it from §9.
+### How to use this document
 
-## Contents
-
-1. [Overview](#1-overview)
-2. [Technology and Constraints](#2-technology-and-constraints)
-3. [General Requirements](#3-general-requirements)
-4. [Coding Standards](#4-coding-standards)
-   - 4.1 [Structure and Namespaces](#41-structure-and-namespaces)
-   - 4.2 [Comments and Literals](#42-comments-and-literals)
-   - 4.3 [Control Flow and LINQ](#43-control-flow-and-linq)
-   - 4.4 [Immutability and Records](#44-immutability-and-records)
-   - 4.5 [Line Endings and Formatting](#45-line-endings-and-formatting)
-5. [Architecture](#5-architecture)
-   - 5.1 [Solution Structure](#51-solution-structure)
-   - 5.2 [Dependency Rules](#52-dependency-rules)
-   - 5.3 [Request Flow](#53-request-flow)
-   - 5.4 [FITS Dataset Capabilities](#54-fits-dataset-capabilities)
-   - 5.5 [Deployment](#55-deployment)
-6. [Core Implementation Patterns](#6-core-implementation-patterns)
-   - 6.1 [Result Pattern](#61-result-pattern)
-   - 6.2 [Functional Core: Purity and Allocation Awareness](#62-functional-core-purity-and-allocation-awareness)
-   - 6.3 [Unmanaged Native Buffers and CFITSIO Table Reading](#63-unmanaged-native-buffers-and-cfitsio-table-reading)
-   - 6.4 [Pipeline Streaming](#64-pipeline-streaming)
-   - 6.5 [Vertical Slice API Endpoints (REPR Pattern)](#65-vertical-slice-api-endpoints-repr-pattern)
-   - 6.6 [Archive Clients: ESO and MAST](#66-archive-clients-eso-and-mast)
-   - 6.7 [Catalogue Client: VizieR](#67-catalogue-client-vizier)
-   - 6.8 [Visualisation as a Separate Capability](#68-visualisation-as-a-separate-capability)
-   - 6.9 [Global Exception Handling](#69-global-exception-handling)
-7. [Testing Standards](#7-testing-standards)
-8. [Appendix: Original Build Sequence (Historical)](#8-appendix-original-build-sequence-historical)
+- `MUST` and `MUST NOT` requirements are hard constraints.
+- A more specific rule overrides a general rule when an explicit exception exists.
+- This document defines **what AstroLab must be**; `CLAUDE.md` defines **how Claude should work with it**.
+- Before completing a change, review the resulting diff against the applicable requirements.
 
 ---
 
-## 1. Overview
+# 1. Overview
 
-**AstroLab** is a high-performance .NET 10 RESTful API platform that downloads, stores, parses, analyses, visualises, and renders FITS (Flexible Image Transport System) scientific datasets from astronomical archives such as ESO and MAST, as well as direct user uploads.
+**AstroLab** is a high-performance .NET 10 / C# 14 RESTful API for downloading, storing, parsing, analysing, and visualising FITS (Flexible Image Transport System) astronomical datasets from ESO and MAST archives as well as direct user uploads.
 
-The system uses a **Functional Core, Imperative Shell (FCIS)** design. The pure, allocation-conscious domain/scientific core (`AstroLab.Core`) is driven by an imperative shell (`AstroLab.Infrastructure`, `AstroLab.Api`) that owns I/O, native interop, and other side effects.
+The system uses **Functional Core, Imperative Shell (FCIS)**:
 
-Expected domain and infrastructure outcomes are represented with `Result<T>` — a hand-rolled discriminated union (§6.1). Exceptions are reserved for genuinely exceptional conditions and for programmer misuse at appropriate boundaries.
+- `AstroLab.Core` contains pure, deterministic scientific/domain logic.
+- `AstroLab.Infrastructure` owns I/O, native interop, storage, archive integration, and concrete rendering.
+- `AstroLab.Api` provides thin vertical API slices and HTTP contracts.
 
-Native memory management, `ReadOnlySpan<T>`, `NativeMemory`, and `System.IO.Pipelines` may be used where they provide measurable benefits when processing large astronomical files. Performance-sensitive code should minimise unnecessary managed allocations while remaining readable and maintainable.
+The API uses **Vertical Slice Architecture** and the **REPR (Request–Endpoint–Response)** pattern.
 
-A dedicated **FITS Image Visualisation** capability provides browser-consumable representations of 2D FITS image data, including pixel scaling, image stretching, colour mapping, NaN/invalid-pixel handling, and image statistics.
+Expected domain and infrastructure outcomes use `Result<T>`. Exceptions are reserved for genuinely exceptional conditions and appropriate programmer misuse.
 
----
+Large astronomical files require allocation-aware processing. `ReadOnlySpan<T>`, `NativeMemory`, unmanaged buffers, `System.IO.Pipelines`, and other performance techniques MAY be used where they provide a measurable benefit.
 
-## 2. Technology and Constraints
-
-- **Target framework:** .NET 10 / C# 14.
-- **Database:** None. Metadata and raw datasets are staged on local disk (`AstroLab.Infrastructure/Storage`), not a SQL or NoSQL database.
-- **Architecture:** Functional Core, Imperative Shell (FCIS), combined with Vertical Slice Architecture in the API layer. Each endpoint follows the REPR (Request–Endpoint–Response) pattern.
-- **Solution structure:** The current solution is organised into `AstroLab.Core`, `AstroLab.Infrastructure`, `AstroLab.Api`, and `AstroLab.Tests`. New projects MAY be introduced when a genuine architectural or operational boundary justifies them; project proliferation without a meaningful boundary is discouraged.
-- **Expected failures:** `Result<T>` is used for expected domain and infrastructure outcomes. Exceptions are reserved for genuinely exceptional failures and programmer misuse.
-- **Performance:** Performance-critical Core algorithms MUST avoid unnecessary allocations and intermediate representations. Zero-allocation implementations SHOULD be used where practical and demonstrably beneficial, but allocation avoidance MUST NOT be treated as an absolute requirement for every algorithm or result type.
-- **FITS visualisation:** 2D FITS image data MUST be transformable into a browser-displayable representation (PNG) without mutating the original FITS data.
+FITS image visualisation is a separate capability that converts 2D FITS image data into browser-consumable representations without mutating the original scientific data.
 
 ---
 
-## 3. General Requirements
+# 2. Technology and Constraints
 
-These requirements define the engineering invariants that apply across the repository. They describe **what the system must do**; §4 describes **how code is written**.
+- **Framework:** .NET 10
+- **Language:** C# 14
+- **API:** ASP.NET Core Minimal APIs
+- **Architecture:** FCIS + Vertical Slice Architecture + REPR
+- **Database:** None
+- **Persistent dataset storage:** local filesystem
+- **Native FITS dependency:** CFITSIO, isolated inside Infrastructure
+- **Testing:** xUnit v3
+- **API documentation:** ASP.NET Core OpenAPI/Swagger
 
-### 3.1 Production Quality
-
-- **MUST:** Write production-ready, maintainable code. Do not leave TODOs in place of required implementations or knowingly ship temporary shortcuts.
-- **MUST:** Prefer readability over cleverness. Optimise for the next reader of the code and the next reviewer of the diff.
-- **MUST:** Keep methods focused on a single responsibility. If describing a method naturally requires "and", consider splitting it.
-- **SHOULD:** Keep methods under 30 lines where practical. This is a refactoring signal, not a hard limit that justifies making otherwise coherent code less readable.
-- **MUST:** Avoid unnecessary duplication, but do not over-abstract. Extract shared logic when it is genuinely duplicated; do not introduce an interface, base class, or generic abstraction solely for a single caller or hypothetical future use.
-- **MUST:** Write code that is testable. Prefer pure functions and constructor-injected dependencies over static state, ambient context, or hidden singletons.
-- **SHOULD:** Prefer the simplest design that satisfies the requirements. Do not introduce performance-oriented complexity, abstractions, or unsafe code without a clear reason.
-
-### 3.2 Validation and Invariants
-
-- **MUST:** Validate all external input before use. This includes HTTP request bodies, query parameters, uploaded files, and archive HTTP responses.
-- **MUST:** Never allow an invalid domain object to enter a state where its invariants are violated.
-- **MUST:** Domain invariants belong to the domain type and MUST be enforced at the domain boundary.
-- **MUST:** Return `Result<T>` for operations that can fail for a reason a caller should handle, including domain validation failures, missing data, unsupported FITS capabilities, and expected infrastructure failures (§6.1).
-- **MUST NOT:** Throw exceptions for expected domain validation, scientific calculation, invalid-FITS, or other caller-handleable failures.
-- **MAY:** Use `ArgumentException`, `ArgumentOutOfRangeException`, or related exceptions for programmer misuse of an API where the caller has violated the method's contract rather than supplied ordinary invalid user input.
-- **MAY:** Request-boundary validation use exceptions where required by the ASP.NET Core binding/design approach, provided those exceptions are caught and translated into an appropriate client response at the API boundary. Such exceptions MUST NOT leak into Core as normal domain control flow.
-- **MUST:** Every `Error` carries a meaningful human-readable message that states what failed and why.
-- **SHOULD:** Prefer stable machine-readable error codes over clients depending on error-message text.
-
-### 3.3 I/O and Cancellation
-
-- **MUST:** Use `async`/`await` for disk, network, and pipeline I/O. Do not introduce synchronous fallback paths for these operations.
-- **MUST:** Every asynchronous operation that can meaningfully be cancelled accepts a `CancellationToken` and propagates it to downstream I/O.
-- **MUST NOT:** Block asynchronous code with `.Result` or `.Wait()`. Restructure callers to remain asynchronous.
-- **SHOULD:** Honour cancellation promptly, particularly during large FITS downloads, file reads, and streaming operations.
-- **MUST:** Suffix asynchronous methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` with `Async`, including interface members.
-
-### 3.4 Functional Core
-
-- **MUST:** Scientific algorithms in `AstroLab.Core` be pure, deterministic functions of their inputs, with no I/O or side effects (§6.2).
-- **MUST:** Keep infrastructure concerns such as filesystem access, network communication, native interop, image encoding, and archive-specific protocols outside Core.
-- **SHOULD:** Keep Core algorithms independent of the representation used by the API or Infrastructure layer.
-
-### 3.5 NuGet Packages
-
-- **MUST:** Always search nuget.org for the latest stable version of each package before writing or modifying any `.csproj` package reference.
-- **MUST NOT:** Rely on training data for package version numbers, as they become outdated.
-- **SHOULD:** Avoid adding a dependency when the required functionality can be implemented clearly using the BCL or an existing dependency.
-- **MUST:** Treat third-party dependencies as implementation details unless the dependency itself forms an explicit architectural boundary.
-
----
-
-## 4. Coding Standards
-
-These conventions apply uniformly across the solution. They define **how code is written**, while §3 defines the higher-level engineering requirements.
-
-### 4.1 Structure and Namespaces
-
-- **MUST:** Use file-scoped namespaces. The namespace segments after the project root MUST mirror the file's folder path exactly.
-
-  Example:
-
-  `src/AstroLab.Api/Features/Fits/Upload/FitsUploadResponse.cs`
-
-  declares:
-
-  `namespace AstroLab.Api.Features.Fits.Upload;`
-
-- **MUST:** Keep one primary type per file. An explicit companion extension container MAY share the file when this specification explicitly permits it. A record's `Create(...)` factory method lives on the record itself (§4.4), not in a companion type, so it never counts against this rule.
-- **MUST:** Use C# 14 `extension(...)` member syntax for new extension members rather than the classic `this`-parameter extension-method form.
-- **MUST NOT:** Use primary constructors on classes, structs, or records. All three use an explicit constructor body. Records follow the private-constructor-plus-`Create(...)` pattern in §4.4.
-
-### 4.2 Method Ordering
-
-Within a class, order methods according to their visibility and usage:
-
-- **Public methods MUST appear before private methods.**
-- **Private methods MUST be ordered according to the order in which they are used by the class**, with a method appearing before the private methods it calls where practical.
-- A method that is only used internally by the class **MUST be private**. Do not make a method public merely because it may be useful to a potential future requirement.
-- If a future requirement requires an existing private method to be part of the class's public API, its visibility MAY be changed from `private` to `public` at that time.
-- Do not expose methods speculatively. Keep the smallest appropriate visibility for the current requirements.
-
-### 4.3 Comments and Literals
-
-- **MUST NOT:** Add `//` comments to explain code whose purpose or behaviour is already clear from its implementation.
-- **MUST NOT:** Add `///` XML documentation comments to models, DTOs, records, or their properties, including request/response DTOs and other data-only types. Type and property names MUST be sufficiently descriptive and self-documenting.
-- **MUST:** Add a `///` XML documentation comment to:
-  - Every endpoint class (`{Leaf}Endpoint.cs`), describing the endpoint's purpose and behaviour.
-  - Every class in `AstroLab.Core` and `AstroLab.Infrastructure`, describing the class's responsibility.
-- **MUST:** Extract numeric literals that encode domain meaning — scaling factors, thresholds, buffer sizes, fallback values, algorithm coefficients, and similar values — into named `private const` fields. Structurally self-evident literals such as `0`, `1`, and `2` used as indices or simple bounds are exempt.
-- **MUST:** Enable nullable reference types in every project with `<Nullable>enable</Nullable>`. Use `T?` for legitimately absent references and perform a real null check rather than using `!` to suppress the compiler.
-- **MUST NOT:** Add redundant parentheses to a mathematical expression — parentheses that restate C#'s existing operator precedence rather than changing evaluation order. Use parentheses only where they are required to produce the correct result, or where a mixed chain of different operator kinds would otherwise be genuinely ambiguous to a reader.
-- **MUST NOT:** Add a trailing comma after the last member, element, argument, parameter, or expression arm when the comma is optional. This applies to `enum` declarations, `switch` expressions, collection/object/array initializers, argument lists, parameter lists, and any other C# construct where a trailing comma is permitted but not required.
-
-### 4.4 Control Flow and LINQ
-
-- **SHOULD:** Prefer LINQ for collection-oriented operations when it improves readability and does not introduce a meaningful performance or allocation cost.
-- **SHOULD:** Prefer explicit `for`/`foreach` loops for numerical, pixel-processing, buffer-processing, or other performance-critical algorithms when they provide clearer control over iteration, memory access, allocations, or algorithmic complexity.
-- **MUST NOT:** Avoid LINQ merely because it has historically been considered slow. Modern .NET provides highly optimised implementations for many common LINQ operations. Choose between LINQ and explicit iteration based on readability and the characteristics of the workload.
-- **SHOULD:** Benchmark genuinely performance-critical alternatives rather than relying on assumptions about LINQ or loops.
-- **MUST:** Prefer early returns for guard conditions rather than unnecessary `else` blocks or deep nesting.
-- **SHOULD:** Prefer pattern matching (`is`, property patterns, relational patterns, and `switch` expressions) when branching on a value's type, state, or structure, where it improves clarity over equivalent `if`/`else` logic.
-- **SHOULD:** Prefer switch expressions when a value is produced by branching on a discriminant and the branches can be expressed clearly as expressions.
-- **SHOULD:** Prefer `var` when the right-hand side makes the type unambiguous at the call site. Use an explicit type when it improves clarity.
-
-### 4.5 Immutability and Records
-
-- **SHOULD:** Prefer immutable types by default.
-- **MUST:** Configuration classes bound through the Options pattern (`IOptions<T>`) MAY remain mutable because the configuration binder requires settable properties.
-- **SHOULD:** Types that own disposable/unmanaged resources or expose substantial behaviour may remain classes rather than records.
-- **MUST:** Use records for immutable data-only types such as DTOs, request/response models, value objects, and measurement results. Small value types MAY use `readonly record struct`.
-- **MUST:** A concrete record type defaults to `sealed`. Leave a record unsealed only when inheritance/polymorphism is an explicit, documented part of its design. `readonly record struct` types are implicitly sealed and MUST NOT carry the modifier.
-- **MUST:** Declare a record's properties explicitly with `{ get; }` accessors, never `{ get; init; }`, and set them only from the record's own constructor. Because properties are get-only, records do not support `with`-expression mutation; construct a new instance through `Create(...)` instead.
-- **MUST:** A record is constructed through a private constructor plus a public static `Create(...)` method declared on the record type itself. `Create(...)` validates its arguments inline and returns `new(...)`; the constructor performs no validation and MUST NOT be called from outside the record's own file. This makes the record impossible to construct in an invalid state. A record that is only ever constructed through its own `Create(...)` — this is the normal case, and includes every `AstroLab.Core` domain record — has no need for a separate `Validate()` method; its checks live directly in `Create(...)`.
-- **MUST:** When a framework can construct a record without going through `Create(...)` — for example, the `[JsonConstructor]`-bound request DTO described in the EXCEPTION below, which `System.Text.Json` constructs directly during model binding — the record exposes a public `Validate()` instance method containing those checks, so the caller can invoke `request.Validate()` after binding. `Create(...)` calls `Validate()` internally instead of duplicating the checks, so hand-written construction still goes through the same checks.
-- **MUST NOT:** Add an empty `Validate()` method purely for symmetry when a record has no invariants to check, or when the record is never constructed outside its own `Create(...)`. A `Validate()` method only appears where a framework can also construct the record outside `Create(...)` — see the `[JsonConstructor]` EXCEPTION below for the shape that applies to.
-- **MAY:** Use `ImmutableList<T>` for collection-shaped properties on API-boundary records. `AstroLab.Core` hot-path types are exempt and MUST use span/array-based representations appropriate to their allocation constraints.
-- **MAY:** Types with established semantic smart constructors, such as `Error.Validation(...)` and `Result<T>.Success(...)`, expose those constructors directly on the type instead of a generic `Create(...)`, as long as they still funnel through the same private constructor.
-- **EXCEPTION:** A request DTO record bound directly from an HTTP request body (no `[AsParameters]`) keeps a **private** constructor but marks it `[JsonConstructor]` (`System.Text.Json.Serialization`) so `System.Text.Json` can still use it during model binding. Construction via the framework bypasses `Create`'s validation. Hand-written construction SHOULD still go through `Create(...)` when validation is required. Because the endpoint handler receives an already-constructed instance from model binding, it MUST call that instance's own `request.Validate()` when applicable.
-- **EXCEPTION:** A request DTO record bound via `[AsParameters]` (query/route parameter binding) MUST keep a **public** constructor. ASP.NET Core's parameter-binding metadata cache requires a public constructor for `[AsParameters]` complex-type binding. The constructor still performs no validation, properties remain `{ get; }`-only, and `Create(...)` remains the validated entry point for hand-written construction.
-
-Example — a Core domain record, only ever constructed through its own `Create(...)`, validates inline:
-
-```csharp
-public readonly record struct ApertureMeasurement
-{
-    private ApertureMeasurement(double flux, double area, int sampledPixelCount)
-    {
-        Flux = flux;
-        Area = area;
-        SampledPixelCount = sampledPixelCount;
-    }
-
-    public double Flux { get; }
-
-    public double Area { get; }
-
-    public int SampledPixelCount { get; }
-
-    public static ApertureMeasurement Create(double flux, double area, int sampledPixelCount)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(area);
-
-        ArgumentOutOfRangeException.ThrowIfNegative(sampledPixelCount);
-
-        return new ApertureMeasurement(flux, area, sampledPixelCount);
-    }
-}
-```
-
-### 4.6 Line Endings and Formatting
-
-- **MUST:** Repository files use CRLF line endings, enforced by `.gitattributes` (`* text eol=crlf`).
-- **SHOULD:** Separate consecutive executable statements with a single blank line when doing so improves readability, except between variable assignments in constructors.
-- **MUST NOT:** Insert unnecessary blank lines immediately inside or before a closing brace.
-
----
-
-## 5. Architecture
-
-The following are architectural **MUST** constraints. A change that violates one of them is incorrect even if the resulting code otherwise works.
-
-1. `AstroLab.Core` MUST NOT reference `AstroLab.Infrastructure` or ASP.NET Core.
-2. `AstroLab.Core` MUST NOT perform I/O, native interop, or access mutable global state.
-3. `AstroLab.Core` MUST contain pure deterministic decision logic, scientific/domain models, validation, algorithms, and result/error representations.
-4. `AstroLab.Infrastructure` owns native memory, filesystem access, network communication, archive protocols, image encoding, and other external side effects.
-5. `AstroLab.Api` feature slices orchestrate Infrastructure and Core; they MUST NOT implement scientific/domain calculations.
-6. Expected failures MUST be represented with `Result<T>`; exceptions MUST NOT be used for normal domain control flow.
-7. Large FITS pixel buffers SHOULD remain outside the managed GC heap where practical.
-8. Large network/file payloads MUST be streamed rather than fully buffered into a single `byte[]`.
-9. Core performance-critical paths SHOULD operate directly over spans or equivalent allocation-conscious representations without unnecessary intermediate managed allocations.
-10. Raw FITS bytes are read from disk through Infrastructure storage/FITS reader types. Decoding already-loaded FITS structures — such as header cards and keyword/value parsing — is pure deterministic logic and belongs in Core where appropriate.
-11. **CFITSIO is an implementation detail.** The architecture MUST NOT depend on CFITSIO-specific types or APIs outside the Infrastructure boundary that owns the native adapter.
-12. Scientific analysis and visualisation MUST remain separate concerns. PNG encoding and colour mapping MUST NOT be mixed with scientific computation in the same method or call frame.
-13. FITS read/write round-trip preservation is **not** a repository-wide architectural requirement. If FITS writing is introduced, the writing capability MUST explicitly define which metadata and provenance must be preserved.
-    - `AstroLab.Infrastructure/Storage/FitsImageWriter` is the one FITS-writing capability in the codebase, encoding a 2D float32 array (e.g. `Images/Stack`'s composite) as a minimal single-HDU file (`SIMPLE`/`BITPIX`/`NAXIS`/`NAXIS1`/`NAXIS2` only) so it can be staged and re-read through the normal `FitsDatasetReader` pipeline. Per this item, it explicitly preserves only pixel dimensions and values — no WCS, provenance, or other source metadata is carried over from the input frames.
-
-### 5.1 Solution Structure
-
-Feature slices shape the API around capabilities rather than technical layers. The API separates FITS inspection, data-type-specific scientific analysis, archive integration, and catalogue integration. Visualisation remains a separate concern within the relevant data-type feature.
-
-The current solution is structured as follows:
+The preferred solution structure is:
 
 ```text
 AstroLab.slnx
-│
 ├── src/
-│   ├── AstroLab.Core/                         # Pure Functional Core
-│   │   ├── Fits/                              # FITS domain models and parsing
-│   │   │   ├── HduDescriptor.cs
-│   │   │   ├── FitsDatasetKind.cs
-│   │   │   └── FitsDatasetClassifier.cs
-│   │   ├── Imaging/                           # Pure image/scaling mathematics
-│   │   │   ├── ImageScaler.cs
-│   │   │   ├── ImageStatistics.cs
-│   │   │   └── ColorMapper.cs
-│   │   ├── Astrometry/                         # WCS parsing and conversion
-│   │   │   └── Wcs.cs
-│   │   ├── Photometry/                         # Aperture-photometry algorithms
-│   │   ├── Sources/                            # Source detection
-│   │   │   └── SourceDetector.cs
-│   │   ├── Spectroscopy/                       # Spectral algorithms
-│   │   ├── TimeSeries/                         # Light-curve algorithms (detrend, compare)
-│   │   ├── Catalogues/                         # Pure catalogue cross-match algorithm
-│   │   │   └── CatalogueCrossMatcher.cs
-│   │   └── Result/                             # Result<T> / Error
-│   │
-│   ├── AstroLab.Infrastructure/                # Imperative Shell
-│   │   ├── Fits/                               # FITS adapter / native interop
-│   │   ├── Storage/                            # Local storage and streaming
-│   │   ├── Archives/                           # ESO and MAST clients
-│   │   ├── Catalogues/                         # VizieR TAP catalogue client
-│   │   └── ImageRendering/                     # FITS → browser image rendering
-│   │
-│   ├── AstroLab.Api/                           # API Host & Vertical Slices
-│   │   ├── Features/
-│   │   │   ├── Fits/
-│   │   │   │   ├── Upload/
-│   │   │   │   └── Inspect/
-│   │   │   ├── Images/
-│   │   │   │   ├── Render/
-│   │   │   │   ├── Statistics/
-│   │   │   │   ├── Histogram/
-│   │   │   │   ├── Photometry/
-│   │   │   │   ├── Sources/
-│   │   │   │   ├── Astrometry/
-│   │   │   │   ├── MultiPhotometry/
-│   │   │   │   ├── DifferentialPhotometry/
-│   │   │   │   ├── SourceCharacterization/
-│   │   │   │   ├── Background/
-│   │   │   │   ├── Segmentation/
-│   │   │   │   ├── Compare/
-│   │   │   │   ├── Align/
-│   │   │   │   ├── Stack/
-│   │   │   │   ├── Separation/
-│   │   │   │   ├── Footprint/
-│   │   │   │   └── Overlay/
-│   │   │   ├── Spectroscopy/
-│   │   │   │   ├── Extract/
-│   │   │   │   ├── Calibrate/
-│   │   │   │   ├── Lines/
-│   │   │   │   ├── Redshift/
-│   │   │   │   └── Compare/
-│   │   │   ├── TimeSeries/
-│   │   │   │   ├── LightCurve/
-│   │   │   │   ├── Detrend/
-│   │   │   │   ├── PeriodSearch/
-│   │   │   │   ├── Transit/
-│   │   │   │   └── Compare/
-│   │   │   ├── Catalogues/
-│   │   │   │   ├── Query/
-│   │   │   │   └── CrossMatch/
-│   │   │   ├── Measurements/
-│   │   │   │   ├── StellarColour/
-│   │   │   │   ├── StellarTemperature/
-│   │   │   │   ├── SpectralClassification/
-│   │   │   │   ├── RadialVelocity/
-│   │   │   │   ├── GalaxyMorphology/
-│   │   │   │   ├── SurfaceBrightness/
-│   │   │   │   └── PhysicalSize/
-│   │   │   └── Archives/
-│   │   │       ├── Search/
-│   │   │       └── Download/
-│   │   └── Program.cs
-│   │
+│   ├── AstroLab.Core/
+│   ├── AstroLab.Infrastructure/
+│   └── AstroLab.Api/
+├── tests/
 │   └── AstroLab.Tests/
-│       ├── Core/
-│       ├── Infrastructure/
-│       └── Features/
-│
 └── storage/
 ```
 
-The exact folder layout MAY evolve as the system grows. A new project or major structural boundary SHOULD only be introduced when it represents a genuine separation of responsibility, deployment, dependency, or ownership.
+The exact folder layout MAY evolve. A new project or major structural boundary SHOULD only be introduced when it represents a genuine separation of responsibility, deployment, dependency, or ownership.
 
-The current four-project arrangement is the preferred default, not an immutable requirement.
+No database or cloud object-storage dependency should be introduced merely to persist FITS datasets.
 
-Roadmap features remain explicitly represented at the API boundary where they have been intentionally scaffolded. They MUST return HTTP 501 until their corresponding implementation exists and MUST NOT return fake scientific results.
+---
 
-### 5.2 Dependency Rules
+# 3. General Requirements
 
-Dependencies flow inward toward Core:
+## 3.1 Production Quality
+
+- **MUST:** Write production-ready, maintainable code.
+- **MUST:** Prefer readability over cleverness.
+- **MUST:** Keep methods focused on a single responsibility.
+- **SHOULD:** Keep methods under 30 lines where practical. This is a refactoring signal, not an absolute limit.
+- **MUST:** Avoid unnecessary duplication without over-abstracting.
+- **MUST:** Avoid interfaces, base classes, generic abstractions, projects, or dependencies that exist only for hypothetical future requirements.
+- **MUST:** Keep code testable through pure functions and constructor-injected dependencies rather than hidden state or ambient singletons.
+- **SHOULD:** Prefer the simplest design satisfying the requirements.
+- **SHOULD:** Avoid performance complexity or unsafe code without a concrete reason.
+
+## 3.2 Validation and Invariants
+
+- **MUST:** Validate external input before use, including HTTP input, uploaded files, and archive responses.
+- **MUST:** Never allow invalid domain objects to enter an invalid state.
+- **MUST:** Domain invariants belong to the domain type and MUST be enforced at its boundary.
+- **MUST:** Use `Result<T>` for caller-handleable failures such as validation failures, missing data, unsupported capabilities, and expected infrastructure failures.
+- **MUST NOT:** Use exceptions for expected domain validation, scientific calculation failures, invalid FITS data, or other normal control flow.
+- **MAY:** Use `ArgumentException`, `ArgumentOutOfRangeException`, etc. for programmer misuse of a method contract.
+- **MAY:** Request-boundary validation use exceptions when required by ASP.NET Core binding, provided they are translated into an appropriate HTTP response at the API boundary.
+- **MUST:** Every `Error` contain a meaningful human-readable message.
+- **SHOULD:** Provide stable machine-readable error codes rather than requiring clients to parse messages.
+
+## 3.3 I/O and Cancellation
+
+- **MUST:** Use `async`/`await` for disk, network, and pipeline I/O.
+- **MUST:** Asynchronous operations that can meaningfully be cancelled accept and propagate a `CancellationToken`.
+- **MUST NOT:** Block asynchronous code with `.Result` or `.Wait()`.
+- **SHOULD:** Honour cancellation promptly, particularly during large downloads, FITS reads, and streaming.
+- **MUST:** Suffix methods returning `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>` with `Async`, including interface members.
+
+## 3.4 Functional Core
+
+- **MUST:** Scientific algorithms in `AstroLab.Core` be pure and deterministic with no I/O or side effects.
+- **MUST:** Keep filesystem access, network communication, native interop, image encoding, and archive protocols outside Core.
+- **SHOULD:** Keep Core independent of API and Infrastructure representations.
+
+## 3.5 NuGet Packages
+
+- **MUST:** Search nuget.org for the latest stable version before adding or modifying a package reference.
+- **MUST NOT:** Rely on training-data package versions.
+- **SHOULD:** Prefer the BCL or an existing dependency when it clearly provides the required functionality.
+- **MUST:** Treat third-party dependencies as implementation details unless the dependency itself forms an intentional architectural boundary.
+
+---
+
+# 4. Coding Standards
+
+## 4.1 Structure and Namespaces
+
+- **MUST:** Use file-scoped namespaces.
+- **MUST:** Namespace segments after the project root exactly mirror the file's folder path.
+
+Example:
+
+```text
+src/AstroLab.Api/Features/Fits/Upload/FitsUploadResponse.cs
+```
+
+```csharp
+namespace AstroLab.Api.Features.Fits.Upload;
+```
+
+- **MUST:** Keep one primary type per file.
+- An explicit companion extension container MAY share a file where appropriate.
+- A record's `Create(...)` factory belongs on the record itself.
+- **MUST:** Use C# 14 `extension(...)` syntax for new extension members.
+- **MUST NOT:** Use primary constructors on classes, structs, or records.
+
+## 4.2 Method Ordering
+
+Within a class:
+
+- **MUST:** Place public methods before private methods.
+- **MUST:** Order private methods according to their usage, with a method appearing before private methods it calls where practical.
+- **MUST:** Keep internally used methods private.
+- **MUST NOT:** expose methods speculatively.
+- A private method MAY become public when a real requirement requires it.
+
+## 4.3 Comments and Documentation
+
+- **MUST NOT:** Add `//` comments merely explaining obvious code.
+- **MUST NOT:** Add XML documentation to models, DTOs, records, or their properties.
+- **MUST:** Add XML documentation to every endpoint class (`{Leaf}Endpoint.cs`) describing its purpose and behaviour.
+- **MUST:** Add XML documentation to every class in `AstroLab.Core` and `AstroLab.Infrastructure`, describing its responsibility.
+- Names should make data-only types self-documenting.
+
+## 4.4 Literals, Nullability and Formatting
+
+- **MUST:** Extract domain-significant numeric literals such as thresholds, scaling factors, coefficients, buffer sizes, and fallback values into named `private const` fields.
+- Obvious literals such as `0`, `1`, and `2` used as simple indices/bounds are exempt.
+- **MUST:** Enable nullable reference types with `<Nullable>enable</Nullable>`.
+- **MUST NOT:** Use `!` to suppress nullable warnings when a real null check is required.
+- **MUST NOT:** Add redundant mathematical parentheses that do not alter evaluation order or materially improve readability.
+- **MUST NOT:** Add optional trailing commas.
+- **MUST:** Use CRLF line endings as enforced by `.gitattributes`.
+- **SHOULD:** Use blank lines to separate logical executable statements where they improve readability.
+- **MUST NOT:** Add unnecessary blank lines immediately inside or before closing braces.
+
+## 4.5 Control Flow and LINQ
+
+- **SHOULD:** Prefer LINQ when it improves readability without a meaningful performance/allocation cost.
+- **SHOULD:** Prefer explicit loops for numerical, pixel, buffer, and other performance-critical algorithms when they provide clearer control over memory, allocations, or complexity.
+- **MUST NOT:** Avoid LINQ merely because it is historically considered slow.
+- **SHOULD:** Benchmark genuinely performance-sensitive alternatives.
+- **MUST:** Prefer early returns for guard conditions over unnecessary nesting.
+- **SHOULD:** Prefer pattern matching where it improves clarity.
+- **SHOULD:** Prefer switch expressions when a discriminant produces a value.
+- **SHOULD:** Prefer `var` when the type is obvious from the right-hand side; use an explicit type when it improves clarity.
+
+## 4.6 Immutability and Records
+
+- **SHOULD:** Prefer immutable types.
+- Options-pattern configuration classes MAY remain mutable because configuration binding requires settable properties.
+- Resource-owning or behaviour-heavy types MAY remain classes.
+- **MUST:** Use records for immutable data-only types such as DTOs, request/response models, value objects, and measurement results.
+- Small value types MAY use `readonly record struct`.
+- **MUST:** Concrete records default to `sealed`; unsealed records require an explicit documented inheritance requirement.
+- `readonly record struct` MUST NOT be declared `sealed`.
+- **MUST:** Record properties use explicit `{ get; }` accessors, never `{ get; init; }`.
+- **MUST:** Record state is assigned only by its constructor.
+- **MUST:** Normal records use a private constructor plus public static `Create(...)`.
+- `Create(...)` validates its arguments inline and constructs the record.
+- The private constructor performs no validation and is not called outside the record's own file.
+- Records that are only constructed through `Create(...)` do not need a separate `Validate()`.
+- When a framework can construct a record outside `Create(...)`, provide a public `Validate()` containing its invariants.
+- `Create(...)` SHOULD call `Validate()` rather than duplicate those checks in such records.
+- **MUST NOT:** Add an empty `Validate()` merely for symmetry.
+- API-boundary records MAY use `ImmutableList<T>` for collection properties.
+- Core hot-path types SHOULD use arrays/spans or other allocation-conscious representations.
+- Established semantic constructors such as `Error.Validation(...)` and `Result<T>.Success(...)` MAY replace the generic `Create(...)` naming where appropriate.
+
+### Request DTO exceptions
+
+A request DTO bound directly from an HTTP body:
+
+- MUST keep a private constructor marked `[JsonConstructor]`.
+- MAY therefore be constructed directly by `System.Text.Json`.
+- MUST expose `Validate()` when it has invariants.
+- The endpoint MUST call `request.Validate()` after model binding where applicable.
+- Hand-written construction SHOULD use `Create(...)`.
+
+---
+
+# 5. Architecture
+
+The architectural dependency direction is:
 
 ```text
 AstroLab.Api
@@ -365,152 +230,230 @@ AstroLab.Tests
     └──► AstroLab.Core
 ```
 
-- `AstroLab.Core` MUST NOT reference `AstroLab.Infrastructure` or `AstroLab.Api`.
-- `AstroLab.Infrastructure` MAY reference Core abstractions and models required to implement infrastructure capabilities.
-- `AstroLab.Api` MAY reference both Core and Infrastructure.
-- Tests MAY reference all production projects.
-- Infrastructure-specific wire formats, native handles, archive DTOs, and persistence representations MUST NOT leak into API contracts.
+## 5.1 Layer Responsibilities
 
-### 5.3 Request Flow
+### Core
 
-Every API endpoint follows the same conceptual four-stage flow:
+`AstroLab.Core`:
 
-1. **Receive request** — route parameters, query parameters, request bodies, or uploaded files via ASP.NET Core Minimal APIs.
-2. **Resolve infrastructure resources** — file paths, network streams, local FITS files, native buffers, archive clients, or other external resources.
-3. **Invoke functional core** — pass resolved data and validated inputs into pure algorithms from `AstroLab.Core`.
-4. **Map the result** — pattern-match on `Result<T>` and convert successes and known errors into appropriate HTTP responses without exception-based control flow.
+- **MUST NOT** reference Infrastructure or ASP.NET Core.
+- **MUST NOT** perform I/O, native interop, or access mutable global state.
+- **MUST** contain pure deterministic scientific/domain logic, validation, models, algorithms, and result/error representations.
+- MAY interpret already-loaded FITS metadata where no I/O is required.
+
+### Infrastructure
+
+`AstroLab.Infrastructure` owns:
+
+- filesystem access
+- native interop
+- native memory
+- network communication
+- archive protocols
+- catalogue communication
+- FITS file access
+- image encoding
+- concrete rendering
+- other external side effects
+
+### API
+
+`AstroLab.Api`:
+
+- uses vertical slices
+- coordinates Core and Infrastructure
+- owns HTTP contracts
+- **MUST NOT** implement scientific/domain calculations
+
+### General architecture
+
+- Expected failures **MUST** use `Result<T>`.
+- Large FITS pixel buffers SHOULD remain outside the managed GC heap where practical.
+- Large network/file payloads **MUST** be streamed rather than fully buffered into a single `byte[]`.
+- Performance-critical Core algorithms SHOULD operate over spans or equivalent allocation-conscious representations.
+- CFITSIO-specific types and APIs MUST remain behind the Infrastructure native adapter.
+- Scientific analysis and visualisation MUST remain separate.
+- PNG/image encoding and colour mapping MUST NOT be mixed into scientific computation.
+- Core algorithms MUST NOT depend on whether their output becomes JSON, PNG, FITS, a chart, or another representation.
+
+## 5.2 FITS Dataset Capabilities
+
+FITS files MUST be treated as potentially **multi-capability datasets**, not as one mutually exclusive scientific type.
+
+A dataset may contain:
+
+```text
+FITS
+ │
+ ├── Image data
+ ├── Spectral data
+ ├── Time-series/table data
+ ├── WCS
+ └── Other recognised capabilities
+```
+
+Capability detection MUST be deterministic and based on inspected FITS metadata.
+
+Rules:
+
+- `TIME` alone MUST NOT classify the entire file as a time series.
+- The first pixel-containing HDU MUST NOT automatically be treated as the only relevant HDU.
+- Spectral suitability SHOULD consider dimensionality and wavelength/frequency/energy/velocity metadata.
+- Time-series suitability SHOULD consider appropriate time and measurement columns.
+- Image suitability MUST be based on actual image data and dimensions.
+- Table suitability MUST be based on structured table data.
+- WCS availability SHOULD be detected independently.
+- Multiple capabilities MAY coexist.
+
+A legacy `FitsDatasetKind` MAY remain where a single primary kind is useful for compatibility, but it MUST NOT imply mutually exclusive scientific capabilities.
+
+Analysis endpoints MUST validate the required capability before processing.
+
+Example:
+
+```text
+Image Photometry       → ImageData
+Astrometry             → ImageData + WCS
+Spectral Extraction    → SpectralData
+Time-Series Analysis   → TimeSeriesData
+```
+
+Capability detection belongs in Core.
+
+The FITS reader MUST verify the required capability before loading associated data.
+
+`FitsHeaderReader.ReadAllHeadersAsync` MUST return `fits.header.empty_file` when a staged file contains zero HDUs.
+
+Malformed FITS metadata MUST NOT produce negative/nonsensical skip distances or buffer sizes. Header-derived numeric sizes MUST be validated and bounded before I/O.
+
+### Scientific result requirements
+
+Endpoints exposing measured, instrumental, or model-derived values MUST expose, where applicable:
+
+- explicit physical units;
+- propagated uncertainty when an existing Core algorithm can calculate it;
+- the estimation method when the value is model-derived;
+- quality indicators already produced by the underlying algorithm.
+
+An endpoint MUST NOT fabricate an uncertainty or report a hard-coded zero uncertainty. If Core cannot statistically derive a valid uncertainty, the field SHOULD be omitted.
+
+These requirements do not authorise inventing new statistics merely to populate a response; they require existing scientifically meaningful information to be surfaced rather than discarded.
+
+## 5.3 Request Flow
+
+Every endpoint follows:
 
 ```text
 HTTP Request
      │
      ▼
-AstroLab.Api
-(feature endpoint)
+API Endpoint
      │
      ▼
-AstroLab.Infrastructure
-(file I/O, HTTP, FITS adapter)
+Infrastructure
+(file I/O / HTTP / FITS adapter)
      │
      ▼
-Native buffers / spans / managed representations
-     │
-     ▼
-AstroLab.Core
-(pure algorithm)
+Core
+(pure scientific/domain logic)
      │
      ▼
 Result<T>
      │
      ▼
+API Response DTO
+     │
+     ▼
 HTTP Response
 ```
 
-Endpoints MUST remain orchestration code. Scientific calculations belong in Core.
+Endpoints MUST remain orchestration code.
 
-### 5.4 FITS Dataset Capabilities
+The endpoint:
 
-The system MUST determine which operations a FITS dataset can legitimately support before executing type-specific analysis.
+1. receives and validates HTTP input;
+2. resolves required Infrastructure resources;
+3. invokes Core;
+4. maps `Result<T>` to the HTTP response.
 
-A FITS file is not necessarily one scientifically exclusive "type". A dataset can contain multiple HDUs and can support multiple forms of analysis. For example, a file may contain an image HDU, a catalogue table, and metadata relevant to time-series analysis.
+## 5.4 Persistent Storage and Deployment
 
-Therefore, classification SHOULD be understood as **capability detection** rather than an assertion that the entire FITS file belongs to exactly one scientific category.
+AstroLab stages FITS files on local disk rather than in a database or object store.
 
-The Core should expose an appropriate representation of capabilities, for example:
-
-```text
-FITS File
-   │
-   ▼
-Inspect HDUs
-   │
-   ▼
-Extract metadata/capabilities
-   │
-   ├── Image data available
-   ├── Spectral data available
-   ├── Time-series/table data available
-   ├── WCS available
-   └── Other recognised capabilities
-```
-
-The implementation MAY continue to expose `FitsDatasetKind` where a single primary kind is useful for backwards compatibility or routing, but the classifier MUST NOT rely on simplistic heuristics that incorrectly imply scientific certainty.
-
-In particular:
-
-- The presence of a `TIME` column alone MUST NOT automatically imply that the entire FITS dataset is a time series.
-- The first HDU containing pixels MUST NOT automatically be treated as the sole scientifically relevant HDU.
-- Spectral suitability SHOULD consider the relevant HDU's dimensionality and wavelength/frequency/energy/velocity metadata.
-- Time-series suitability SHOULD consider the table structure and the presence of appropriate time and measurement columns.
-- Image suitability SHOULD be based on actual image data and its dimensions.
-- Table suitability SHOULD be based on the presence of structured table data.
-- WCS availability SHOULD be detected independently from image/spectrum/table classification.
-- Multiple capabilities MAY coexist.
-
-Capability detection MUST be deterministic and based only on the inspected FITS metadata.
-
-Analysis endpoints MUST validate that the required capability is available before attempting the operation.
-
-For example:
+The application storage root is configurable through:
 
 ```text
-Image Photometry
-    requires: ImageData
-
-Astrometry
-    requires: ImageData + WCS
-
-Spectral Extraction
-    requires: SpectralData
-
-Time-Series Analysis
-    requires: TimeSeriesData
+Storage:RootPath
 ```
 
-`FitsDatasetClassifier`/capability detection belongs in Core because it is pure metadata interpretation.
+Docker uses:
 
-`FitsDatasetReader` MUST ensure that the required capability is available before loading the associated data.
+```text
+/app/storage
+```
 
-`FitsHeaderReader.ReadAllHeadersAsync` MUST fail with a validation error (`fits.header.empty_file`) when a staged file contains zero HDUs.
+as the container-side storage root.
 
-Malformed FITS metadata MUST NOT result in negative or nonsensical skip distances or buffer sizes. Numeric sizes derived from FITS headers MUST be validated and bounded before being used for I/O.
+The recommended Docker deployment uses a **host bind mount**:
 
-An endpoint that reports a measured, instrumental, or model-derived scientific value MUST expose, where applicable to that value:
+```yaml
+volumes:
+  - ./storage:/app/storage
+```
 
-- explicit physical units (via the property name or an accompanying unit field);
-- its propagated uncertainty, computed from an existing Core algorithm — an endpoint MUST NOT report a fabricated or hard-coded zero uncertainty, and MUST simply omit the field when Core has no statistically valid way to derive one (e.g. a single-line-pair redshift, or a calibration relation with no known scatter model);
-- the estimation method or algorithm used, when the value is a model-derived estimate rather than a direct measurement; and
-- any quality indicator the underlying algorithm already produces (e.g. a confidence score or a fit's underlying evidence value).
+The host directory is therefore the persistence boundary:
 
-This MUST NOT be treated as licence to invent Core-level statistics that do not exist; it only requires surfacing what Core already computes and discarding nothing.
+```text
+Host
+└── storage/
+    └── observation.fits
+            │
+            │ bind mount
+            ▼
+Container
+└── /app/storage/
+    └── observation.fits
+```
 
-### 5.5 Deployment
+Requirements:
 
-**Location:** `Dockerfile` (repo root)
+- FITS files MUST survive container deletion/recreation.
+- The application MUST NOT contain Docker-specific storage logic.
+- The application MUST NOT copy persistent FITS files into another container directory.
+- FITS files MUST NOT be stored in a database merely for persistence.
+- S3/object storage MUST NOT be introduced merely for persistence.
+- The host `storage/` directory MUST NOT be committed to source control.
+- Important staged data SHOULD be backed up independently of Docker.
 
-`Dockerfile` is a multi-stage build producing a Linux container image.
+Local non-Docker execution MAY use:
 
-The runtime stage uses:
+```text
+Storage:RootPath=./storage
+```
 
-- `mcr.microsoft.com/dotnet/aspnet:10.0`
-- a non-root application user
-- port `8080`
-- `/app/storage` as the persistent storage volume
+Docker MUST use `/app/storage`.
 
-The FITS native dependency is built from a pinned upstream CFITSIO source release (with checksum verification) in a dedicated build stage, rather than installed through the Linux distribution's package manager or relying on manually copied native binaries. This keeps the deployed CFITSIO version under explicit control instead of tracking whatever build happens to ship with the base image's OS release.
+The Docker image:
 
-CFITSIO remains an Infrastructure implementation detail. The application architecture MUST NOT depend on a particular filesystem location or native deployment mechanism beyond the Infrastructure adapter's documented requirements.
+- MUST be multi-stage;
+- MUST use the .NET 10 ASP.NET runtime image;
+- MUST run as a non-root application user;
+- MUST expose port `8080`;
+- MUST contain the required CFITSIO runtime library.
+
+CFITSIO MUST be built from a pinned upstream source release with checksum verification in a dedicated build stage rather than relying on an arbitrary OS-package version or manually copied binary.
+
+CFITSIO remains an Infrastructure implementation detail and the application MUST NOT depend on a particular native-library filesystem location.
 
 ---
 
-## 6. Core Implementation Patterns
+# 6. Core Implementation Patterns
 
-### 6.1 Result Pattern
+## 6.1 Result Pattern
 
-**Location:** `AstroLab.Core/Result/Result.cs` and `Error.cs`
+`Result<TValue>` is a `readonly record struct` representing either success with a value or failure with an `Error`.
 
-C# has no native discriminated-union type. `Result<TValue>` is a `readonly record struct` representing either a successful result containing a `TValue` or a failure containing an `Error`.
-
-The current implementation exposes:
+It exposes the existing composition operations:
 
 - `Success`
 - `Failure`
@@ -521,17 +464,15 @@ The current implementation exposes:
 - `Ensure`
 - `Deconstruct`
 
-These operations allow Core and Infrastructure outcomes to be composed and mapped to HTTP responses without exceptions.
+`Result<TValue>` has a private constructor.
 
-`Result<TValue>` has a private constructor so the success/failure invariant is protected.
-
-`Success` and `Failure` are semantic smart constructors and are the only supported ways to obtain a `Result<TValue>`.
+`Success` and `Failure` are the supported semantic constructors.
 
 `Error` is a lightweight `readonly record struct` containing:
 
-- a stable machine-readable code
-- a human-readable message
-- an `ErrorCategory`
+- stable machine-readable code
+- human-readable message
+- `ErrorCategory`
 
 Named constructors include:
 
@@ -544,584 +485,665 @@ Named constructors include:
 - `Cancelled`
 - `Unexpected`
 
-These constructors delegate to `Error`'s private constructor, which validates that `code` and `message` are non-empty.
+The `Error` constructor MUST reject empty codes/messages.
 
-`ErrorCategory.NotImplemented` represents a named capability whose implementation does not yet exist. `ResultEndpointExtensions` maps it to HTTP 501.
+`NotImplemented` represents a deliberately unavailable capability and maps to HTTP 501.
 
-Exceptions MUST NOT be used for normal domain validation, scientific calculation failures, invalid FITS data, or other expected failures.
+Exceptions MUST NOT be used for normal domain validation, scientific failures, or invalid FITS data.
 
-They MAY be used at the imperative shell boundary for genuinely exceptional conditions such as unrecoverable infrastructure, native interop, or process-level failures.
+They MAY be used for genuinely exceptional Infrastructure/native/process failures and programmer misuse.
 
-Programmer misuse MAY use standard .NET argument exceptions where appropriate.
+## 6.2 Functional Core and Allocation Awareness
 
-### 6.2 Functional Core: Purity and Allocation Awareness
+Core algorithms SHOULD be static pure functions where practical.
 
-**Location:** `AstroLab.Core`
+Pure Core code:
 
-`AstroLab.Core` is the functional core and MUST remain isolated from infrastructure and external side effects.
+- depends only on inputs;
+- produces deterministic results;
+- performs no I/O;
+- modifies no external/hidden state;
+- references no Infrastructure implementation.
 
-Core algorithms SHOULD be implemented as standard static pure functions wherever practical.
+Core MUST have:
 
-Pure functions:
+- no disk access;
+- no network access;
+- no native interop;
+- no filesystem dependency;
+- no Infrastructure reference;
+- no ASP.NET Core dependency;
+- no archive/storage implementation dependency.
 
-- depend only on their input parameters
-- produce deterministic outputs for identical inputs
-- do not modify external or hidden global state
-- do not perform I/O
-- do not depend on infrastructure implementations
+Core contains:
 
-`AstroLab.Core` MUST have:
+- domain/scientific models;
+- value types;
+- mathematical algorithms;
+- validation;
+- result/error types;
+- pure FITS metadata interpretation.
 
-- zero disk access
-- zero network access
-- zero native interop
-- zero filesystem dependencies
-- zero references to `AstroLab.Infrastructure`
-- zero dependencies on ASP.NET Core
-- zero dependencies on archive clients or storage implementations
+Large-buffer algorithms MAY accept `ReadOnlySpan<T>`, `ReadOnlyMemory<T>`, arrays, or other appropriate representations.
 
-The Core project contains:
+Use spans where they provide meaningful benefits such as:
 
-- domain/scientific models
-- value types
-- mathematical algorithms
-- validation logic
-- result/error representations
-- FITS metadata interpretation that does not require I/O
+- avoiding copies;
+- processing existing buffers;
+- contiguous memory access;
+- allocation-conscious hot paths.
 
-Algorithms operating on large pixel or byte buffers SHOULD accept `ReadOnlySpan<T>`, `ReadOnlyMemory<T>`, arrays, or other appropriate representations depending on the lifetime and ownership requirements of the algorithm.
+`ref struct`, `stackalloc`, unsafe code, and similar techniques MUST NOT be introduced merely to satisfy a theoretical zero-allocation rule.
 
-Use spans when they provide a meaningful advantage, particularly for:
+### Performance
 
-- avoiding unnecessary copies
-- processing existing buffers
-- expressing contiguous memory access
-- enabling allocation-conscious hot paths
+Performance-sensitive algorithms SHOULD:
 
-However, spans, `ref struct`, `stackalloc`, and unsafe constructs MUST NOT be introduced merely to satisfy an abstract zero-allocation rule.
+- avoid unnecessary heap allocations;
+- avoid unnecessary intermediate collections;
+- avoid repeated temporary arrays;
+- avoid boxing;
+- use spans or equivalent representations where appropriate;
+- consider vectorisation only where measurement demonstrates a benefit;
+- be benchmarked before introducing substantial complexity.
 
-### Performance and Allocation Rule
+Natural result allocations are acceptable. For example, a source detector may allocate a collection of sources.
 
-Performance-critical Core algorithms SHOULD minimise managed allocations and unnecessary intermediate collections.
+The requirement is to avoid **unnecessary** allocations, particularly inside hot loops and per-pixel processing.
 
-For genuinely hot data-processing paths:
-
-- avoid unnecessary heap allocations
-- avoid unnecessary LINQ pipelines when they materially affect allocations or performance
-- avoid repeated temporary arrays
-- avoid boxing value types
-- prefer spans or equivalent representations where appropriate
-- consider vectorisation where measurement demonstrates a meaningful benefit
-- benchmark before introducing complex optimisations
-
-A Core algorithm MAY allocate when the allocation is part of its natural result.
-
-For example, source detection may reasonably return a collection of detected sources, and a photometry operation may reasonably return a measurement object.
-
-The requirement is therefore:
-
-> **Avoid unnecessary allocations, especially in hot loops and per-pixel processing, rather than requiring every Core method to be absolutely allocation-free.**
-
-Allocation behaviour SHOULD be measured for algorithms identified as performance-critical.
-
-### 6.3 Unmanaged Native Buffers and CFITSIO Table Reading
+## 6.3 Native Buffers and CFITSIO
 
 **Location:** `AstroLab.Infrastructure/Fits`
 
-Infrastructure owns native interop, filesystem access, network communication, and resource management.
+Infrastructure owns native resources and their lifetime.
 
-When large FITS image buffers justify unmanaged storage, they MAY be allocated using `System.Runtime.InteropServices.NativeMemory` or an equivalent mechanism.
+Large FITS buffers MAY use `NativeMemory` or an equivalent unmanaged allocator.
 
 `UnmanagedFitsBuffer` MUST:
 
-- allocate native memory using the selected native allocation mechanism
-- expose memory to Core algorithms through spans where safe and appropriate
-- deterministically release native allocations through `IDisposable`
-- make ownership explicit
-- prevent double-free operations
-- avoid copying large pixel buffers into managed arrays unnecessarily
+- allocate native memory through the selected allocator;
+- expose it through spans where safe;
+- deterministically release it through `IDisposable`;
+- make ownership explicit;
+- prevent double-free;
+- avoid unnecessary copies into managed arrays.
 
-CFITSIO-specific handles and P/Invoke declarations MUST remain inside Infrastructure.
+CFITSIO handles and P/Invoke declarations MUST remain in Infrastructure.
 
 The rest of the application MUST depend on AstroLab abstractions rather than CFITSIO APIs.
 
-If a future implementation replaces CFITSIO with another FITS reader, Core and API code SHOULD require no changes.
+Replacing CFITSIO in future SHOULD require no Core/API changes.
 
-**CFITSIO usage.** FITS header parsing and image pixel decoding are pure C# (`FitsHeaderReader`, `FitsCardParser`, `FitsPixelDataReader`, `FitsPixelConverter`) and do not use CFITSIO. The one exception is binary/ASCII table column reading (`CfitsIoTimeSeriesReader`, backing the `/api/timeseries/{fileId}/light-curve` endpoint): decoding an arbitrary column storage type with `TSCAL`/`TZERO` applied, and eventually variable-length columns and tile-compressed images, is exactly the kind of well-trodden binary-format logic CFITSIO already solves, so that reader goes through the native library rather than re-implementing it by hand.
+### CFITSIO scope
 
-- `FitsFileHandle` owns a cfitsio `fitsfile*` obtained via `ffopen`, with the same disposal/double-free guarantees as `UnmanagedFitsBuffer`.
-- `CfitsIoErrorMapper` translates a cfitsio `status` code (`ffgerr` plus the `ffgmsg` message stack) into a `Result<TValue>`-friendly `Error`; no cfitsio status code MUST surface as a raw exception or raw native error text to an API client.
-- Row/element-_count_ parameters (e.g. `ffgcvd`'s `firstrow`/`firstelem`/`nelem`, and `ffgpxv`'s `nelem`) are cfitsio's own fixed-width `LONGLONG` (`long long` on every platform, including Windows) and MUST be marshaled as a plain `long`, **not** `CLong`. `CLong` is reserved for parameters that are genuinely the platform-variant C `long` — axis-length/pixel-coordinate arrays such as `ffgipr`'s `naxes` and `ffgpxv`'s own `firstpix`. Note that `ffgpxv` itself takes one parameter of each kind (`firstpix` as `CLong[]`, `nelem` as `long`) — getting this distinction wrong silently corrupts marshaling on Windows without a compile-time error.
-- Deciding _which_ column/HDU to read (`TimeSeriesTableDescriptor.Resolve`, parsing `TFIELDS`/`NAXIS2`/`TTYPEn`) is pure header interpretation and MUST stay in Core, fully unit-testable without cfitsio present. Only the actual native column-value read crosses into Infrastructure.
-- `TimeSeriesTableDescriptor.Resolve` MUST validate each resolved column's `TFORMn` and reject anything other than a scalar (repeat count = 1) column with `fits.data.unsupported_column_shape`, rather than silently reading a fixed-repeat array column's or a variable-length (`P`/`Q`) column's data as if it were one value per row.
-- Tests that call into real cfitsio (`FitsFileHandleTests`, `CfitsIoTimeSeriesReaderTests`, `TimeSeriesWorkflowTests`) MUST dynamically skip (`Assert.Skip`) when the native library cannot be loaded, rather than fail, since it is built from pinned source in the Docker/CI image (§5.5) but not guaranteed on every developer machine.
+FITS header parsing and image pixel decoding are implemented in managed C# and do not require CFITSIO.
 
-### 6.4 Pipeline Streaming
+CFITSIO is used for binary/ASCII table column reading where it avoids reimplementing complex FITS table semantics such as:
+
+- `TSCAL`/`TZERO`;
+- variable-length columns;
+- other established FITS table behaviour.
+
+`FitsFileHandle` owns the native `fitsfile*` returned by `ffopen` and MUST provide deterministic disposal and double-free protection.
+
+`CfitsIoErrorMapper` MUST convert CFITSIO status/error information into `Result<T>`-compatible `Error` values. Native status codes and raw native error text MUST NOT reach API clients.
+
+### Native integer marshaling
+
+CFITSIO row/element-count parameters such as `ffgcvd`'s `firstrow`, `firstelem`, `nelem`, and `ffgpxv`'s `nelem` use fixed-width C `long long` and MUST be marshaled as C# `long`.
+
+`CLong` is reserved for parameters representing the platform-dependent C `long`, such as appropriate axis-length/pixel-coordinate parameters.
+
+This distinction MUST be preserved because incorrect Windows marshaling can silently corrupt native calls.
+
+### Time-series table descriptors
+
+Choosing which HDU/column to read is pure FITS-header interpretation and belongs in Core.
+
+`TimeSeriesTableDescriptor.Resolve` MUST validate `TFORMn` and reject non-scalar columns with:
+
+```text
+fits.data.unsupported_column_shape
+```
+
+It MUST NOT silently interpret fixed-repeat, `P`, or `Q` variable-length columns as one scalar value per row.
+
+Tests requiring the real CFITSIO library SHOULD be isolated from pure Core tests and MUST dynamically skip when the native library cannot be loaded.
+
+## 6.4 Pipeline Streaming
 
 **Location:** `AstroLab.Infrastructure/Storage` and `AstroLab.Infrastructure/Archives`
 
-Incoming archive data from ESO and MAST MUST be streamed directly to local storage without unnecessarily buffering the entire FITS file in managed memory.
-
-Use `System.IO.Pipelines.PipeReader` and `PipeWriter` where appropriate.
+Archive data MUST be streamed directly to local staging storage.
 
 The implementation MUST:
 
-- stream network responses incrementally to local staging storage
-- avoid loading complete FITS files into a single `byte[]`
-- minimise intermediate buffer allocations
-- respect backpressure where pipelines are used
-- correctly complete and dispose pipeline resources
-- propagate cancellation tokens throughout the pipeline
-- avoid retrying large downloads automatically unless the operation explicitly supports safe resumability
+- stream network responses incrementally;
+- avoid buffering complete FITS files into one `byte[]`;
+- minimise intermediate allocations;
+- respect backpressure where pipelines are used;
+- correctly complete/dispose pipeline resources;
+- propagate cancellation;
+- avoid automatic retries of large downloads unless safe resumability is explicitly implemented.
 
-### 6.5 Vertical Slice API Endpoints (REPR Pattern)
+`System.IO.Pipelines` MAY be used where appropriate.
+
+## 6.5 Vertical Slice API / REPR
 
 **Location:** `AstroLab.Api/Features`
 
-API functionality is organised into self-contained vertical slices using ASP.NET Core Minimal APIs. Each endpoint follows the **REPR (Request–Endpoint–Response)** pattern.
+API functionality is organised into self-contained vertical slices using Minimal APIs.
 
-Each endpoint is paired with its endpoint-specific request and response DTOs, defined at the API boundary within the same feature slice.
+Each endpoint has:
 
-- Each feature slice owns its request/response DTOs and endpoint mapping.
-- A feature area such as `Images` is a route group, not a single endpoint.
-- Each leaf such as `Render`, `Statistics`, `Photometry`, `Inspect`, `Upload`, `Extract`, `Search`, or `Download` represents one self-contained endpoint.
-- Each leaf owns its `{Leaf}Endpoint.cs`, request/response DTOs, and endpoint-specific mapping.
-- Endpoint namespaces follow `AstroLab.Api.Features.{Feature}.{Leaf}`.
-- Endpoints MUST remain thin and MUST NOT implement photometry, image scaling, spectral extraction, or other scientific algorithms.
+- endpoint-specific request DTOs;
+- endpoint-specific response DTOs;
+- endpoint mapping;
+- endpoint-specific result mapping.
 
-A domain or infrastructure model MUST NOT be returned directly from an HTTP endpoint.
-
-Every HTTP response MUST have its own API DTO record under `Features/`, constructed from the `Result<T>` value returned by Core/Infrastructure.
-
-This isolates the HTTP wire contract from internal representation changes.
-
-Shared boundary enums such as `StretchMode`, `ColorMap`, `DispersionAxis`, and `ArchiveSource` are permitted when they are plain API discriminators rather than domain models.
-
-### Request Validation: GET vs. POST
-
-A request DTO's private-constructor-plus-`Create(...)` pattern (§4.4) means the two HTTP binding paths reach validation differently.
-
-- **GET/query-bound requests:** Query and route primitives are supplied to the handler, which constructs the validated request using `XxxRequest.Create(...)`.
-- **POST/body-bound requests:** `System.Text.Json` constructs the DTO directly using the `[JsonConstructor]` exception described in §4.4. Where the request has invariants requiring explicit validation, the handler MUST call `request.Validate()` before using it.
-- Invalid request-bound values MAY surface as `ArgumentException`/`ArgumentOutOfRangeException` and are mapped to HTTP 400 by `RequestValidationExceptionHandler`.
-- Domain operations that fail after request validation MUST use `Result<T>` rather than throwing validation exceptions.
-
-This keeps HTTP binding concerns at the API boundary while ensuring domain logic remains exception-free for expected failures.
-
-### Roadmap Endpoint Rule
-
-A feature scaffolded before its Core algorithm exists MUST return HTTP 501.
-
-Its handler MUST call:
-
-```csharp
-AstroLab.Api.Features.NotImplementedResult.Value(code, message)
-```
-
-which returns `Results.Problem(..., statusCode: 501, title: code)`.
-
-Roadmap endpoints MUST NOT return fake success values, hard-coded scientific results, or partial scientific implementations.
-
-When the Core algorithm becomes available, replace the stub with the normal:
+Namespaces follow:
 
 ```text
-Request
-  → Infrastructure
-  → Core
-  → Result<T>
-  → Response
+AstroLab.Api.Features.{Feature}.{Leaf}
 ```
 
-flow.
+A feature such as `Images` is a route group. Each leaf such as `Render`, `Statistics`, `Photometry`, `Upload`, `Extract`, `Search`, or `Download` is a self-contained endpoint.
 
-Existing routing and DTOs SHOULD remain stable where the new implementation fits the existing contract.
+Endpoints MUST remain thin and MUST NOT contain scientific algorithms.
 
-### 6.6 Archive Clients: ESO and MAST
+Domain and Infrastructure models MUST NOT be returned directly from HTTP endpoints.
+
+Every HTTP response MUST have an API DTO record.
+
+This isolates HTTP contracts from internal representations.
+
+Shared boundary enums MAY be used when they are API discriminators rather than domain models.
+
+### Request validation
+
+GET/query-bound requests:
+
+- route/query values are supplied to the handler;
+- the handler constructs the validated request through `Create(...)`.
+
+POST/body-bound requests:
+
+- `System.Text.Json` constructs the DTO through the `[JsonConstructor]` exception;
+- the handler MUST call `request.Validate()` where applicable.
+
+Request-bound `ArgumentException`/`ArgumentOutOfRangeException` failures are mapped to HTTP 400 by `RequestValidationExceptionHandler`.
+
+After request validation, domain failures MUST use `Result<T>` rather than validation exceptions.
+
+## 6.6 ESO and MAST Archive Clients
 
 **Location:** `AstroLab.Infrastructure/Archives`
 
-ESO and MAST clients are HTTP client abstractions over each archive's real documented query/download surfaces.
+ESO and MAST clients represent real documented archive APIs.
 
-Each archive is split into two dedicated typed `HttpClient`s so the resilience policy sized for small metadata requests can never be accidentally applied to a large FITS transfer.
+Each archive uses separate typed HTTP clients for metadata/query requests and large FITS downloads so query resilience policies cannot accidentally be applied to large transfers.
 
-#### Archive API clients
+### Archive API clients
 
 Examples:
 
-- `IEsoArchiveApiClient` / `EsoArchiveApiClient`
-- `IMastArchiveApiClient` / `MastArchiveApiClient`
+```text
+IEsoArchiveApiClient / EsoArchiveApiClient
+IMastArchiveApiClient / MastArchiveApiClient
+```
 
-These clients handle:
+They handle:
 
-- search
-- metadata
-- target resolution
-- product discovery
-- DataLink/product APIs
+- search;
+- metadata;
+- target resolution;
+- product discovery;
+- DataLink/product APIs.
 
 They SHOULD use `IHttpClientFactory` and appropriate resilience policies.
 
-The resilience policy MUST be appropriate to metadata/query requests and MUST NOT be reused blindly for large file transfers.
+Query policies MUST NOT be blindly reused for large downloads.
 
-#### Archive download clients
+### Download clients
 
 Examples:
 
-- `IEsoArchiveDownloadClient` / `EsoArchiveDownloadClient`
-- `IMastArchiveDownloadClient` / `MastArchiveDownloadClient`
-
-These clients handle FITS file transfers.
+```text
+IEsoArchiveDownloadClient / EsoArchiveDownloadClient
+IMastArchiveDownloadClient / MastArchiveDownloadClient
+```
 
 They MUST:
 
-- use streaming responses
-- use `ResponseHeadersRead`
-- propagate the caller's cancellation token
-- avoid buffering the entire FITS file
-- avoid automatic retries unless safe resumability is explicitly implemented
-- avoid short fixed request timeouts that can terminate legitimate large transfers
+- stream responses;
+- use `ResponseHeadersRead`;
+- propagate cancellation;
+- avoid buffering complete FITS files;
+- avoid automatic retries unless safe resumability exists;
+- use timeouts appropriate for legitimate large transfers.
 
-`IEsoArchiveClient` / `EsoArchiveClient` and `IMastArchiveClient` / `MastArchiveClient` remain the application-facing abstractions.
+`IEsoArchiveClient` / `EsoArchiveClient` and `IMastArchiveClient` / `MastArchiveClient` remain the application-facing abstractions and orchestrate their respective API/download clients.
 
-Each is a thin orchestrator that delegates search/product discovery to the API client and downloads to the download client.
+`SearchAsync` MUST honour all supported filters from `ArchiveSearchQuery`, including:
 
-Each client MUST be designed so refinements to its request/response contracts can land without changing callers, Core, or API feature slices.
+- `Target`;
+- `Instrument`;
+- `From`;
+- `To`;
+- `MaxResults`;
+- other supported archive filters.
 
-`SearchAsync` MUST honour every filter carried by `ArchiveSearchQuery` (`Target`, `Instrument`, `From`, `To`, `MaxResults`, and other supported filters) that the upstream archive's query surface supports.
+Filters MUST be translated into the archive's native query model rather than silently dropped.
 
-The implementation MUST translate filters into the archive's native query shape rather than silently dropping them.
+An unrelated 2xx response MUST NOT be interpreted as a successful empty search. Response parsing MUST fail closed when the payload does not match the expected contract.
 
-A coincidental 2xx response from an unrelated page on the real host MUST NOT be interpreted as a successful search with zero results. Response parsing MUST fail closed when the payload does not match the expected contract shape.
+Archive wire DTOs such as `EsoTapResponse` and `MastMashupRequest` MUST remain Infrastructure types.
 
-Archive-specific request/response payloads such as `EsoTapResponse` and `MastMashupRequest` are private wire-format DTOs, not domain models.
+Map them into shared records such as `ArchiveObservation` and `ArchiveDownload`.
 
-Map them into shared records such as `ArchiveObservation` and `ArchiveDownload` before returning from the client.
+Optional metadata MUST remain `null` when the archive does not provide it. Never invent values.
 
-Optional metadata such as:
+This includes:
 
-- collection
-- data product type
-- calibration level
-- right ascension
-- declination
-- exposure time
-- wavelength range
-- proposal information
-- data rights
+- collection;
+- data product type;
+- calibration level;
+- RA/Dec;
+- exposure time;
+- wavelength range;
+- proposal information;
+- data rights.
 
-MUST remain `null` when the archive does not provide the information. Do not invent values.
+MJD-based archive filters MUST use the shared `ModifiedJulianDate` conversion.
 
-Both MJD-based archives' `t_min` fields MUST use the shared `ModifiedJulianDate` conversion rather than duplicating conversion logic.
+### MAST
 
-#### MAST specifics
-
-`IMastArchiveClient` MAY extend `IArchiveClient` with MAST-specific operations such as:
+MAST-specific operations MAY extend the MAST abstraction, including:
 
 - `ResolveTargetAsync`
 - `GetProductsAsync`
 - `DownloadAsync(MastProduct, ct)`
 
-These MUST remain off the shared interface where they are genuinely MAST-specific.
+MAST-specific operations MUST NOT be forced onto the shared archive interface.
 
-`SearchAsync` resolves `ArchiveSearchQuery.Target` to sky coordinates using MAST's name-resolution capability before running positional archive searches where appropriate.
+Target searches SHOULD resolve names to sky coordinates before positional searches where appropriate.
 
-It MUST NOT rely solely on textual target-name matching where that would produce unreliable results.
+MAST searches MUST NOT rely solely on textual target-name matching when that is unreliable.
 
-`DownloadAsync(string)` MUST NOT construct product URIs from assumptions about filenames or collection layouts.
+`DownloadAsync(string)` MUST discover the observation's actual products rather than constructing a URI from filename or collection assumptions.
 
-It MUST discover the observation's actual products and select a suitable product using `MastProductSelectionPolicy`.
+`MastProductSelectionPolicy` selects the appropriate product.
 
-The product-selection policy SHOULD prefer an appropriate public, science-grade, calibrated FITS product over a raw or intermediate product where the archive exposes those distinctions.
+Where the archive exposes distinctions, the policy SHOULD prefer an appropriate public, science-grade, calibrated FITS product over raw/intermediate data.
 
-The selected product's actual `DataUri` MUST be used for the download.
+The selected product's actual `DataUri` MUST be downloaded.
 
-#### ESO specifics
+### ESO
 
-An ESO ObsCore dataset identifier (`dp_id`) is not itself assumed to be a downloadable filename.
+An ESO `dp_id` MUST NOT be assumed to be a downloadable filename.
 
-`DownloadAsync(string)` MUST use ESO's product/DataLink mechanism to discover the dataset's actual downloadable products.
+`DownloadAsync(string)` MUST use ESO's product/DataLink mechanisms to discover actual downloadable products.
 
-It MUST NOT construct a FITS filename or URL from assumptions about `dp_id`.
+It MUST NOT construct FITS filenames or URLs from `dp_id`.
 
-`EsoProductSelectionPolicy` selects the most appropriate discovered product.
+`EsoProductSelectionPolicy` selects the appropriate discovered product.
 
-ESO tabular responses SHOULD resolve columns by name and handle:
+ESO tabular response mapping SHOULD resolve columns by name and handle:
 
-- missing columns
-- nulls
-- JSON primitive/string numeric conversion
-- optional fields
+- missing columns;
+- nulls;
+- JSON primitive/string numeric conversion;
+- optional fields.
 
-in one reusable mapping mechanism rather than duplicating column-index lookups.
-
-ESO date filtering MUST use observation-overlap semantics:
+ESO date filtering uses observation-overlap semantics:
 
 ```text
 t_max >= From
 t_min <= To
 ```
 
-rather than assuming that `t_min` alone must fall inside the requested window.
+If a real archive contract is genuinely unknown for a capability, return `Error.NotImplemented(...)` rather than sending requests to a guessed URL.
 
-If an archive's real query/download contract is genuinely not yet known for a capability, `SearchAsync`/`DownloadAsync` MUST return `Error.NotImplemented(...)` rather than sending requests to a guessed URL.
+## 6.7 VizieR Catalogue Client
 
-### 6.7 Catalogue Client: VizieR
+**Location:** `AstroLab.Infrastructure/Catalogues`
 
-**Location:** `AstroLab.Infrastructure/Catalogues`, `AstroLab.Api/Features/Catalogues`
+`ICatalogueClient` / `VizierTapClient` provides VizieR catalogue integration.
 
-`ICatalogueClient` (`ConeSearchAsync`) is the catalogue-integration counterpart to `IArchiveClient` (§6.6): a single HTTP client abstraction, `VizierTapClient`, over VizieR's real IVOA TAP service, backing both `Catalogues/Query` (a direct cone search) and `Catalogues/CrossMatch` (a cone search over the sky field a staged image's detected sources span, followed by the pure `AstroLab.Core.Catalogues.CatalogueCrossMatcher` nearest-neighbour match).
+It supports:
 
-A VizieR table (e.g. `I/355/gaiadr3`) is identified by its catalogue-native table name, and its RA/Dec/identifier/magnitude column _names_ vary per catalogue. `VizierTapClient` MUST NOT assume a fixed column name for any of these roles. Instead, it discovers them per catalogue from the TAP service's mandatory `TAP_SCHEMA.columns` description, matching each role by its IVOA UCD1+ tag (`pos.eq.ra`, `pos.eq.dec`, `meta.id`/`meta.record`, `phot.mag`), preferring a column additionally tagged `meta.main` when more than one candidate matches. This mirrors how `EsoArchiveApiClient` discovers real downloadable products through DataLink rather than guessing a URL (§6.6) — column-name guessing is the equivalent mistake for a catalogue query.
+- direct catalogue cone searches;
+- image-source cross-matching.
 
-A magnitude column is optional metadata: when a catalogue exposes none, the cone-search ADQL selects a literal `NULL` for it rather than omitting the column or inventing a value, and `CatalogueRecord.Magnitude` is `null`.
+The pure cross-match algorithm belongs in:
 
-Responses use the IVOA VOTable XML format (`FORMAT=votable`) — the one output format every compliant TAP service is required to support — parsed by `VoTableParser` matching elements by local name so it tolerates the VOTable namespace differing across service versions. A DALI/TAP `QUERY_STATUS=ERROR` `INFO` element MUST be treated as a failure (`ErrorCategory.Infrastructure`) even inside an HTTP 200 response, and a response with no recognizable `TABLE` element MUST fail closed rather than being read as an empty successful result.
+```text
+AstroLab.Core.Catalogues.CatalogueCrossMatcher
+```
 
-`CatalogueCrossMatcher.Match` is pure Core logic: for each detected source it finds the nearest `CatalogueMatchCandidate` (across every catalogue requested) within the requested radius via `AngularSeparation`, omitting sources with no candidate in range rather than reporting a null match.
+A VizieR table is identified by its catalogue-native table name.
 
-### 6.8 Visualisation as a Separate Capability
+RA, Dec, identifier, and magnitude column names MUST NOT be hard-coded because they vary between catalogues.
 
-**Location:** `AstroLab.Infrastructure/ImageRendering`, `AstroLab.Api/Features/Images/Render`
+`VizierTapClient` MUST discover these roles through the TAP service's `TAP_SCHEMA.columns`, using IVOA UCD1+ metadata:
 
-Visualisation is an infrastructure/API concern, not a scientific one.
+- RA → `pos.eq.ra`
+- Dec → `pos.eq.dec`
+- identifier → `meta.id` / `meta.record`
+- magnitude → `phot.mag`
 
-It MUST NOT be implemented inside `AstroLab.Core` when it refers to concrete output formats or codecs.
+When multiple candidates exist, prefer one additionally tagged `meta.main`.
 
-Core produces scientific data such as:
+Magnitude is optional. If no magnitude column exists, the query MUST select literal `NULL` and `CatalogueRecord.Magnitude` MUST be `null`.
 
-- scaled pixel values
-- statistics
-- source measurements
-- WCS coordinates
-- photometric measurements
+Responses use IVOA VOTable XML.
+
+`VoTableParser` MUST tolerate differing VOTable namespaces by matching elements by local name.
+
+A DALI/TAP `QUERY_STATUS=ERROR` MUST be treated as an Infrastructure failure even if HTTP status is 200.
+
+A response without a recognisable `TABLE` MUST fail closed rather than being treated as a successful empty result.
+
+`CatalogueCrossMatcher.Match` is pure Core logic:
+
+- for each detected source, find the nearest candidate across requested catalogues;
+- use `AngularSeparation`;
+- respect the requested matching radius;
+- omit sources with no candidate within the radius.
+
+## 6.8 Visualisation
+
+**Location:** `AstroLab.Infrastructure/ImageRendering`, `AstroLab.Api/Features/Images`
+
+Visualisation is an Infrastructure/API concern.
+
+Core MAY produce:
+
+- scaled pixel values;
+- image statistics;
+- source measurements;
+- WCS coordinates;
+- photometric measurements.
 
 Core MUST NOT know about:
 
-- PNG
-- JPEG
-- image codecs
-- HTTP image responses
-- browser-specific formats
+- PNG;
+- JPEG;
+- codecs;
+- HTTP image responses;
+- browser-specific representations.
 
-A concrete rendering dependency such as `PngRenderer` belongs in Infrastructure.
+Concrete rendering such as `PngRenderer` belongs in Infrastructure.
 
-Conceptually:
+Conceptual flow:
 
 ```text
 HTTP request
-(RenderEndpoint)
-       │
-       ▼
-AstroLab.Infrastructure/Fits
-(FITS pixel read)
-       │
-       ▼
+     │
+     ▼
+API endpoint
+     │
+     ▼
+Infrastructure/Fits
+     │
+     ▼
 Native buffer / spans
-       │
-       ▼
-AstroLab.Core/Imaging
-(ImageScaler, ImageStatistics, ColorMapper)
-       │
-       ▼
-AstroLab.Infrastructure/ImageRendering
-(FitsImageRenderer + PngRenderer)
-       │
-       ▼
-HTTP response
-(image/png)
+     │
+     ▼
+Core/Imaging
+     │
+     ├── ImageScaler
+     ├── ImageStatistics
+     └── ColorMapper
+     │
+     ▼
+Infrastructure/ImageRendering
+     │
+     ├── FitsImageRenderer
+     └── PngRenderer
+     │
+     ▼
+HTTP image response
 ```
 
-The same separation applies to future:
+The same separation applies to spectrum plots, light curves, false-colour images, source overlays, and RGB composites.
 
-- spectrum plots
-- light-curve plots
-- false-colour images
+Core algorithms MUST NOT care whether their output becomes an image, JSON, FITS file, chart, or another representation.
 
-(Source overlays and RGB composites already follow this same separation today — see `Images/Overlay` and `Images/Composite`.)
+## 6.9 Global Exception Handling
 
-Core supplies scientific values. Infrastructure/API mapping turns those values into the requested visual or wire representation.
+**Location:**
 
-A Core algorithm MUST NOT know or care whether its output becomes a PNG, JSON response, FITS file, chart, or another representation.
+```text
+AstroLab.Api/RequestValidationExceptionHandler.cs
+AstroLab.Api/GlobalExceptionHandler.cs
+Program.cs
+```
 
-### 6.9 Global Exception Handling
+`Result<T>` handles expected failures such as:
 
-**Location:** `AstroLab.Api/RequestValidationExceptionHandler.cs`, `AstroLab.Api/GlobalExceptionHandler.cs`, `Program.cs`
+- validation failures from domain operations;
+- missing data;
+- unsupported capabilities;
+- expected archive failures;
+- intentionally unavailable capabilities.
 
-`Result<T>` covers expected failures such as:
+`RequestValidationExceptionHandler` handles request-boundary validation exceptions and maps them to HTTP 400.
 
-- validation failures arising from domain operations
-- missing data
-- unsupported capabilities
-- archive failures that the caller can reasonably handle
-- deliberately unimplemented capabilities
+It also handles `BadHttpRequestException` from Minimal API parameter binding.
 
-Request-boundary validation MAY use `ArgumentException` or `ArgumentOutOfRangeException` where required by the request DTO construction model.
+`Program.cs` MUST explicitly configure:
 
-`RequestValidationExceptionHandler`, registered ahead of `GlobalExceptionHandler`, catches those request-validation exceptions and maps them to HTTP 400. It also catches `Microsoft.AspNetCore.Http.BadHttpRequestException`, thrown by minimal API parameter binding when a required parameter (e.g. an endpoint parameter with no default value) is missing — `Program.cs` explicitly sets `RouteHandlerOptions.ThrowOnBadRequest = true` so this is thrown consistently in every hosting environment. Left at its default, `ThrowOnBadRequest` follows `IsDevelopment()`: `true` in Development (throws, reaching the exception handler chain) but `false` otherwise (the framework silently writes an empty-body 400 without ever reaching a registered `IExceptionHandler`) — an environment-dependent difference that MUST NOT be relied upon.
+```text
+RouteHandlerOptions.ThrowOnBadRequest = true
+```
 
-Unexpected exceptions escaping an endpoint are caught by `GlobalExceptionHandler`, registered with `AddExceptionHandler<T>()` and `AddProblemDetails()`, and enabled with `app.UseExceptionHandler()`.
+so missing/invalid required parameters behave consistently across hosting environments.
 
-The global handler MUST:
+`GlobalExceptionHandler` handles unexpected exceptions.
 
-- log the full exception server-side
-- return a generic `ProblemDetails` response
-- use HTTP 500 with title `unexpected_error`
-- never expose stack traces or raw exception messages to callers
+It MUST:
 
-Global exception handling is a safety net, not a substitute for `Result<T>`.
+- log the full exception server-side;
+- return generic `ProblemDetails`;
+- use HTTP 500;
+- use title `unexpected_error`;
+- never expose stack traces;
+- never expose raw exception messages.
 
-A failure mode that can reasonably be anticipated MUST be represented explicitly with `Result<T>`.
+Global exception handling is a safety net, not a replacement for `Result<T>`.
+
+Any reasonably anticipated failure MUST have an explicit `Result<T>` representation.
 
 ---
 
-## 7. Testing Standards
+# 7. Testing Standards
 
 **Location:** `AstroLab.Tests`
 
-Tests cover Core, Infrastructure, and API layers.
-
 Use xUnit v3.
 
-### 7.1 Core Unit Tests
+Tests cover Core, Infrastructure, and API layers.
 
-**Location:** `AstroLab.Tests/Core/`
+## 7.1 Core Tests
 
-Tests MUST verify, at minimum:
+Core tests MUST cover, where implemented:
 
-- photometry calculations, including circular aperture flux and annular background estimation
-- image scaling and expected normalised values, including logarithmic scaling
-- spectrum extraction and expected one-dimensional output
-- `Result<T>` success and failure behaviour
-- expected domain failures without exception-based control flow
-- FITS capability detection and capability mismatches
-- WCS coordinate transformations where implemented
-- source detection behaviour and edge cases where implemented
+- photometry calculations, including circular aperture flux and annular background estimation;
+- image scaling and expected normalised values, including logarithmic scaling;
+- spectrum extraction and expected one-dimensional output;
+- `Result<T>` success/failure behaviour;
+- expected failures without exception-based control flow;
+- FITS capability detection and capability mismatches;
+- WCS transformations;
+- source detection and relevant edge cases.
 
 Tests SHOULD include:
 
-- empty inputs
-- NaN/infinite values where scientifically meaningful
-- negative or zero values where algorithms permit them
-- boundary conditions
-- malformed or incomplete metadata
-- representative scientific examples with known expected results
+- empty inputs;
+- NaN/infinite values where scientifically meaningful;
+- negative/zero values where algorithms permit them;
+- boundaries;
+- malformed/incomplete metadata;
+- representative scientific examples with known expected results.
 
-### 7.2 Allocation and Performance Tests
+## 7.2 Allocation and Performance Tests
 
-Performance/allocation tests SHOULD verify Core algorithms identified as performance-sensitive.
+Performance/allocation tests SHOULD protect algorithms identified as genuinely performance-sensitive.
 
-Tests SHOULD detect:
+Where relevant, tests SHOULD detect:
 
-- unnecessary managed-array allocations
-- hidden LINQ allocations where relevant
-- boxed value types
-- unnecessary intermediate collections
-- unexpected per-element allocations
-- significant regressions in execution time
+- unnecessary managed-array allocations;
+- hidden LINQ allocations;
+- boxing;
+- unnecessary intermediate collections;
+- per-element allocations;
+- significant execution-time regressions.
 
-Allocation is measured using `GC.GetAllocatedBytesForCurrentThread()` or a dedicated benchmarking/allocation framework where appropriate.
+Allocation MAY be measured with:
 
-Tests MUST distinguish one-time setup and test-harness allocations from allocations performed by the algorithm under test.
+```csharp
+GC.GetAllocatedBytesForCurrentThread()
+```
 
-The purpose of these tests is to protect genuinely performance-sensitive paths, not to enforce an arbitrary zero-allocation rule on every Core operation.
+or an appropriate benchmarking/allocation framework.
 
-Where an algorithm naturally produces a result collection, the cost of producing that result is expected and SHOULD NOT be treated as an accidental allocation.
+Tests MUST distinguish test setup/harness allocations from allocations caused by the algorithm.
 
-### 7.3 Infrastructure Tests
+Do not enforce an arbitrary zero-allocation requirement on every Core operation.
 
-Infrastructure tests SHOULD verify:
+Natural result allocations SHOULD NOT be treated as accidental allocations.
 
-- native buffer ownership and disposal
-- double-disposal safety
-- FITS header reading
-- FITS pixel conversion
-- malformed FITS handling
-- archive response parsing
-- archive product discovery
-- product-selection policies
-- streaming behaviour
-- cancellation
-- rendering correctness
-- correct handling of missing archive metadata
+## 7.3 Infrastructure Tests
+
+Infrastructure tests SHOULD cover:
+
+- native buffer ownership;
+- disposal and double-disposal;
+- FITS header reading;
+- FITS pixel conversion;
+- malformed FITS handling;
+- archive response parsing;
+- archive product discovery;
+- product-selection policies;
+- streaming;
+- cancellation;
+- rendering correctness;
+- missing archive metadata.
 
 Native-library-dependent tests SHOULD be isolated from pure Core tests.
 
-### 7.4 API Tests
+Tests requiring the real CFITSIO library SHOULD dynamically skip when the native library is unavailable rather than failing solely because a developer machine lacks the library.
 
-API integration tests SHOULD verify:
+## 7.4 API Tests
 
-- request binding
-- request validation
-- expected HTTP status codes
-- response DTO mapping
-- Result-to-response mapping
-- unsupported capability responses
-- global exception handling (`GlobalExceptionHandler`, `RequestValidationExceptionHandler`)
-- cancellation behaviour where practical
-- end-to-end FITS workflows for representative datasets
+API integration tests SHOULD cover:
 
-Scaffolded HTTP 501 roadmap endpoints do not require dedicated tests — a stub returning `NotImplementedResult` is not a real code path yet, and a test against it only pins down a value that changes the moment the real implementation lands. Cover a roadmap endpoint once its Request → Infrastructure → Core → `Result<T>` → Response flow is actually implemented (§6.5).
+- request binding;
+- request validation;
+- expected HTTP status codes;
+- response DTO mapping;
+- `Result<T>` to HTTP mapping;
+- unsupported capability responses;
+- global exception handling;
+- request-validation exception handling;
+- cancellation where practical;
+- representative end-to-end FITS workflows.
 
-API tests MUST NOT require external ESO or MAST services unless explicitly designated as integration/acceptance tests.
+API tests MUST NOT depend on live ESO or MAST services unless explicitly designated as integration/acceptance tests.
 
-Tests against external archives SHOULD be separated from deterministic application tests and SHOULD NOT be required for every local build.
+External archive tests SHOULD be separated from deterministic application tests and MUST NOT be required for every local build.
 
 ---
 
-## 8. Appendix: Original Build Sequence (Historical)
+# 8. Scientific and Engineering Invariants
 
-AstroLab was originally scaffolded by an AI coding agent using the build order below. The solution described by this document already exists in the repository.
+The following principles apply across all scientific capabilities.
 
-This appendix is **historical**. It is retained as a reference for extending the same architectural pattern to new capability areas; it is not an outstanding task list.
+### Correctness over apparent sophistication
 
-| Phase | What was built                                        | Governing specification |
-| ----- | ----------------------------------------------------- | ----------------------- |
-| 1     | Solution and project scaffolding                      | §5.1, §5.2              |
-| 2     | Core `Result` / `Error` types                         | §6.1                    |
-| 3     | Core FITS/domain models                               | §5.1                    |
-| 4     | Core photometry, imaging, and spectroscopy algorithms | §6.2                    |
-| 5     | Core unit and allocation tests                        | §7                      |
-| 6     | FITS native bindings and unmanaged buffers            | §6.3                    |
-| 7     | `LocalFileStore` / pipeline streaming                 | §6.4                    |
-| 8     | ESO and MAST archive clients                          | §6.6                    |
-| 9     | API vertical slices                                   | §6.5, §5.3              |
-| 10    | API integration tests                                 | §7                      |
-| 11    | Full solution validation                              | —                       |
+Algorithms MUST produce scientifically defensible results rather than impressive-looking approximations.
 
-```text
-1. Solution & project scaffolding
-        │
-        ▼
-2. Core Result/Error types
-        │
-        ▼
-3. Core FITS/domain models
-        │
-        ▼
-4. Core photometry / imaging / spectroscopy algorithms
-        │
-        ▼
-5. Core unit & allocation tests
-        │
-        ▼
-6. FITS native bindings & unmanaged buffers
-        │
-        ▼
-7. LocalFileStore / Pipelines
-        │
-        ▼
-8. ESO & MAST archive clients
-        │
-        ▼
-9. API vertical slices
-        │
-        ▼
-10. API integration tests
-        │
-        ▼
-11. Full solution validation
-```
+Do not fabricate:
 
-At each stage, the implementation compiled and its tests remained passing before proceeding to the next stage.
+- measurements;
+- uncertainties;
+- metadata;
+- calibration values;
+- confidence values;
+- scientific classifications.
 
-The same discipline applies to future work that extends this architectural pattern.
+### Units
+
+Measured and derived physical quantities MUST expose their units explicitly.
+
+Unit conversions SHOULD be centralised rather than duplicated across endpoints.
+
+### Uncertainty
+
+Use propagated uncertainty when an existing Core algorithm can derive it.
+
+Do not invent an uncertainty merely because an API response has an uncertainty field.
+
+### Metadata and provenance
+
+When relevant, preserve and surface available metadata such as:
+
+- observation date/time;
+- instrument;
+- exposure time;
+- gain;
+- filter;
+- RA/Dec;
+- image dimensions;
+- pixel scale;
+- WCS;
+- wavelength information.
+
+Missing metadata MUST remain missing rather than being inferred without a documented basis.
+
+### Data quality
+
+Algorithms SHOULD account for:
+
+- NaN/invalid pixels;
+- saturation;
+- background;
+- noise;
+- dynamic range;
+- insufficient samples;
+- malformed metadata;
+- physically invalid inputs.
+
+### Reproducibility
+
+Core scientific calculations SHOULD be deterministic for identical inputs.
+
+Algorithm parameters and methods used to derive scientific results SHOULD be represented explicitly where required for interpretation or reproducibility.
+
+### Scientific vs presentation layers
+
+Scientific values are produced by Core.
+
+Presentation, encoding, visualisation, and HTTP representation belong outside Core.
+
+---
+
+# 9. Change Discipline
+
+When extending AstroLab:
+
+1. Preserve the FCIS boundary.
+2. Put scientific/domain logic in Core.
+3. Put I/O and external integrations in Infrastructure.
+4. Keep API slices thin.
+5. Reuse existing abstractions before introducing new ones.
+6. Preserve existing public contracts unless the requirement explicitly changes them.
+7. Add focused tests for changed behaviour.
+8. Avoid unrelated refactoring.
+9. Avoid speculative abstractions and dependencies.
+10. Review the final implementation against this specification.
+
+A change is incorrect if it works functionally but violates an applicable `MUST` or `MUST NOT` requirement.
+
+The specification takes precedence over patterns found in older code when the older code conflicts with an explicit requirement here.

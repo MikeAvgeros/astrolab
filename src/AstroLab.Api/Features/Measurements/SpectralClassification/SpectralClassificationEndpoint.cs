@@ -22,8 +22,10 @@ public static class SpectralClassificationEndpoint
     }
 
     private static async Task<IResult> ClassifySpectrumAsync(
-        string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
+        string fileId, FitsDatasetReader datasetReader, CancellationToken cancellationToken, double? significanceThreshold = null)
     {
+        var request = SpectralClassificationRequest.Create(significanceThreshold);
+
         var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
 
         if (datasetResult.IsFailure)
@@ -40,7 +42,8 @@ public static class SpectralClassificationEndpoint
             return extractResult.Error.ToProblem();
         }
 
-        var classifyResult = SpectralTypeClassifier.Classify(extractResult.Value);
+        var classifyResult = SpectralTypeClassifier.Classify(
+            extractResult.Value, request.SignificanceThreshold ?? SpectralLineDetector.DefaultSignificanceSigma);
 
         return classifyResult.ToApiResult(estimate =>
             Results.Ok(SpectralClassificationResponse.Create(fileId, estimate.SpectralType, estimate.Confidence, SpectralTypeClassifier.MethodName)));

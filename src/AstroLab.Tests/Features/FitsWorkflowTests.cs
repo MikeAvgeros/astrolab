@@ -1794,17 +1794,27 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task ClassifySpectrum_ReturnsNotImplemented()
+    public async Task ClassifySpectrum_SingleEmissionSpike_ClassifiesAsLateType()
     {
         var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
 
         var response = await _client.GetAsync($"/api/measurements/{fileId}/spectral-classification");
 
-        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("spectroscopy.classification.not_implemented", body.GetProperty("title").GetString());
+        Assert.Equal("M", body.GetProperty("estimatedSpectralType").GetString());
+    }
+
+    [Fact]
+    public async Task ClassifySpectrum_RejectsNonPositiveSignificanceThreshold()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/measurements/{fileId}/spectral-classification?significanceThreshold=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

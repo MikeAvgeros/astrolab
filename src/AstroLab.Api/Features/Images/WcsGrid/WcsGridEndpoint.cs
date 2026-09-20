@@ -56,14 +56,14 @@ public static class WcsGridEndpoint
             return gridResult.Error.ToProblem();
         }
 
-        var renderResult = FitsImageRenderer.Render(dataset.Pixels, width, height, RenderOptions.Create(maxDimension: null));
+        var renderResult = FitsImageRenderer.Render(dataset.Pixels, width, height, RenderOptions.Create());
 
         if (renderResult.IsFailure)
         {
             return renderResult.Error.ToProblem();
         }
 
-        var gridded = OverlayRenderer.DrawGridLines(renderResult.Value, gridResult.Value);
+        var gridded = OverlayRenderer.DrawGridLines(renderResult.Value, gridResult.Value, width, height);
 
         var headers = httpContext.Response.Headers;
 

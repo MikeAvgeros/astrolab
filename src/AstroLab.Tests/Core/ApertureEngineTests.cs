@@ -86,6 +86,30 @@ public class ApertureEngineTests
     }
 
     [Fact]
+    public void MeasureCircularAperture_NonFiniteCenter_ReturnsInvalidCenterFailure()
+    {
+        var pixels = CreateUniformImage(21, 21, 1.0f);
+
+        var result = ApertureEngine.MeasureCircularAperture(pixels, 21, 21, double.NaN, double.NaN, 5.0);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.invalid_center", result.Error.Code);
+    }
+
+    [Fact]
+    public void MeasureAnnulusBackground_NonFiniteCenter_ReturnsInvalidCenterFailure()
+    {
+        var pixels = CreateUniformImage(21, 21, 1.0f);
+
+        var result = ApertureEngine.MeasureAnnulusBackground(pixels, 21, 21, double.NaN, double.NaN, 5.0, 10.0);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("photometry.invalid_center", result.Error.Code);
+    }
+
+    [Fact]
     public void MeasureAnnulusBackground_Median_IsRobustToOutliers()
     {
         const int size = 121;

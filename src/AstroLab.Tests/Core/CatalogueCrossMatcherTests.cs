@@ -81,6 +81,20 @@ public class CatalogueCrossMatcherTests
     }
 
     [Fact]
+    public void Match_SourceWithOutOfRangeDeclination_ReturnsFailureRatherThanSilentlyOmittingIt()
+    {
+        var sources = new[] { (SourceId: 1, RightAscension: 180.0, Declination: 95.0) };
+
+        var candidate = CatalogueMatchCandidate.Create("cat", "a", 180.0, 0.0);
+
+        var result = CatalogueCrossMatcher.Match(sources, [candidate], radiusArcsec: 5.0);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.invalid_declination", result.Error.Code);
+    }
+
+    [Fact]
     public void Match_NonPositiveRadius_ReturnsValidationError()
     {
         var result = CatalogueCrossMatcher.Match([], [], radiusArcsec: 0.0);

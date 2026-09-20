@@ -1,9 +1,10 @@
 namespace AstroLab.Infrastructure.Archives;
 
 /// <summary>
-/// Picks the single best downloadable product from an ESO DataLink product list, scoring public
-/// data rights, a FITS-looking format/filename, the primary (<c>#this</c>) product semantic, and
-/// calibration level, in that order of weight.
+/// Picks the single best downloadable product from an ESO DataLink product list, restricted to
+/// FITS-looking filenames/formats (as <see cref="MastProductSelectionPolicy"/> does for MAST) and
+/// scored by public data rights, the primary (<c>#this</c>) product semantic, and calibration
+/// level, in that order of weight.
 /// </summary>
 public static class EsoProductSelectionPolicy
 {
@@ -13,7 +14,6 @@ public static class EsoProductSelectionPolicy
     private const string FitsFormatToken = "fits";
     private const int PublicDataRightsScore = 1000;
     private const int PrimaryProductScore = 100;
-    private const int FitsFormatScore = 500;
     private const int CalibrationLevelScoreMultiplier = 10;
 
     public static EsoProduct? SelectBest(IReadOnlyList<EsoProduct> products)
@@ -23,6 +23,11 @@ public static class EsoProductSelectionPolicy
 
         foreach (var product in products)
         {
+            if (!LooksLikeFits(product))
+            {
+                continue;
+            }
+
             var score = Score(product);
 
             if (score <= bestScore) continue;
@@ -47,11 +52,6 @@ public static class EsoProductSelectionPolicy
         if (string.Equals(product.ProductType, PrimaryProductSemantics, StringComparison.OrdinalIgnoreCase))
         {
             score += PrimaryProductScore;
-        }
-
-        if (LooksLikeFits(product))
-        {
-            score += FitsFormatScore;
         }
 
         score += (product.CalibrationLevel ?? 0) * CalibrationLevelScoreMultiplier;

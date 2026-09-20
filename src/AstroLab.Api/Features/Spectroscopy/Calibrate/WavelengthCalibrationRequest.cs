@@ -21,6 +21,19 @@ public sealed record WavelengthCalibrationRequest
     public ImmutableList<double>? FluxSensitivity { get; }
 
     public static WavelengthCalibrationRequest Create(
-        ImmutableList<double> pixelPositions, ImmutableList<double> knownWavelengths, ImmutableList<double>? fluxSensitivity = null) =>
-        new(pixelPositions, knownWavelengths, fluxSensitivity);
+        ImmutableList<double> pixelPositions, ImmutableList<double> knownWavelengths, ImmutableList<double>? fluxSensitivity = null)
+    {
+        var request = new WavelengthCalibrationRequest(pixelPositions, knownWavelengths, fluxSensitivity);
+
+        request.Validate();
+
+        return request;
+    }
+
+    public void Validate()
+    {
+        ArgumentNullException.ThrowIfNull(PixelPositions);
+
+        ArgumentNullException.ThrowIfNull(KnownWavelengths);
+    }
 }

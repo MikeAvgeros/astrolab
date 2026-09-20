@@ -30,6 +30,13 @@ public static class ApertureEngine
             return Result<ApertureMeasurement>.Failure(boundsCheck.Error);
         }
 
+        var centerCheck = ValidateCenter(centerX, centerY);
+
+        if (centerCheck.IsFailure)
+        {
+            return Result<ApertureMeasurement>.Failure(centerCheck.Error);
+        }
+
         var radiusCheck = ValidateRadius(radius, nameof(radius));
 
         if (radiusCheck.IsFailure)
@@ -100,6 +107,13 @@ public static class ApertureEngine
         if (boundsCheck.IsFailure)
         {
             return Result<AnnulusMeasurement>.Failure(boundsCheck.Error);
+        }
+
+        var centerCheck = ValidateCenter(centerX, centerY);
+
+        if (centerCheck.IsFailure)
+        {
+            return Result<AnnulusMeasurement>.Failure(centerCheck.Error);
         }
 
         var innerRadiusCheck = ValidateRadius(innerRadius, nameof(innerRadius));
@@ -359,6 +373,11 @@ public static class ApertureEngine
             ? Result<Unit>.Success(Unit.Value)
             : Error.Validation("photometry.invalid_image_bounds",
                 $"Pixel span length ({pixelLength}) does not match width x height ({width}x{height}).");
+
+    private static Result<Unit> ValidateCenter(double centerX, double centerY) =>
+        double.IsFinite(centerX) && double.IsFinite(centerY)
+            ? Result<Unit>.Success(Unit.Value)
+            : Error.Validation("photometry.invalid_center", "centerX and centerY must be finite values.");
 
     private static Result<Unit> ValidateRadius(double radius, string paramName) =>
         radius > 0 && double.IsFinite(radius)

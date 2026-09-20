@@ -12,17 +12,11 @@ namespace AstroLab.Core.Fits;
 /// </summary>
 public static class FitsDatasetClassifier
 {
-    private const string TimeColumnName = "TIME";
-    private const string TotalFieldsKeyword = "TFIELDS";
     private const string DispersionAxisKeyword = "DISPAXIS";
     private const int FirstFieldNumber = 1;
     private const int NoFields = 0;
     private const int SingleAxisDimension = 1;
-    private const int MinimumTimeSeriesFieldCount = 2;
-    private const long MaxFieldCount = 999;
-    
-    private static readonly string[] MeasurementColumnNames = ["FLUX", "MAG", "RATE", "COUNTS", "SAP_FLUX", "PDCSAP_FLUX"];
-    
+
     private static readonly string[] SpectralCTypePrefixes =
         ["WAVE", "FREQ", "ENER", "AWAV", "VELO", "VRAD", "VOPT", "ZOPT", "BETA", "WAVN"];
 
@@ -101,39 +95,9 @@ public static class FitsDatasetClassifier
 
         return false;
     }
-
-    private static bool IsTimeSeriesTable(HduDescriptor hdu)
-    {
-        if (hdu.Type is not (HduType.AsciiTable or HduType.BinaryTable))
-        {
-            return false;
-        }
-
-        var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
-
-        if (fieldCount < MinimumTimeSeriesFieldCount || fieldCount > MaxFieldCount)
-        {
-            return false;
-        }
-
-        return HasColumn(hdu.Header, fieldCount, TimeColumnName) &&
-            MeasurementColumnNames.Any(measurementColumnName => HasColumn(hdu.Header, fieldCount, measurementColumnName));
-    }
-
-    private static bool HasColumn(FitsHeader header, long fieldCount, string columnName)
-    {
-        for (long field = FirstFieldNumber; field <= fieldCount; field++)
-        {
-            var nameResult = header.GetString($"TTYPE{field}");
-
-            if (nameResult.IsSuccess && string.Equals(nameResult.Value.Trim(), columnName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    
+    private static bool IsTimeSeriesTable(HduDescriptor hdu) =>
+        hdu.Type is HduType.AsciiTable or HduType.BinaryTable && TimeSeriesTableDescriptor.Resolve(hdu).IsSuccess;
 
     private static bool IsSpectrum(HduDescriptor hdu)
     {

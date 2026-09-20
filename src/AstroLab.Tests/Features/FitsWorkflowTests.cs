@@ -736,6 +736,28 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task CalibrateWavelengths_MissingPixelPositions_ReturnsBadRequestInsteadOfServerError()
+    {
+        var request = new { KnownWavelengths = new[] { 500.0, 506.0 } };
+
+        var response = await _client.PostAsJsonAsync("/api/spectroscopy/does-not-matter/calibrate", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExtractSpectrum_MissingTraceCenters_ReturnsBadRequestInsteadOfServerError()
+    {
+        var fileId = await UploadGradientSpectrumFrameAsync();
+
+        var request = new { Axis = "Horizontal", ApertureHalfWidth = 1.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/spectroscopy/{fileId}/extract", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CompareSpectra_IdenticalSpectra_ReturnsUnitCorrelationAndZeroShift()
     {
         var primaryFileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
@@ -1551,6 +1573,18 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var fileId = await UploadGradientImageAsync();
 
         var request = new { FileIds = new[] { fileId }, Method = "Mean" };
+
+        var response = await _client.PostAsJsonAsync("/api/images/stack", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task StackImages_WithMoreThanTheMaximumFileCount_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var request = new { FileIds = Enumerable.Repeat(fileId, 65).ToArray(), Method = "Mean" };
 
         var response = await _client.PostAsJsonAsync("/api/images/stack", request);
 

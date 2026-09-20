@@ -34,6 +34,8 @@ public sealed record SpectrumExtractionRequest
 
     public void Validate()
     {
+        ArgumentNullException.ThrowIfNull(TraceCenters);
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureHalfWidth);
     }
 }

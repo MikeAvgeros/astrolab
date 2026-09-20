@@ -31,7 +31,7 @@ public class OverlayRendererTests
     {
         var image = BlankImage(20, 20);
 
-        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)]);
+        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)], image.Width, image.Height);
 
         var onOuterEdge = PixelAt(image, 16, 10);
 
@@ -45,7 +45,7 @@ public class OverlayRendererTests
     {
         var image = BlankImage(20, 20);
 
-        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)]);
+        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)], image.Width, image.Height);
 
         Assert.Equal((BackgroundGray, BackgroundGray, BackgroundGray), PixelAt(image, 10, 10));
 
@@ -57,7 +57,7 @@ public class OverlayRendererTests
     {
         var image = BlankImage(20, 20);
 
-        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)]);
+        OverlayRenderer.DrawSourceMarkers(image, [Source(10.0, 10.0)], image.Width, image.Height);
 
         Assert.Equal((BackgroundGray, BackgroundGray, BackgroundGray), PixelAt(image, 0, 0));
     }
@@ -67,7 +67,8 @@ public class OverlayRendererTests
     {
         var image = BlankImage(10, 10);
 
-        var exception = Record.Exception(() => OverlayRenderer.DrawSourceMarkers(image, [Source(0.0, 0.0), Source(9.0, 9.0)]));
+        var exception = Record.Exception(() =>
+            OverlayRenderer.DrawSourceMarkers(image, [Source(0.0, 0.0), Source(9.0, 9.0)], image.Width, image.Height));
 
         Assert.Null(exception);
     }
@@ -77,8 +78,24 @@ public class OverlayRendererTests
     {
         var image = BlankImage(5, 5);
 
-        OverlayRenderer.DrawSourceMarkers(image, []);
+        OverlayRenderer.DrawSourceMarkers(image, [], image.Width, image.Height);
 
         Assert.All(image.Rgb, value => Assert.Equal(BackgroundGray, value));
+    }
+
+    [Fact]
+    public void DrawSourceMarkers_ImageDownsampledRelativeToSourceSpace_ScalesMarkerPosition()
+    {
+        // The rendered image is half the resolution the source was detected at (as happens when
+        // FitsImageRenderer downsamples a large image): a source at (40, 40) in the original
+        // 80x80 pixel space must be drawn at (20, 20) in the 40x40 rendered image, not at (40, 40)
+        // (which would be off the edge of the marker's expected ring here).
+        var image = BlankImage(40, 40);
+
+        OverlayRenderer.DrawSourceMarkers(image, [Source(40.0, 40.0)], sourceWidth: 80, sourceHeight: 80);
+
+        var onOuterEdgeOfScaledPosition = PixelAt(image, 26, 20);
+
+        Assert.NotEqual((BackgroundGray, BackgroundGray, BackgroundGray), onOuterEdgeOfScaledPosition);
     }
 }

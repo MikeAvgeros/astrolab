@@ -37,8 +37,30 @@ public static class FitsPixelDataReader
         }
 
         var totalBytes = (nuint)descriptor.DataSizeBytes;
+        
+        if (stream.CanSeek)
+        {
+            var remainingBytes = stream.Length - stream.Position;
 
-        var buffer = UnmanagedFitsBuffer.Allocate(totalBytes);
+            if (remainingBytes < (long)totalBytes)
+            {
+                return Error.Validation(
+                    "fits.data.truncated",
+                    $"The stream has {remainingBytes:N0} bytes remaining, fewer than the {totalBytes:N0} bytes of pixel data the header declares.");
+            }
+        }
+
+        UnmanagedFitsBuffer buffer;
+
+        try
+        {
+            buffer = UnmanagedFitsBuffer.Allocate(totalBytes);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or OutOfMemoryException)
+        {
+            return Error.Infrastructure(
+                "fits.data.allocation_failed", $"Failed to allocate {totalBytes:N0} bytes for the pixel buffer: {ex.Message}");
+        }
 
         try
         {

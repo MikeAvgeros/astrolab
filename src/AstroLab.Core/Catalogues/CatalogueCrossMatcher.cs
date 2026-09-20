@@ -37,7 +37,7 @@ public static class CatalogueCrossMatcher
 
                 if (separationResult.IsFailure)
                 {
-                    continue;
+                    return Result<ImmutableList<CatalogueMatch>>.Failure(separationResult.Error);
                 }
 
                 if (separationResult.Value <= radiusArcsec && separationResult.Value < bestSeparationArcsec)

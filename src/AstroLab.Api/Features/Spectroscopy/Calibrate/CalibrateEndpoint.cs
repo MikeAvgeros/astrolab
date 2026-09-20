@@ -22,6 +22,8 @@ public static class CalibrateEndpoint
     private static async Task<IResult> CalibrateAsync(
         string fileId, WavelengthCalibrationRequest request, FitsDatasetReader datasetReader, CancellationToken cancellationToken)
     {
+        request.Validate();
+
         var fitResult = SpectrumExtractor.FitDispersionSolution([.. request.PixelPositions], [.. request.KnownWavelengths]);
 
         if (fitResult.IsFailure)

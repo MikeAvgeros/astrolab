@@ -22,37 +22,49 @@ public static class OverlayRenderer
     private const byte GridLineRed = 60;
     private const byte GridLineGreen = 220;
     private const byte GridLineBlue = 220;
-
-    public static RenderedImage DrawSourceMarkers(RenderedImage image, IReadOnlyList<DetectedSource> sources)
+    
+    public static RenderedImage DrawSourceMarkers(
+        RenderedImage image, IReadOnlyList<DetectedSource> sources, int sourceWidth, int sourceHeight)
     {
+        var (scaleX, scaleY) = ComputeScale(image, sourceWidth, sourceHeight);
+
         foreach (var source in sources)
         {
-            DrawMarkerRing(image, (int)Math.Round(source.PixelX), (int)Math.Round(source.PixelY));
+            DrawMarkerRing(image, (int)Math.Round(source.PixelX * scaleX), (int)Math.Round(source.PixelY * scaleY));
         }
 
         return image;
     }
-
-    public static RenderedImage DrawGridLines(RenderedImage image, WcsGridLines grid)
+    
+    public static RenderedImage DrawGridLines(RenderedImage image, WcsGridLines grid, int sourceWidth, int sourceHeight)
     {
+        var (scaleX, scaleY) = ComputeScale(image, sourceWidth, sourceHeight);
+
         foreach (var line in grid.RightAscensionLines)
         {
-            DrawPolyline(image, line);
+            DrawPolyline(image, line, scaleX, scaleY);
         }
 
         foreach (var line in grid.DeclinationLines)
         {
-            DrawPolyline(image, line);
+            DrawPolyline(image, line, scaleX, scaleY);
         }
 
         return image;
     }
 
-    private static void DrawPolyline(RenderedImage image, ImmutableArray<(double X, double Y)> points)
+    private static (double ScaleX, double ScaleY) ComputeScale(RenderedImage image, int sourceWidth, int sourceHeight) =>
+        (sourceWidth > 0 ? image.Width / (double)sourceWidth : 1.0,
+            sourceHeight > 0 ? image.Height / (double)sourceHeight : 1.0);
+
+    private static void DrawPolyline(RenderedImage image, ImmutableArray<(double X, double Y)> points, double scaleX, double scaleY)
     {
         for (var i = 1; i < points.Length; i++)
         {
-            DrawLine(image, points[i - 1], points[i]);
+            DrawLine(
+                image,
+                (points[i - 1].X * scaleX, points[i - 1].Y * scaleY),
+                (points[i].X * scaleX, points[i].Y * scaleY));
         }
     }
 

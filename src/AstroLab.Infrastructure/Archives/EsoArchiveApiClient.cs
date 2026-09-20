@@ -19,6 +19,8 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     private const string DataLinkEndpoint = "datalink/links";
     private const string DatasetIdIvoPrefix = "ivo://eso.org/csp#";
     private const string UnknownInstrument = "UNKNOWN";
+    private const double MetresToMicrometres = 1e6;
+    private const string LikeEscapeChar = "\\";
 
     private const string RequestedColumns =
         "dp_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
@@ -57,7 +59,7 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
             var tapResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
 
-            if (tapResponse is null || tapResponse.Metadata is not { } metadata)
+            if (tapResponse?.Metadata is not { } metadata)
             {
                 return Result<IReadOnlyList<ArchiveObservation>>.Failure(Error.Unexpected(
                     "eso.search_malformed_response", "ESO returned a response that did not match the expected TAP result contract."));
@@ -108,7 +110,7 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
             var dataLinkResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
 
-            if (dataLinkResponse is null || dataLinkResponse.Metadata is not { } metadata)
+            if (dataLinkResponse?.Metadata is not { } metadata)
             {
                 return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected(
                     "eso.products_malformed_response",
@@ -138,7 +140,7 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
         if (!string.IsNullOrWhiteSpace(query.Target))
         {
-            conditions.Add($"target_name LIKE '%{EscapeAdqlLiteral(query.Target)}%'");
+            conditions.Add($"target_name LIKE '%{EscapeAdqlLikePattern(query.Target)}%' ESCAPE '{LikeEscapeChar}'");
         }
 
         if (!string.IsNullOrWhiteSpace(query.Mission))
@@ -169,6 +171,11 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     }
 
     private static string EscapeAdqlLiteral(string value) => value.Replace("'", "''");
+    
+    private static string EscapeAdqlLikePattern(string value) => EscapeAdqlLiteral(
+        value.Replace(LikeEscapeChar, LikeEscapeChar + LikeEscapeChar)
+            .Replace("%", LikeEscapeChar + "%")
+            .Replace("_", LikeEscapeChar + "_"));
 
     private static Dictionary<string, int> BuildColumnIndex(List<EsoColumnMetadata> metadata) =>
         metadata
@@ -186,18 +193,21 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
             var row = new EsoTapRow(columnIndex, rowValues);
 
             var datasetId = row.GetString("dp_id");
+            
             if (string.IsNullOrWhiteSpace(datasetId))
             {
                 continue;
             }
 
             var target = row.GetString("target_name");
+            
             if (string.IsNullOrWhiteSpace(target))
             {
                 continue;
             }
 
             var instrument = row.GetString("instrument_name");
+            
             if (string.IsNullOrWhiteSpace(instrument))
             {
                 instrument = UnknownInstrument;
@@ -211,8 +221,8 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
                 rightAscension: row.GetDouble("s_ra"),
                 declination: row.GetDouble("s_dec"),
                 exposureTimeSeconds: row.GetDouble("t_exptime"),
-                wavelengthMinMicrometres: row.GetDouble("em_min"),
-                wavelengthMaxMicrometres: row.GetDouble("em_max"),
+                wavelengthMinMicrometres: row.GetDouble("em_min") * MetresToMicrometres,
+                wavelengthMaxMicrometres: row.GetDouble("em_max") * MetresToMicrometres,
                 proposalId: row.GetString("proposal_id"),
                 proposalPi: row.GetString("obs_creator_name"),
                 dataRights: row.GetString("data_rights")));
@@ -237,12 +247,14 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
             var row = new EsoTapRow(columnIndex, rowValues);
 
             var errorMessage = row.GetString("error_message");
+            
             if (!string.IsNullOrWhiteSpace(errorMessage))
             {
                 continue;
             }
 
             var dataUri = row.GetString("access_url");
+            
             if (string.IsNullOrWhiteSpace(dataUri))
             {
                 continue;

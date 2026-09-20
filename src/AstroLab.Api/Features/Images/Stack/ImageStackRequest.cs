@@ -7,6 +7,8 @@ namespace AstroLab.Api.Features.Images.Stack;
 public sealed record ImageStackRequest
 {
     private const int MinimumFileCount = 2;
+    
+    private const int MaximumFileCount = 64;
 
     [JsonConstructor]
     private ImageStackRequest(ImmutableList<string> fileIds, StackCombinationMethod method = StackCombinationMethod.Mean)
@@ -35,6 +37,11 @@ public sealed record ImageStackRequest
         if (FileIds.Count < MinimumFileCount)
         {
             throw new ArgumentOutOfRangeException(nameof(FileIds), FileIds.Count, $"At least {MinimumFileCount} staged images are required to stack.");
+        }
+
+        if (FileIds.Count > MaximumFileCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(FileIds), FileIds.Count, $"At most {MaximumFileCount} staged images may be stacked in a single request.");
         }
     }
 }

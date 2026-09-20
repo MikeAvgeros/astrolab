@@ -6,6 +6,7 @@ internal sealed record MastCaomRecord
 {
     [JsonConstructor]
     internal MastCaomRecord(
+        long? caomObsId,
         string? obsId,
         string? targetName,
         string? obsCollection,
@@ -23,6 +24,7 @@ internal sealed record MastCaomRecord
         string? proposalPi,
         string? dataRights)
     {
+        CaomObsId = caomObsId;
         ObsId = obsId;
         TargetName = targetName;
         ObsCollection = obsCollection;
@@ -40,6 +42,9 @@ internal sealed record MastCaomRecord
         ProposalPi = proposalPi;
         DataRights = dataRights;
     }
+    
+    [JsonPropertyName("obsid")]
+    public long? CaomObsId { get; }
 
     [JsonPropertyName("obs_id")]
     public string? ObsId { get; }

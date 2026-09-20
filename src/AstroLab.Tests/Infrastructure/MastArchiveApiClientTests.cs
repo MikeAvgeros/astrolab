@@ -30,9 +30,18 @@ public class MastArchiveApiClientTests
             {
               "obs_id":"obs1","target_name":"M31","obs_collection":"HST","instrument_name":"ACS/WFC",
               "dataproduct_type":"image","calib_level":3,"t_min":58000.5,"t_max":58000.6,
-              "t_exptime":900.0,"s_ra":10.68,"s_dec":41.27,"em_min":0.4,"em_max":0.7,
+              "t_exptime":900.0,"s_ra":10.68,"s_dec":41.27,"em_min":4e-7,"em_max":7e-7,
               "proposal_id":"12345","proposal_pi":"Someone","data_rights":"PUBLIC"
             }
+          ]
+        }
+        """;
+
+    private const string ObsIdLookupResponseJson = """
+        {
+          "status": "COMPLETE",
+          "data": [
+            {"obsid": 70000000, "obs_id": "obs1"}
           ]
         }
         """;
@@ -217,8 +226,8 @@ public class MastArchiveApiClientTests
         Assert.Equal(10.68, observation.RightAscension);
         Assert.Equal(41.27, observation.Declination);
         Assert.Equal(900.0, observation.ExposureTimeSeconds);
-        Assert.Equal(0.4, observation.WavelengthMinMicrometres);
-        Assert.Equal(0.7, observation.WavelengthMaxMicrometres);
+        Assert.Equal(0.4, observation.WavelengthMinMicrometres!.Value, precision: 9);
+        Assert.Equal(0.7, observation.WavelengthMaxMicrometres!.Value, precision: 9);
         Assert.Equal("12345", observation.ProposalId);
         Assert.Equal("Someone", observation.ProposalPi);
         Assert.Equal("PUBLIC", observation.DataRights);
@@ -286,9 +295,16 @@ public class MastArchiveApiClientTests
     }
 
     [Fact]
-    public async Task GetProductsAsync_MapsProducts()
+    public async Task GetProductsAsync_ResolvesCaomObsIdThenFetchesProducts()
     {
-        var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(ProductsResponseJson)));
+        var (client, handler) = CreateClient(async request =>
+        {
+            var requestJson = await ReadRequestJsonAsync(request);
+
+            return RequestContainsService(requestJson, "Mast.Caom.Filtered")
+                ? JsonResponse(ObsIdLookupResponseJson)
+                : JsonResponse(ProductsResponseJson);
+        });
 
         var result = await client.GetProductsAsync("obs1");
 
@@ -296,20 +312,46 @@ public class MastArchiveApiClientTests
         Assert.Equal(2, result.Value.Count);
         Assert.Equal("mast:HST/product/j8xi01a1q_raw.fits", result.Value[0].DataUri);
 
-        var requestJson = await ReadRequestJsonAsync(handler.Requests.Single());
-        Assert.Contains("\"service\":\"Mast.Caom.Products\"", requestJson);
-        Assert.Contains("\"obsid\":\"obs1\"", requestJson);
+        var lookupRequest = handler.Requests[0];
+        var lookupJson = await ReadRequestJsonAsync(lookupRequest);
+        Assert.Contains("\"service\":\"Mast.Caom.Filtered\"", lookupJson);
+        Assert.Contains("\"paramName\":\"obs_id\"", lookupJson);
+
+        var productsRequest = handler.Requests[1];
+        var productsJson = await ReadRequestJsonAsync(productsRequest);
+        Assert.Contains("\"service\":\"Mast.Caom.Products\"", productsJson);
+        Assert.Contains("\"obsid\":\"70000000\"", productsJson);
     }
 
     [Fact]
     public async Task GetProductsAsync_EmptyResultSet_ReturnsSuccessWithEmptyList()
     {
-        var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse("""{"status":"COMPLETE","data":[]}""")));
+        var (client, _) = CreateClient(async request =>
+        {
+            var requestJson = await ReadRequestJsonAsync(request);
+
+            return RequestContainsService(requestJson, "Mast.Caom.Filtered")
+                ? JsonResponse(ObsIdLookupResponseJson)
+                : JsonResponse("""{"status":"COMPLETE","data":[]}""");
+        });
 
         var result = await client.GetProductsAsync("obs1");
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_ObsIdNotFound_ReturnsNotFoundFailureWithoutFetchingProducts()
+    {
+        var (client, handler) = CreateClient(_ =>
+            Task.FromResult(JsonResponse("""{"status":"COMPLETE","data":[]}""")));
+
+        var result = await client.GetProductsAsync("obs1");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("mast.observation_not_found", result.Error.Code);
+        Assert.Single(handler.Requests);
     }
 
     [Fact]

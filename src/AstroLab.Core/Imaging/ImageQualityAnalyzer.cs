@@ -40,7 +40,14 @@ public static class ImageQualityAnalyzer
 
         var dynamicRange = stats.Min > 0.0 ? stats.Max / stats.Min : (double?)null;
 
-        var (saturationThreshold, saturationThresholdFromHeader) = ResolveSaturationThreshold(header, descriptor);
+        var saturationThresholdResult = ResolveSaturationThreshold(header, descriptor);
+
+        if (saturationThresholdResult.IsFailure)
+        {
+            return Result<ImageQualityReport>.Failure(saturationThresholdResult.Error);
+        }
+
+        var (saturationThreshold, saturationThresholdFromHeader) = saturationThresholdResult.Value;
 
         var (saturatedPixelCount, saturatedPixelFraction) = CountSaturated(pixels, saturationThreshold, stats.ValidPixelCount);
 
@@ -77,13 +84,18 @@ public static class ImageQualityAnalyzer
         return (nanCount, infiniteCount);
     }
 
-    private static (double? Threshold, bool FromHeader) ResolveSaturationThreshold(FitsHeader header, FitsImageDescriptor descriptor)
+    private static Result<(double? Threshold, bool FromHeader)> ResolveSaturationThreshold(FitsHeader header, FitsImageDescriptor descriptor)
     {
         var saturateResult = header.GetReal(SaturateKeyword);
 
         if (saturateResult.IsSuccess)
         {
             return (saturateResult.Value, true);
+        }
+        
+        if (saturateResult.Error.Category != ErrorCategory.NotFound)
+        {
+            return Result<(double?, bool)>.Failure(saturateResult.Error);
         }
 
         if (descriptor.BitPix.IsFloatingPoint())

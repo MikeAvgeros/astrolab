@@ -96,6 +96,22 @@ public class ImageQualityAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_MalformedSaturateKeyword_ReturnsValidationFailureRatherThanFallingBackToHeuristic()
+    {
+        float[] pixels = [10, 20, 30, 40, 50, 60, 70, 80];
+
+        var header = BuildHeader(
+            "SIMPLE  =                    T", "BITPIX  =                    8", "NAXIS   =                    2",
+            "NAXIS1  =                    4", "NAXIS2  =                    2", "SATURATE= 'not-a-number'       ");
+
+        var result = ImageQualityAnalyzer.Analyze(pixels, header, BuildByteImageDescriptor());
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("fits.header.keyword_wrong_type", result.Error.Code);
+    }
+
+    [Fact]
     public void Analyze_FloatingPointDataWithoutSaturateKeyword_ReportsSaturationNotPresent()
     {
         float[] pixels = [1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f];

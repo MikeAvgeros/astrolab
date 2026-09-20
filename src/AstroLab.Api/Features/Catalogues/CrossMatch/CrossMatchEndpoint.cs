@@ -134,7 +134,12 @@ public static class CrossMatchEndpoint
             var separationResult = AngularSeparation.ComputeArcseconds(
                 centerRightAscension, centerDeclination, source.RightAscension, source.Declination);
 
-            if (separationResult.IsSuccess && separationResult.Value > maxSeparationArcsec)
+            if (separationResult.IsFailure)
+            {
+                return Result<(double, double, double)>.Failure(separationResult.Error);
+            }
+
+            if (separationResult.Value > maxSeparationArcsec)
             {
                 maxSeparationArcsec = separationResult.Value;
             }

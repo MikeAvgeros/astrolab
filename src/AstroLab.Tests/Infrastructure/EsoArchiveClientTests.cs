@@ -93,6 +93,28 @@ public class EsoArchiveClientTests
         Assert.Null(EsoProductSelectionPolicy.SelectBest([]));
     }
 
+    [Fact]
+    public void EsoProductSelectionPolicy_NeverSelectsANonFitsProductEvenIfItWouldOtherwiseScoreHigher()
+    {
+        // The preview would win on data rights + primary semantics + calibration level alone, but
+        // it is not a FITS product and must never be selected.
+        var preview = EsoProduct.Create("p1", "ADP.123", null, "https://x/preview", "#this", null, 5, "image/jpeg", 5000, "PUBLIC");
+
+        var fitsAncillary = EsoProduct.Create("p2", "ADP.123", null, "https://x/ancillary.fits", "#ancillary", null, 0, "application/x-fits", 100, null);
+
+        var selected = EsoProductSelectionPolicy.SelectBest([preview, fitsAncillary]);
+
+        Assert.Equal(fitsAncillary, selected);
+    }
+
+    [Fact]
+    public void EsoProductSelectionPolicy_OnlyNonFitsProducts_ReturnsNull()
+    {
+        var preview = EsoProduct.Create("p1", "ADP.123", null, "https://x/preview", "#this", null, null, "image/jpeg", 5000, "PUBLIC");
+
+        Assert.Null(EsoProductSelectionPolicy.SelectBest([preview]));
+    }
+
     private sealed class StubEsoArchiveApiClient : IEsoArchiveApiClient
     {
         private readonly Func<string, Task<Result<IReadOnlyList<EsoProduct>>>> _getProducts;

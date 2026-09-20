@@ -45,6 +45,22 @@ public class LightCurveComparerTests
     }
 
     [Fact]
+    public void Compare_NearZeroMeanFluxCausingOverflow_ReturnsZeroMeanFluxFailure()
+    {
+        ReadOnlySpan<double> time = [0.0, 1.0, 2.0];
+
+        ReadOnlySpan<double> fluxA = [1e307, 2e307, 3e307];
+
+        ReadOnlySpan<double> fluxB = [0.0009, 0.001, 0.0011];
+
+        var result = LightCurveComparer.Compare(time, fluxA, time, fluxB);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("timeseries.compare.zero_mean_flux", result.Error.Code);
+    }
+
+    [Fact]
     public void Compare_RejectsLengthMismatch()
     {
         ReadOnlySpan<double> timeA = [0.0, 1.0, 2.0];

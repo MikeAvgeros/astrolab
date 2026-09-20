@@ -16,7 +16,7 @@ public class EsoArchiveApiClientTests
             {"name":"proposal_id"},{"name":"obs_creator_name"},{"name":"data_rights"}
           ],
           "data": [
-            ["ADP.123", "M31", "FORS", "FORS2", "image", 2, 58000.5, 58000.6, 300.0, 10.68, 41.27, 0.4, 0.7, "60.A-9203", "Someone", "public"]
+            ["ADP.123", "M31", "FORS", "FORS2", "image", 2, 58000.5, 58000.6, 300.0, 10.68, 41.27, 4e-7, 7e-7, "60.A-9203", "Someone", "public"]
           ]
         }
         """;
@@ -75,6 +75,22 @@ public class EsoArchiveApiClientTests
     }
 
     [Fact]
+    public async Task SearchAsync_TargetContainingLikeWildcards_EscapesThemInTheAdqlQuery()
+    {
+        var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
+
+        var query = ArchiveSearchQuery.Create(target: "NGC_1234%");
+
+        var result = await client.SearchAsync(query);
+
+        Assert.True(result.IsSuccess);
+
+        var decodedBody = Uri.UnescapeDataString(handler.LastRequestBody!.Replace('+', ' '));
+
+        Assert.Contains(@"target_name LIKE '%NGC\_1234\%%' ESCAPE '\'", decodedBody);
+    }
+
+    [Fact]
     public async Task SearchAsync_NoDates_AddsNoTemporalPredicate()
     {
         var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
@@ -130,8 +146,8 @@ public class EsoArchiveApiClientTests
         Assert.Equal(10.68, observation.RightAscension);
         Assert.Equal(41.27, observation.Declination);
         Assert.Equal(300.0, observation.ExposureTimeSeconds);
-        Assert.Equal(0.4, observation.WavelengthMinMicrometres);
-        Assert.Equal(0.7, observation.WavelengthMaxMicrometres);
+        Assert.Equal(0.4, observation.WavelengthMinMicrometres!.Value, precision: 9);
+        Assert.Equal(0.7, observation.WavelengthMaxMicrometres!.Value, precision: 9);
         Assert.Equal("60.A-9203", observation.ProposalId);
         Assert.Equal("Someone", observation.ProposalPi);
         Assert.Equal("public", observation.DataRights);

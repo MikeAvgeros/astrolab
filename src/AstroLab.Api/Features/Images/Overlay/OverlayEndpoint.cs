@@ -44,13 +44,13 @@ public static class OverlayEndpoint
             return detectionResult.Error.ToProblem();
         }
 
-        var renderOptions = RenderOptions.Create(maxDimension: null);
+        var renderOptions = RenderOptions.Create();
 
         var renderResult = FitsImageRenderer.Render(dataset.Pixels, width, height, renderOptions);
 
         return renderResult.ToApiResult(rendered =>
         {
-            var overlaid = OverlayRenderer.DrawSourceMarkers(rendered, detectionResult.Value);
+            var overlaid = OverlayRenderer.DrawSourceMarkers(rendered, detectionResult.Value, width, height);
 
             return Results.File(PngRenderer.Encode(overlaid), "image/png");
         });

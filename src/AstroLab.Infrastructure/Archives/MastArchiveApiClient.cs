@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -24,12 +25,16 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string InstrumentNameParam = "instrument_name";
     private const string MinParam = "t_min";
     private const string MaxParam = "t_max";
+    private const string ObsIdParam = "obs_id";
     private const string UnknownInstrument = "UNKNOWN";
     private const string RequestFormFieldName = "request";
+    private const double MetresToMicrometres = 1e6;
 
     private const string RequestedColumns =
         "obsid,obs_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
         "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,proposal_pi,data_rights";
+
+    private const string CaomObsIdLookupColumns = "obsid,obs_id";
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<MastArchiveApiClient> _logger;
@@ -186,7 +191,16 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                 Error.Validation("mast.invalid_observation_id", "observationId must not be empty."));
         }
 
-        var requestPayload = MastProductRequest.Create(ProductsService, MastProductParams.Create(observationId));
+        var caomObsIdResult = await ResolveCaomObsIdAsync(observationId, cancellationToken);
+
+        if (caomObsIdResult.IsFailure)
+        {
+            return Result<IReadOnlyList<MastProduct>>.Failure(caomObsIdResult.Error);
+        }
+
+        var requestPayload = MastProductRequest.Create(
+            ProductsService,
+            MastProductParams.Create(caomObsIdResult.Value.ToString(CultureInfo.InvariantCulture)));
 
         try
         {
@@ -238,6 +252,64 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         {
             _logger.LogError(ex, "Unexpected error retrieving MAST products for observation {ObservationId}", observationId);
             return Result<IReadOnlyList<MastProduct>>.Failure(
+                Error.Unexpected("mast.products_unexpected_error", "An unexpected error occurred while retrieving products."));
+        }
+    }
+    
+    private async Task<Result<long>> ResolveCaomObsIdAsync(string observationId, CancellationToken cancellationToken)
+    {
+        var requestPayload = MastMashupRequest.Create(
+            CaomFilteredService,
+            MastMashupParams.Create(
+                CaomObsIdLookupColumns,
+                [MastMashupFilter.Create(ObsIdParam, [MastFilterValue.FromText(observationId)])],
+                position: null,
+                radius: null,
+                pageSize: 1));
+
+        try
+        {
+            var content = BuildRequestContent(
+                JsonSerializer.Serialize(requestPayload, MastJsonContext.Default.MastMashupRequest));
+
+            using var response = await _httpClient.PostAsync(InvokeEndpoint, content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<long>.Failure(await MapHttpErrorAsync(response, "mast.products", cancellationToken));
+            }
+
+            var mashupResponse =
+                await response.Content.ReadFromJsonAsync(MastJsonContext.Default.MastMashupResponse, cancellationToken);
+
+            if (mashupResponse is null || mashupResponse.Status != CompleteStatus)
+            {
+                _logger.LogWarning("MAST observation id lookup returned non-complete status: {Status}, Message: {Message}",
+                    mashupResponse?.Status, mashupResponse?.Msg);
+
+                return Result<long>.Failure(
+                    Error.Unexpected("mast.products_failed", mashupResponse?.Msg ?? "Failed to resolve the MAST observation identifier."));
+            }
+
+            var caomObsId = mashupResponse.Data.Select(record => record.CaomObsId).FirstOrDefault(id => id is not null);
+
+            if (caomObsId is not { } resolvedId)
+            {
+                return Result<long>.Failure(
+                    Error.NotFound("mast.observation_not_found", $"MAST observation '{observationId}' was not found."));
+            }
+
+            return Result<long>.Success(resolvedId);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("MAST observation id lookup was canceled for observation {ObservationId}", observationId);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error resolving MAST observation id for observation {ObservationId}", observationId);
+            return Result<long>.Failure(
                 Error.Unexpected("mast.products_unexpected_error", "An unexpected error occurred while retrieving products."));
         }
     }
@@ -306,8 +378,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             rightAscension: observation.RightAscension,
             declination: observation.Declination,
             exposureTimeSeconds: observation.ExposureTime,
-            wavelengthMinMicrometres: observation.WavelengthMin,
-            wavelengthMaxMicrometres: observation.WavelengthMax,
+            wavelengthMinMicrometres: observation.WavelengthMin * MetresToMicrometres,
+            wavelengthMaxMicrometres: observation.WavelengthMax * MetresToMicrometres,
             proposalId: observation.ProposalId,
             proposalPi: observation.ProposalPi,
             dataRights: observation.DataRights);

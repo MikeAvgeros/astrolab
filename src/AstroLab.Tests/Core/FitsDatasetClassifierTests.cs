@@ -68,6 +68,7 @@ public class FitsDatasetClassifierTests
         for (var i = 0; i < columnNames.Length; i++)
         {
             cards.Add($"TTYPE{i + 1}  = '{columnNames[i],-8}'");
+            cards.Add($"TFORM{i + 1}  = '1D      '");
         }
 
         cards.Add("END");
@@ -129,6 +130,37 @@ public class FitsDatasetClassifierTests
         Assert.Equal(FitsDatasetKind.TimeSeries, FitsDatasetClassifier.Classify(hdus));
 
         Assert.True(FitsDatasetClassifier.EnsureKind(hdus, FitsDatasetKind.TimeSeries).IsSuccess);
+    }
+
+    [Fact]
+    public void Classify_TableWithVectorFluxColumn_DoesNotReportTimeSeries()
+    {
+        // TIME/FLUX are present by name, but FLUX has a non-scalar TFORM (repeat count 3), which
+        // TimeSeriesTableDescriptor.Resolve cannot read as a time series column — classification
+        // must agree, rather than reporting TimeSeries and then failing to resolve it later.
+        var hdus = new[]
+        {
+            PrimaryHdu(),
+            BuildHdu(
+                1,
+                "XTENSION= 'BINTABLE'",
+                "BITPIX  =                    8",
+                "NAXIS   =                    2",
+                "NAXIS1  =                   16",
+                "NAXIS2  =                  100",
+                "PCOUNT  =                    0",
+                "GCOUNT  =                    1",
+                "TFIELDS =                    2",
+                "TTYPE1  = 'TIME    '",
+                "TFORM1  = '1D      '",
+                "TTYPE2  = 'FLUX    '",
+                "TFORM2  = '3D      '",
+                "END"),
+        };
+
+        Assert.Equal(FitsDatasetKind.Table, FitsDatasetClassifier.Classify(hdus));
+
+        Assert.False(FitsDatasetClassifier.EnsureKind(hdus, FitsDatasetKind.TimeSeries).IsSuccess);
     }
 
     [Fact]

@@ -111,15 +111,16 @@ public static class LightCurveComparer
                 "timeseries.compare.zero_variance", "One of the light curves is constant, so a correlation coefficient is undefined.");
         }
 
-        if (meanB == 0.0)
-        {
-            return Error.Validation(
-                "timeseries.compare.zero_mean_flux", "The comparison light curve has zero mean flux, so a flux ratio is undefined.");
-        }
-
         var correlation = covariance / Math.Sqrt(varianceA * varianceB);
 
         var fluxRatio = meanA / meanB;
+
+        if (!double.IsFinite(fluxRatio))
+        {
+            return Error.Validation(
+                "timeseries.compare.zero_mean_flux",
+                "The comparison light curve has a mean flux too close to zero, so a flux ratio is undefined.");
+        }
 
         var variabilityRatio = Math.Sqrt(varianceA / varianceB);
 

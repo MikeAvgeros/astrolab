@@ -17,10 +17,18 @@ public static class CfitsIoTimeSeriesReader
 {
     private const double NullValueSubstitute = double.NaN;
     private const long MaxSupportedRowCount = int.MaxValue;
+    
+    private static readonly Lock SyncRoot = new();
 
     public static Task<Result<LightCurveTableData>> ReadAsync(
         string filePath, int hduNumber, TimeSeriesTableDescriptor descriptor, CancellationToken cancellationToken) =>
-        Task.Run(() => Read(filePath, hduNumber, descriptor), cancellationToken);
+        Task.Run(() =>
+        {
+            lock (SyncRoot)
+            {
+                return Read(filePath, hduNumber, descriptor);
+            }
+        }, cancellationToken);
 
     private static Result<LightCurveTableData> Read(string filePath, int hduNumber, TimeSeriesTableDescriptor descriptor)
     {

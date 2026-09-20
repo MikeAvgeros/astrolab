@@ -16,6 +16,7 @@ public static class SpectrumCrossCorrelator
     private const int MinimumOverlapPoints = 5;
     private const double MaxLagFraction = 0.25;
     private const double Epsilon = 1e-12;
+    private const int MaxStackallocLength = 1024;
     
     public static Result<(double PeakCorrelation, double LagBins)> CorrelatePixelLag(
         ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
@@ -38,7 +39,11 @@ public static class SpectrumCrossCorrelator
 
         var bestCorrelation = double.NegativeInfinity;
 
-        Span<double> correlationByLag = stackalloc double[2 * maxLag + 1];
+        var lagGridLength = 2 * maxLag + 1;
+
+        Span<double> correlationByLag = lagGridLength <= MaxStackallocLength
+            ? stackalloc double[lagGridLength]
+            : new double[lagGridLength];
 
         for (var lag = -maxLag; lag <= maxLag; lag++)
         {
@@ -173,9 +178,9 @@ public static class SpectrumCrossCorrelator
             return double.NaN;
         }
 
-        Span<double> a = stackalloc double[overlap];
+        Span<double> a = overlap <= MaxStackallocLength ? stackalloc double[overlap] : new double[overlap];
 
-        Span<double> b = stackalloc double[overlap];
+        Span<double> b = overlap <= MaxStackallocLength ? stackalloc double[overlap] : new double[overlap];
 
         for (var i = 0; i < overlap; i++)
         {

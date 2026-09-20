@@ -224,8 +224,8 @@ public class EsoArchiveApiClientTests
         Assert.Equal("#this", result.Value[1].ProductType);
         Assert.Equal("application/x-fits", result.Value[1].Format);
         Assert.Equal(200000, result.Value[1].Size);
-
-        var decodedRequestUri = Uri.UnescapeDataString(handler.LastRequest!.RequestUri!.ToString());
+        
+        var decodedRequestUri = Uri.UnescapeDataString(handler.LastRequest!.RequestUri!.PathAndQuery);
         Assert.Contains("ID=ivo://eso.org/csp#ADP.123", decodedRequestUri);
         Assert.Contains("RESPONSEFORMAT=json", decodedRequestUri);
     }

@@ -88,7 +88,7 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
                 Error.Validation("eso.invalid_dataset_id", "datasetId must not be empty."));
         }
 
-        var requestUri = $"{DataLinkEndpoint}?ID={DatasetIdIvoPrefix}{HttpUtility.UrlEncode(datasetId)}&RESPONSEFORMAT=json";
+        var requestUri = $"{DataLinkEndpoint}?ID={HttpUtility.UrlEncode(DatasetIdIvoPrefix + datasetId)}&RESPONSEFORMAT=json";
 
         try
         {

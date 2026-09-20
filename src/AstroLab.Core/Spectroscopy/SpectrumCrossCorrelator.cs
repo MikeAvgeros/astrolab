@@ -16,6 +16,7 @@ public static class SpectrumCrossCorrelator
     private const int MinimumOverlapPoints = 5;
     private const double MaxLagFraction = 0.25;
     private const double Epsilon = 1e-12;
+    private const int MaxStackallocLength = 1024;
     
     public static Result<(double PeakCorrelation, double LagBins)> CorrelatePixelLag(
         ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB)
@@ -38,7 +39,11 @@ public static class SpectrumCrossCorrelator
 
         var bestCorrelation = double.NegativeInfinity;
 
-        Span<double> correlationByLag = stackalloc double[2 * maxLag + 1];
+        var lagGridLength = 2 * maxLag + 1;
+
+        Span<double> correlationByLag = lagGridLength <= MaxStackallocLength
+            ? stackalloc double[lagGridLength]
+            : new double[lagGridLength];
 
         for (var lag = -maxLag; lag <= maxLag; lag++)
         {
@@ -65,7 +70,7 @@ public static class SpectrumCrossCorrelator
         return (bestCorrelation, refinedLag);
     }
     
-    public static Result<(double Redshift, double PeakCorrelation)> CorrelateAgainstTemplate(
+    public static Result<(double Redshift, double PeakCorrelation, double RedshiftUncertainty)> CorrelateAgainstTemplate(
         ReadOnlySpan<double> observedWavelengths,
         ReadOnlySpan<double> observedFlux,
         ReadOnlySpan<double> templateWavelengths,
@@ -157,7 +162,8 @@ public static class SpectrumCrossCorrelator
                 "No trial redshift produced enough overlap between the observed and template wavelength ranges.");
         }
 
-        return (bestRedshift, bestCorrelation);
+        // Half the trial grid's step size is a reasonable resolution-limited uncertainty on the peak.
+        return (bestRedshift, bestCorrelation, step / 2.0);
     }
 
     private static double CorrelateAtLag(ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB, int lag)
@@ -173,9 +179,9 @@ public static class SpectrumCrossCorrelator
             return double.NaN;
         }
 
-        Span<double> a = stackalloc double[overlap];
+        Span<double> a = overlap <= MaxStackallocLength ? stackalloc double[overlap] : new double[overlap];
 
-        Span<double> b = stackalloc double[overlap];
+        Span<double> b = overlap <= MaxStackallocLength ? stackalloc double[overlap] : new double[overlap];
 
         for (var i = 0; i < overlap; i++)
         {

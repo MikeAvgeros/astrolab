@@ -109,6 +109,6 @@ public sealed record ObservationHeaderMetadataDto
     {
         var result = header.GetInteger(keyword);
 
-        return result.IsSuccess ? (int)result.Value : null;
+        return result.IsSuccess && result.Value is >= int.MinValue and <= int.MaxValue ? (int)result.Value : null;
     }
 }

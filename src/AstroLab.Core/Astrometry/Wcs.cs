@@ -22,6 +22,8 @@ public readonly record struct Wcs
     private const double SupportedLonPoleDegrees = 180.0;
     private const double DefaultLonPoleAtPoleDegrees = 0.0;
     private const double LonPoleToleranceDegrees = 1e-6;
+
+    private const double MaxArcProjectionRadiusDegrees = 180.0;
     
     private const double RelativeSingularityTolerance = 1e-10;
 
@@ -318,6 +320,8 @@ public readonly record struct Wcs
     {
         WcsProjection.Sin when radiusDegrees > RadiansToDegrees => Error.Validation(
             "astrometry.point_outside_projection", "Pixel position lies outside the valid radius of a SIN projection."),
+        WcsProjection.Arc when radiusDegrees > MaxArcProjectionRadiusDegrees => Error.Validation(
+            "astrometry.point_outside_projection", "Pixel position lies outside the valid radius of an ARC projection."),
         _ => Result<Unit>.Success(Unit.Value),
     };
 

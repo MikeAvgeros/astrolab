@@ -16,8 +16,10 @@ public sealed record LineFitRequest
         InitialFwhm = initialFwhm;
     }
 
+    /// <summary>In the file's native dispersion unit (its CRVAL1/CDELT1 solution — typically Ångström for optical spectra), not nanometers.</summary>
     public double MinWavelength { get; }
 
+    /// <summary>In the file's native dispersion unit (its CRVAL1/CDELT1 solution — typically Ångström for optical spectra), not nanometers.</summary>
     public double MaxWavelength { get; }
 
     public double? InitialCentre { get; }

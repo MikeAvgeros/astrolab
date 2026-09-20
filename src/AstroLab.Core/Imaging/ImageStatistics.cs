@@ -18,6 +18,7 @@ public readonly record struct ImageStatistics
     private const double Epsilon = 1e-12;
 
     public const int DefaultDisplayHistogramBinCount = 256;
+    public const int MaxDisplayHistogramBinCount = 65536;
 
     private ImageStatistics(double min, double max, double mean, double stdDev, long validPixelCount, long totalPixelCount)
     {
@@ -118,6 +119,11 @@ public readonly record struct ImageStatistics
                 "Require 0 <= lowerPercentile < upperPercentile <= 100.");
         }
 
+        if (histogramBins <= 0)
+        {
+            return Error.Validation("imaging.invalid_histogram_bin_count", "histogramBins must be positive.");
+        }
+
         var statsResult = Compute(pixels);
 
         if (statsResult.IsFailure)
@@ -165,6 +171,11 @@ public readonly record struct ImageStatistics
             }
         }
 
+        if (histogramBins <= 0)
+        {
+            return Error.Validation("imaging.invalid_histogram_bin_count", "histogramBins must be positive.");
+        }
+
         if (Math.Abs(stats.Max - stats.Min) < Epsilon)
         {
             results.Fill(stats.Min);
@@ -191,9 +202,10 @@ public readonly record struct ImageStatistics
     public static Result<ImageHistogram> ComputeHistogram(
         ReadOnlySpan<float> pixels, ImageStatistics stats, int binCount = DefaultDisplayHistogramBinCount)
     {
-        if (binCount <= 0)
+        if (binCount is <= 0 or > MaxDisplayHistogramBinCount)
         {
-            return Error.Validation("imaging.invalid_histogram_bin_count", "binCount must be positive.");
+            return Error.Validation(
+                "imaging.invalid_histogram_bin_count", $"binCount must be between 1 and {MaxDisplayHistogramBinCount}.");
         }
 
         var binEdges = new double[binCount + 1];

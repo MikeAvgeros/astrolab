@@ -11,5 +11,19 @@ public sealed record HistogramRequest
 
     public int BinCount { get; }
 
-    public static HistogramRequest Create(int binCount = ImageStatistics.DefaultDisplayHistogramBinCount) => new(binCount);
+    public static HistogramRequest Create(int binCount = ImageStatistics.DefaultDisplayHistogramBinCount)
+    {
+        var request = new HistogramRequest(binCount);
+
+        request.Validate();
+
+        return request;
+    }
+
+    private void Validate()
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(BinCount);
+
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(BinCount, ImageStatistics.MaxDisplayHistogramBinCount);
+    }
 }

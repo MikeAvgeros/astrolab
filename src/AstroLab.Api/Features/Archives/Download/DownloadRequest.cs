@@ -28,5 +28,10 @@ public sealed record DownloadRequest
     public void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DatasetId);
+
+        if (!Enum.IsDefined(Archive))
+        {
+            throw new ArgumentOutOfRangeException(nameof(Archive), Archive, "Unknown archive source.");
+        }
     }
 }

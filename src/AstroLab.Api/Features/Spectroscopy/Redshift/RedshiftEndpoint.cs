@@ -59,10 +59,6 @@ public static class RedshiftEndpoint
             maxRedshift);
 
         return correlateResult.ToApiResult(correlate =>
-        {
-            var gridResolution = (maxRedshift - minRedshift) / (SpectrumCrossCorrelator.DefaultRedshiftGridSize - 1);
-
-            return Results.Ok(RedshiftEstimationResponse.Create(fileId, correlate.Redshift, gridResolution / 2.0, "cross_correlation"));
-        });
+            Results.Ok(RedshiftEstimationResponse.Create(fileId, correlate.Redshift, correlate.RedshiftUncertainty, "cross_correlation")));
     }
 }

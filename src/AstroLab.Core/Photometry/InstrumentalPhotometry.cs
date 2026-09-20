@@ -55,6 +55,11 @@ public static class InstrumentalPhotometry
     public static Result<double> ComputeSurfaceBrightness(
         double magnitude, double apertureAreaPixels, double pixelScaleXDegrees, double pixelScaleYDegrees)
     {
+        if (!double.IsFinite(magnitude))
+        {
+            return Error.Validation("photometry.surfacebrightness.invalid_magnitude", "magnitude must be finite.");
+        }
+
         if (apertureAreaPixels <= 0.0 || !double.IsFinite(apertureAreaPixels))
         {
             return Error.Validation(

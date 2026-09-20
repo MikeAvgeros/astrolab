@@ -18,6 +18,12 @@ public static class AngularSeparation
     public static Result<double> ComputeArcseconds(
         double rightAscension1Degrees, double declination1Degrees, double rightAscension2Degrees, double declination2Degrees)
     {
+        if (!double.IsFinite(rightAscension1Degrees) || !double.IsFinite(declination1Degrees)
+            || !double.IsFinite(rightAscension2Degrees) || !double.IsFinite(declination2Degrees))
+        {
+            return Error.Validation("astrometry.non_finite_coordinate", "rightAscension and declination must be finite.");
+        }
+
         if (declination1Degrees is < MinDeclinationDegrees or > MaxDeclinationDegrees
             || declination2Degrees is < MinDeclinationDegrees or > MaxDeclinationDegrees)
         {

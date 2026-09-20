@@ -33,17 +33,15 @@ public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
                 Error.Validation("eso.invalid_data_uri", "The product's access URI must not be empty."));
         }
 
+        HttpResponseMessage? response = null;
+
         try
         {
-            var response = await _httpClient.GetAsync(product.DataUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response = await _httpClient.GetAsync(product.DataUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await MapHttpErrorAsync(response, "eso.download", cancellationToken);
-
-                response.Dispose();
-
-                return Result<ArchiveDownload>.Failure(error);
+                return Result<ArchiveDownload>.Failure(await MapHttpErrorAsync(response, "eso.download", cancellationToken));
             }
 
             var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -54,7 +52,11 @@ public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
 
             var contentLength = response.Content.Headers.ContentLength;
 
-            return Result<ArchiveDownload>.Success(new ArchiveDownload(fileName, contentLength, pipeReader, response));
+            var download = new ArchiveDownload(fileName, contentLength, pipeReader, response);
+
+            response = null; // Ownership transferred to ArchiveDownload, which disposes it.
+
+            return Result<ArchiveDownload>.Success(download);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -66,6 +68,10 @@ public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
             _logger.LogError(ex, "Exception occurred while downloading ESO product {ProductId}", product.Id);
             return Result<ArchiveDownload>.Failure(
                 Error.Unexpected("eso.download_unexpected_error", "An unexpected error occurred while downloading the product."));
+        }
+        finally
+        {
+            response?.Dispose();
         }
     }
 

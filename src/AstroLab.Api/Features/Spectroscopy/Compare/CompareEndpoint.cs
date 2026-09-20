@@ -12,8 +12,6 @@ namespace AstroLab.Api.Features.Spectroscopy.Compare;
 /// </summary>
 public static class CompareEndpoint
 {
-    private const double SpeedOfLightKmPerSec = 299792.458;
-
     extension(IEndpointRouteBuilder group)
     {
         public void MapCompareEndpoint()
@@ -124,8 +122,8 @@ public static class CompareEndpoint
                 "spectroscopy.compare.invalid_wavelength_solution", "CRVAL1 must be a positive reference wavelength.");
         }
 
-        var wavelengthShift = lagBins * dispersionPerPixelResult.Value;
+        var observedWavelength = referenceWavelength + (lagBins * dispersionPerPixelResult.Value);
 
-        return SpeedOfLightKmPerSec * wavelengthShift / referenceWavelength;
+        return RadialVelocityEstimator.EstimateKilometersPerSecond(observedWavelength, referenceWavelength);
     }
 }

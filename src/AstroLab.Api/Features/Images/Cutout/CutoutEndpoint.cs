@@ -84,6 +84,13 @@ public static class CutoutEndpoint
 
         var height = request.Height ?? imageHeight - y;
 
+        if (width <= 0 || height <= 0 || width > imageWidth - x || height > imageHeight - y)
+        {
+            return Error.Validation(
+                "image.cutout.out_of_bounds",
+                $"Requested region (x={x}, y={y}, width={width}, height={height}) lies outside the source image ({imageWidth}x{imageHeight}).");
+        }
+
         return (x, y, width, height);
     }
 

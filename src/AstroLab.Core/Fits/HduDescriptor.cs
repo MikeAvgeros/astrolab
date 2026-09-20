@@ -52,6 +52,9 @@ public readonly record struct HduDescriptor
         return new HduDescriptor(index, type, header, image);
     }
 
+    // A missing or invalid NAXIS1/NAXIS2/PCOUNT is treated as 0 rather than a validation failure:
+    // this is only a size estimate (e.g. for storage/display), not a value used in scientific
+    // calculations, so silently under-estimating it is preferable to failing HDU classification.
     private long TableDataSizeBytes()
     {
         var rowLength = BoundedNonNegative(Header.GetInteger("NAXIS1").GetValueOrDefault(NoDataBytes));

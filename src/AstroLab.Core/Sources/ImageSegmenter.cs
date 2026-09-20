@@ -334,7 +334,7 @@ public static class ImageSegmenter
 
                 var dy = peaks[i].Y - y;
 
-                var distanceSquared = (double)(dx * dx + (dy * dy));
+                var distanceSquared = (double)dx * dx + (double)dy * dy;
 
                 if (distanceSquared < bestDistanceSquared)
                 {

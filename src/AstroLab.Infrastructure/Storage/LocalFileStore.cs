@@ -64,11 +64,6 @@ public sealed class LocalFileStore : ILocalFileStore
 
         var directory = Path.GetDirectoryName(path);
 
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         var succeeded = false;
 
         long totalBytesWritten = 0;
@@ -77,6 +72,11 @@ public sealed class LocalFileStore : ILocalFileStore
 
         try
         {
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: DefaultFileStreamBufferSize, useAsync: true);
 
             while (true)
@@ -114,7 +114,7 @@ public sealed class LocalFileStore : ILocalFileStore
 
             throw;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             await source.CompleteAsync(ex);
 
@@ -156,7 +156,7 @@ public sealed class LocalFileStore : ILocalFileStore
 
             return Result<Stream>.Success(stream);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return Error.Infrastructure("storage.open_failed", $"Failed to open staged file '{relativeKey}': {ex.Message}");
         }
@@ -180,7 +180,7 @@ public sealed class LocalFileStore : ILocalFileStore
 
             return Result<Unit>.Success(Unit.Value);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return Error.Infrastructure("storage.delete_failed", $"Failed to delete staged file '{relativeKey}': {ex.Message}");
         }
@@ -192,7 +192,7 @@ public sealed class LocalFileStore : ILocalFileStore
         {
             File.Delete(path);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
     }

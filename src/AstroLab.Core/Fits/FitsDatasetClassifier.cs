@@ -19,6 +19,7 @@ public static class FitsDatasetClassifier
     private const int NoFields = 0;
     private const int SingleAxisDimension = 1;
     private const int MinimumTimeSeriesFieldCount = 2;
+    private const long MaxFieldCount = 999;
     
     private static readonly string[] MeasurementColumnNames = ["FLUX", "MAG", "RATE", "COUNTS", "SAP_FLUX", "PDCSAP_FLUX"];
     
@@ -110,7 +111,7 @@ public static class FitsDatasetClassifier
 
         var fieldCount = hdu.Header.GetInteger(TotalFieldsKeyword).GetValueOrDefault(NoFields);
 
-        if (fieldCount < MinimumTimeSeriesFieldCount)
+        if (fieldCount < MinimumTimeSeriesFieldCount || fieldCount > MaxFieldCount)
         {
             return false;
         }
@@ -121,7 +122,7 @@ public static class FitsDatasetClassifier
 
     private static bool HasColumn(FitsHeader header, long fieldCount, string columnName)
     {
-        for (var field = FirstFieldNumber; field <= fieldCount; field++)
+        for (long field = FirstFieldNumber; field <= fieldCount; field++)
         {
             var nameResult = header.GetString($"TTYPE{field}");
 

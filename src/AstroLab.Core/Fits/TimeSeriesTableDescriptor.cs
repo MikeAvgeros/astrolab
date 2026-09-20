@@ -10,6 +10,7 @@ public readonly record struct TimeSeriesTableDescriptor
     private const string TimeColumnName = "TIME";
     private const int FirstFieldNumber = 1;
     private const int ScalarRepeatCount = 1;
+    private const long MaxFieldCount = 999;
 
     private static readonly string[] MeasurementColumnNames =
         ["FLUX", "MAG", "RATE", "COUNTS", "SAP_FLUX", "PDCSAP_FLUX"];
@@ -42,6 +43,14 @@ public readonly record struct TimeSeriesTableDescriptor
             return Result<TimeSeriesTableDescriptor>.Failure(fieldCountResult.Error);
         }
 
+        if (fieldCountResult.Value is < 0 or > MaxFieldCount)
+        {
+            return Error.Validation(
+                "fits.header.invalid_tfields", $"TFIELDS must be between 0 and {MaxFieldCount}, was {fieldCountResult.Value}.");
+        }
+
+        var fieldCount = (int)fieldCountResult.Value;
+
         var rowCountResult = hdu.Header.GetInteger(RowCountKeyword);
 
         if (rowCountResult.IsFailure)
@@ -55,14 +64,14 @@ public readonly record struct TimeSeriesTableDescriptor
                 "fits.header.invalid_naxis", $"NAXIS2 must be non-negative, was {rowCountResult.Value}.");
         }
 
-        var timeColumnResult = FindColumn(hdu.Header, (int)fieldCountResult.Value, TimeColumnName);
+        var timeColumnResult = FindColumn(hdu.Header, fieldCount, TimeColumnName);
 
         if (timeColumnResult.IsFailure)
         {
             return Result<TimeSeriesTableDescriptor>.Failure(timeColumnResult.Error);
         }
 
-        var fluxColumnResult = FindMeasurementColumn(hdu.Header, (int)fieldCountResult.Value);
+        var fluxColumnResult = FindMeasurementColumn(hdu.Header, fieldCount);
 
         if (fluxColumnResult.IsFailure)
         {
@@ -169,6 +178,9 @@ public readonly record struct TimeSeriesTableDescriptor
             return ScalarRepeatCount;
         }
 
-        return int.Parse(tform.AsSpan(0, digitCount), NumberStyles.Integer, CultureInfo.InvariantCulture);
+        return int.TryParse(tform.AsSpan(0, digitCount), NumberStyles.Integer, CultureInfo.InvariantCulture, out var repeatCount)
+            ? repeatCount
+            : Error.Validation(
+                "fits.header.invalid_tform", $"TFORM value '{tform}' has a repeat count that is not a valid 32-bit integer.");
     }
 }

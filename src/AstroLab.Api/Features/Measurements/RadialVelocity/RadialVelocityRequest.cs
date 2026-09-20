@@ -8,8 +8,10 @@ public sealed record RadialVelocityRequest
         ObservedWavelengthNm = observedWavelengthNm;
     }
 
+    /// <summary>In nanometers. Note this differs from the spectroscopy endpoints (e.g. /lines, /redshift), which use the file's native dispersion unit (typically Ångström) — convert before passing a value between them.</summary>
     public double RestWavelengthNm { get; }
 
+    /// <summary>In nanometers. Note this differs from the spectroscopy endpoints (e.g. /lines, /redshift), which use the file's native dispersion unit (typically Ångström) — convert before passing a value between them.</summary>
     public double ObservedWavelengthNm { get; }
 
     public static RadialVelocityRequest Create(double restWavelengthNm, double observedWavelengthNm)

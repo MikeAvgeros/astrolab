@@ -26,14 +26,16 @@ public sealed record RedshiftEstimationRequest
         MaxRedshift = maxRedshift;
     }
     
+    /// <summary>In the same wavelength unit as <see cref="RestWavelengths"/> (typically the file's native dispersion unit, e.g. Ångström), not nanometers.</summary>
     public ImmutableList<double>? ObservedWavelengths { get; }
-    
+
+    /// <summary>In the same wavelength unit as <see cref="ObservedWavelengths"/> (typically the file's native dispersion unit, e.g. Ångström), not nanometers.</summary>
     public ImmutableList<double>? RestWavelengths { get; }
-    
+
     public ImmutableList<double>? ObservedSpectrumWavelengths { get; }
-    
+
     public ImmutableList<double>? ObservedFlux { get; }
-    
+
     public ImmutableList<double>? TemplateWavelengths { get; }
     
     public ImmutableList<double>? TemplateFlux { get; }

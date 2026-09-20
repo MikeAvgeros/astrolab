@@ -29,6 +29,16 @@ public readonly record struct CatalogueMatchCandidate
 
         ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
 
+        if (!double.IsFinite(rightAscension))
+        {
+            throw new ArgumentOutOfRangeException(nameof(rightAscension), rightAscension, "rightAscension must be finite.");
+        }
+
+        if (!double.IsFinite(declination))
+        {
+            throw new ArgumentOutOfRangeException(nameof(declination), declination, "declination must be finite.");
+        }
+
         return new CatalogueMatchCandidate(catalogueId, identifier, rightAscension, declination, magnitude);
     }
 }

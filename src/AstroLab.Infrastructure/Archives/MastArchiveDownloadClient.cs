@@ -37,19 +37,17 @@ public sealed class MastArchiveDownloadClient : IMastArchiveDownloadClient
 
         var requestUri = $"{DownloadEndpoint}?uri={Uri.EscapeDataString(product.DataUri)}";
 
+        HttpResponseMessage? response = null;
+
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await MapHttpErrorAsync(response, "mast.download", cancellationToken);
-
-                response.Dispose();
-
-                return Result<ArchiveDownload>.Failure(error);
+                return Result<ArchiveDownload>.Failure(await MapHttpErrorAsync(response, "mast.download", cancellationToken));
             }
 
             var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -60,7 +58,11 @@ public sealed class MastArchiveDownloadClient : IMastArchiveDownloadClient
 
             var contentLength = response.Content.Headers.ContentLength;
 
-            return Result<ArchiveDownload>.Success(new ArchiveDownload(fileName, contentLength, pipeReader, response));
+            var download = new ArchiveDownload(fileName, contentLength, pipeReader, response);
+
+            response = null; // Ownership transferred to ArchiveDownload, which disposes it.
+
+            return Result<ArchiveDownload>.Success(download);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -72,6 +74,10 @@ public sealed class MastArchiveDownloadClient : IMastArchiveDownloadClient
             _logger.LogError(ex, "Unexpected error during download for MAST product {DataUri}", product.DataUri);
             return Result<ArchiveDownload>.Failure(
                 Error.Unexpected("mast.download_unexpected_error", "An unexpected error occurred while downloading the product."));
+        }
+        finally
+        {
+            response?.Dispose();
         }
     }
 

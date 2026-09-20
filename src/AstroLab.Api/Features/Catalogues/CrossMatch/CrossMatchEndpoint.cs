@@ -75,9 +75,14 @@ public static class CrossMatchEndpoint
             return Results.Ok(CrossMatchResponse.Create(request.FileId, []));
         }
 
-        var field = ComputeSearchField(sourcePositions, request.RadiusArcsec);
+        var fieldResult = ComputeSearchField(sourcePositions, request.RadiusArcsec);
 
-        var candidatesResult = await ResolveCandidatesAsync(request.CatalogueIds, field, catalogueClient, cancellationToken);
+        if (fieldResult.IsFailure)
+        {
+            return fieldResult.Error.ToProblem();
+        }
+
+        var candidatesResult = await ResolveCandidatesAsync(request.CatalogueIds, fieldResult.Value, catalogueClient, cancellationToken);
 
         if (candidatesResult.IsFailure)
         {
@@ -109,12 +114,18 @@ public static class CrossMatchEndpoint
         return builder.ToImmutable();
     }
 
-    private static (double CenterRightAscension, double CenterDeclination, double RadiusArcsec) ComputeSearchField(
+    private static Result<(double CenterRightAscension, double CenterDeclination, double RadiusArcsec)> ComputeSearchField(
         IReadOnlyList<(int SourceId, double RightAscension, double Declination)> sourcePositions, double matchRadiusArcsec)
     {
-        var centerRightAscension = sourcePositions.Average(source => source.RightAscension);
+        var centroidResult = SphericalCentroid.Compute(
+            sourcePositions.Select(source => (source.RightAscension, source.Declination)).ToArray());
 
-        var centerDeclination = sourcePositions.Average(source => source.Declination);
+        if (centroidResult.IsFailure)
+        {
+            return Result<(double, double, double)>.Failure(centroidResult.Error);
+        }
+
+        var (centerRightAscension, centerDeclination) = centroidResult.Value;
 
         var maxSeparationArcsec = 0.0;
 

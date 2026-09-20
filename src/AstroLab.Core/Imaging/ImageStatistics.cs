@@ -118,6 +118,11 @@ public readonly record struct ImageStatistics
                 "Require 0 <= lowerPercentile < upperPercentile <= 100.");
         }
 
+        if (histogramBins <= 0)
+        {
+            return Error.Validation("imaging.invalid_histogram_bin_count", "histogramBins must be positive.");
+        }
+
         var statsResult = Compute(pixels);
 
         if (statsResult.IsFailure)
@@ -163,6 +168,11 @@ public readonly record struct ImageStatistics
             {
                 return Error.Validation("imaging.invalid_percentile_range", "Each percentile must be between 0 and 100 inclusive.");
             }
+        }
+
+        if (histogramBins <= 0)
+        {
+            return Error.Validation("imaging.invalid_histogram_bin_count", "histogramBins must be positive.");
         }
 
         if (Math.Abs(stats.Max - stats.Min) < Epsilon)

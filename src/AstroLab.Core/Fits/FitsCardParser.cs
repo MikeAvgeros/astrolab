@@ -192,7 +192,9 @@ public static class FitsCardParser
 
         var normalized = token.Replace('D', 'E').Replace('d', 'e');
 
-        if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var real))
+        // NumberStyles.Float still recognizes the literal tokens "NaN"/"Infinity"/"-Infinity", which
+        // are not legal FITS numeric values; treat them as undefined rather than a "successful" real.
+        if (double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var real) && double.IsFinite(real))
         {
             return FitsValue.OfReal(real);
         }

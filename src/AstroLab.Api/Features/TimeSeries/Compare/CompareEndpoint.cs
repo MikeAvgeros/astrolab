@@ -5,9 +5,11 @@ using AstroLab.Infrastructure.Storage;
 namespace AstroLab.Api.Features.TimeSeries.Compare;
 
 /// <summary>
-/// Compares a staged light curve against one or more other staged light curves (from different
-/// dates, instruments, or targets), reporting their correlation, mean magnitude offset, flux and
-/// variability ratios, and (where the sampling allows it) a comparison of their best-fit periods.
+/// Compares a staged light curve against one or more other staged light curves that are
+/// time-aligned sample-for-sample with it (e.g. simultaneous target/comparison-star photometry
+/// from the same exposures — see <see cref="LightCurveComparer"/>), reporting their correlation,
+/// mean magnitude offset, flux and variability ratios, and (where the sampling allows it) a
+/// comparison of their best-fit periods.
 /// </summary>
 public static class CompareEndpoint
 {
@@ -82,7 +84,15 @@ public static class CompareEndpoint
             return null;
         }
 
-        var searchResult = LombScarglePeriodogram.Search(time, flux, rangeResult.Value.MinPeriod, rangeResult.Value.MaxPeriod);
+        var detrendResult = LightCurveDetrender.Detrend(time, flux, "linear");
+
+        if (detrendResult.IsFailure)
+        {
+            return null;
+        }
+
+        var searchResult = LombScarglePeriodogram.Search(
+            time, detrendResult.Value, rangeResult.Value.MinPeriod, rangeResult.Value.MaxPeriod);
 
         return searchResult.IsSuccess ? searchResult.Value.BestPeriod : null;
     }

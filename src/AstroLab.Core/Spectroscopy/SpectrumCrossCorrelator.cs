@@ -70,7 +70,7 @@ public static class SpectrumCrossCorrelator
         return (bestCorrelation, refinedLag);
     }
     
-    public static Result<(double Redshift, double PeakCorrelation)> CorrelateAgainstTemplate(
+    public static Result<(double Redshift, double PeakCorrelation, double RedshiftUncertainty)> CorrelateAgainstTemplate(
         ReadOnlySpan<double> observedWavelengths,
         ReadOnlySpan<double> observedFlux,
         ReadOnlySpan<double> templateWavelengths,
@@ -162,7 +162,8 @@ public static class SpectrumCrossCorrelator
                 "No trial redshift produced enough overlap between the observed and template wavelength ranges.");
         }
 
-        return (bestRedshift, bestCorrelation);
+        // Half the trial grid's step size is a reasonable resolution-limited uncertainty on the peak.
+        return (bestRedshift, bestCorrelation, step / 2.0);
     }
 
     private static double CorrelateAtLag(ReadOnlySpan<double> fluxA, ReadOnlySpan<double> fluxB, int lag)

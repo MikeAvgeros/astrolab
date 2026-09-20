@@ -73,6 +73,34 @@ public sealed class ArchiveWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task SearchObservations_WithFromAndToQueryParameters_ForwardsDateRangeToArchiveQuery()
+    {
+        var observation = ArchiveObservation.Create(
+            "obs1", "M31", "ACS/WFC", new DateTimeOffset(2017, 9, 1, 0, 0, 0, TimeSpan.Zero), ArchiveSource.Eso);
+
+        ArchiveSearchQuery? capturedQuery = null;
+
+        var eso = new StubEsoArchiveClient(
+            search: (query, _) =>
+            {
+                capturedQuery = query;
+                return Task.FromResult(Result<IReadOnlyList<ArchiveObservation>>.Success([observation]));
+            },
+            download: (_, _) => throw new InvalidOperationException("Search should not download."));
+
+        var client = CreateClientWithStubArchives(eso, NotCalledMastClient());
+
+        var response = await client.GetAsync(
+            "/api/archives/search?archive=Eso&target=M31&from=2020-01-01T00:00:00Z&to=2020-12-31T00:00:00Z");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), capturedQuery.Value.From);
+        Assert.Equal(new DateTimeOffset(2020, 12, 31, 0, 0, 0, TimeSpan.Zero), capturedQuery.Value.To);
+    }
+
+    [Fact]
     public async Task SearchObservations_ArchiveReturnsFailure_MapsToProblemResponse()
     {
         var eso = new StubEsoArchiveClient(

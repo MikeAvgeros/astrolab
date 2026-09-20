@@ -1,4 +1,5 @@
 using AstroLab.Core.Imaging;
+using AstroLab.Core.Result;
 using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.Images.Compare;
@@ -38,6 +39,16 @@ public static class CompareEndpoint
         using var comparison = comparisonResult.Value;
 
         var (width, height) = file.Image.Resolve2DDimensions();
+
+        var (comparisonWidth, comparisonHeight) = comparison.Image.Resolve2DDimensions();
+
+        if (comparisonWidth != width || comparisonHeight != height)
+        {
+            return Error.Validation(
+                "imaging.compare.invalid_image_bounds",
+                $"Both images must share the same dimensions; the first is {width}x{height}, the comparison is {comparisonWidth}x{comparisonHeight}.")
+                .ToProblem();
+        }
 
         var differenceResult = ImageComparer.Compare(file.Pixels, comparison.Pixels, width, height);
 

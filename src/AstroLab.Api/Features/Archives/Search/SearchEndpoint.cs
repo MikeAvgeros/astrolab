@@ -22,14 +22,16 @@ public static class SearchEndpoint
         CancellationToken cancellationToken,
         string? mission = null,
         string? instrument = null,
+        DateTimeOffset? from = null,
+        DateTimeOffset? to = null,
         double? searchRadiusDegrees = null,
         int maxResults = ObservationSearchRequest.DefaultMaxResults)
     {
-        var request = ObservationSearchRequest.Create(archive, target, mission, instrument, searchRadiusDegrees, maxResults);
+        var request = ObservationSearchRequest.Create(archive, target, mission, instrument, from, to, searchRadiusDegrees, maxResults);
 
         var query = request.SearchRadiusDegrees is { } searchRadiusDegreesValue
-            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, searchRadiusDegrees: searchRadiusDegreesValue, maxResults: request.MaxResults)
-            : ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, maxResults: request.MaxResults);
+            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, request.From, request.To, searchRadiusDegreesValue, request.MaxResults)
+            : ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, request.From, request.To, maxResults: request.MaxResults);
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 

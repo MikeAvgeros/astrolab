@@ -43,6 +43,15 @@ public static class FitsHeaderReader
 
             var skipBytes = RoundUpToBlockSize(descriptor.DataSizeBytes);
 
+            var remainingBytes = stream.Length - stream.Position;
+
+            if (skipBytes < 0 || skipBytes > remainingBytes)
+            {
+                return Error.Validation(
+                    "fits.header.invalid_data_size",
+                    $"HDU at index {index} declares a data size that produces an invalid skip distance.");
+            }
+
             if (skipBytes > 0)
             {
                 stream.Seek(skipBytes, SeekOrigin.Current);

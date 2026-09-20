@@ -83,7 +83,8 @@ public sealed class VizierTapClient : ICatalogueClient
         return
             $"SELECT TOP {query.MaxResults} \"{idColumn}\" AS catalogue_id, \"{raColumn}\" AS ra, \"{decColumn}\" AS dec, {magnitudeSelect} AS mag " +
             $"FROM \"{tableName}\" " +
-            $"WHERE 1=CONTAINS(POINT('ICRS',\"{raColumn}\",\"{decColumn}\"),CIRCLE('ICRS',{rightAscension},{declination},{radiusDegrees}))";
+            $"WHERE 1=CONTAINS(POINT('ICRS',\"{raColumn}\",\"{decColumn}\"),CIRCLE('ICRS',{rightAscension},{declination},{radiusDegrees})) " +
+            $"ORDER BY DISTANCE(POINT('ICRS',\"{raColumn}\",\"{decColumn}\"),POINT('ICRS',{rightAscension},{declination})) ASC";
     }
 
     private async Task<Result<ResolvedColumns>> ResolveColumnsAsync(string catalogueId, CancellationToken cancellationToken)
@@ -165,7 +166,7 @@ public sealed class VizierTapClient : ICatalogueClient
     private static bool HasUcdAtom(string ucd, string atom) =>
         ucd.Split(';').Any(part => string.Equals(part.Trim(), atom, StringComparison.OrdinalIgnoreCase));
 
-    private static List<CatalogueRecord> MapRecords(VoTableResult table)
+    private static Result<IReadOnlyList<CatalogueRecord>> MapRecords(VoTableResult table)
     {
         var fieldNames = table.FieldNames.ToList();
 
@@ -177,12 +178,14 @@ public sealed class VizierTapClient : ICatalogueClient
 
         var magIndex = fieldNames.FindIndex(n => string.Equals(n, "mag", StringComparison.OrdinalIgnoreCase));
 
-        var records = new List<CatalogueRecord>();
-
         if (idIndex < 0 || raIndex < 0 || decIndex < 0)
         {
-            return records;
+            return Error.Infrastructure(
+                "catalogues.vizier.malformed_response",
+                "VizieR TAP response did not include the expected catalogue_id/ra/dec columns.");
         }
+
+        var records = new List<CatalogueRecord>();
 
         foreach (var row in table.Rows)
         {

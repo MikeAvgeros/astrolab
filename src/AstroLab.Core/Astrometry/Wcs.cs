@@ -111,6 +111,11 @@ public readonly record struct Wcs
 
     public Result<(double RightAscension, double Declination)> PixelToWorld(double pixelX, double pixelY)
     {
+        if (!double.IsFinite(pixelX) || !double.IsFinite(pixelY))
+        {
+            return Error.Validation("astrometry.non_finite_coordinate", "Pixel coordinates must be finite.");
+        }
+
         var p1 = pixelX + PixelCenterOffset - CrPix1;
 
         var p2 = pixelY + PixelCenterOffset - CrPix2;
@@ -161,6 +166,11 @@ public readonly record struct Wcs
 
     public Result<(double PixelX, double PixelY)> WorldToPixel(double rightAscension, double declination)
     {
+        if (!double.IsFinite(rightAscension) || !double.IsFinite(declination))
+        {
+            return Error.Validation("astrometry.non_finite_coordinate", "Sky coordinates must be finite.");
+        }
+
         if (declination is < MinDeclinationDegrees or > MaxDeclinationDegrees)
         {
             return Error.Validation("astrometry.invalid_declination", "declination must be between -90 and 90 degrees.");

@@ -26,9 +26,10 @@ public static class ApertureCorrectionEndpoint
             return hduResult.Error.ToProblem();
         }
 
-        var (correctedFlux, correctedFluxUncertainty) = Core.Photometry.ApertureCorrection.Apply(
+        var correctionResult = Core.Photometry.ApertureCorrection.Apply(
             request.MeasuredFlux, request.CorrectionFactor, request.MeasuredFluxUncertainty);
 
-        return Results.Ok(ApertureCorrectionResponse.Create(fileId, correctedFlux, correctedFluxUncertainty));
+        return correctionResult.ToApiResult(correction => Results.Ok(
+            ApertureCorrectionResponse.Create(fileId, correction.CorrectedFlux, correction.CorrectedFluxUncertainty)));
     }
 }

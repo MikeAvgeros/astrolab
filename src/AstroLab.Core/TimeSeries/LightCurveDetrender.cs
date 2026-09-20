@@ -35,6 +35,11 @@ public static class LightCurveDetrender
             }
         }
 
+        if (string.IsNullOrWhiteSpace(method))
+        {
+            return Error.Validation("timeseries.detrend.missing_method", "A detrend method must be specified.");
+        }
+
         return method.Trim().ToLowerInvariant() switch
         {
             "linear" => DetrendLinear(time, flux),

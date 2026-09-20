@@ -24,6 +24,8 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
     private async Task<string> UploadGradientImageAsync() => await UploadAsync(SyntheticFits.SmallGradientImage());
 
+    private async Task<string> UploadGradientImageTransposedAsync() => await UploadAsync(SyntheticFits.SmallGradientImageTransposed());
+
     private async Task<string> UploadGradientImageWithWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithWcs());
 
     private async Task<string> UploadGradientImageWithShiftedWcsAsync() => await UploadAsync(SyntheticFits.SmallGradientImageWithShiftedWcs());
@@ -1377,6 +1379,24 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var largeFileId = await UploadImageWithSourceAsync();
 
         var request = new { FileId = smallFileId, ComparisonFileId = largeFileId };
+
+        var response = await _client.PostAsJsonAsync("/api/images/compare", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("imaging.compare.invalid_image_bounds", body.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task CompareImages_OnTransposedDimensionsWithSamePixelCount_ReturnsBadRequest()
+    {
+        var fileId = await UploadGradientImageAsync();
+
+        var transposedFileId = await UploadGradientImageTransposedAsync();
+
+        var request = new { FileId = fileId, ComparisonFileId = transposedFileId };
 
         var response = await _client.PostAsJsonAsync("/api/images/compare", request);
 

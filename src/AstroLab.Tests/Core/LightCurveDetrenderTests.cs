@@ -144,4 +144,18 @@ public class LightCurveDetrenderTests
 
         Assert.Equal("timeseries.detrend.empty_series", result.Error.Code);
     }
+
+    [Fact]
+    public void Detrend_RejectsNullMethod()
+    {
+        ReadOnlySpan<double> time = [0.0, 1.0, 2.0];
+
+        ReadOnlySpan<double> flux = [1.0, 2.0, 3.0];
+
+        var result = LightCurveDetrender.Detrend(time, flux, null!);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("timeseries.detrend.missing_method", result.Error.Code);
+    }
 }

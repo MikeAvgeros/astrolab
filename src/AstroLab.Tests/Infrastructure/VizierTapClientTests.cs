@@ -114,6 +114,25 @@ public class VizierTapClientTests
         </VOTABLE>
         """;
 
+    private const string ConeSearchWithUnexpectedColumnsVoTable = """
+        <?xml version="1.0"?>
+        <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.4">
+          <RESOURCE type="results">
+            <TABLE>
+              <FIELD name="Source" datatype="char" arraysize="*"/>
+              <FIELD name="RA_ICRS" datatype="double"/>
+              <FIELD name="DE_ICRS" datatype="double"/>
+              <FIELD name="Gmag" datatype="double"/>
+              <DATA>
+                <TABLEDATA>
+                  <TR><TD>Gaia DR3 123456</TD><TD>180.001</TD><TD>0.002</TD><TD>15.4</TD></TR>
+                </TABLEDATA>
+              </DATA>
+            </TABLE>
+          </RESOURCE>
+        </VOTABLE>
+        """;
+
     private const string QueryErrorVoTable = """
         <?xml version="1.0"?>
         <VOTABLE version="1.4" xmlns="http://www.ivoa.net/xml/VOTable/v1.4">
@@ -229,6 +248,19 @@ public class VizierTapClientTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("catalogues.vizier.unresolved_position_columns", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task ConeSearchAsync_ResultTableMissingExpectedColumns_ReturnsInfrastructureError()
+    {
+        var (client, _) = CreateSequencedClient(GaiaSchemaVoTable, ConeSearchWithUnexpectedColumnsVoTable);
+
+        var query = CatalogueConeSearchQuery.Create("I/355/gaiadr3", rightAscension: 180.0, declination: 0.0, radiusArcsec: 5.0);
+
+        var result = await client.ConeSearchAsync(query);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("catalogues.vizier.malformed_response", result.Error.Code);
     }
 
     [Fact]

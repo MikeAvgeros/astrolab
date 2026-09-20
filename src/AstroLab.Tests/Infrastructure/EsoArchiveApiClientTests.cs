@@ -192,6 +192,17 @@ public class EsoArchiveApiClientTests
         Assert.Empty(result.Value);
     }
 
+    [Fact]
+    public async Task SearchAsync_MalformedResponseBodyWithHttp200_ReturnsFailureRatherThanEmptySuccess()
+    {
+        var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse("""{"QUERY_STATUS":"ERROR","message":"unknown table"}""")));
+
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("eso.search_malformed_response", result.Error.Code);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.BadRequest, "eso.search.invalid_request")]
     [InlineData(HttpStatusCode.Unauthorized, "eso.search.unauthorized")]
@@ -257,6 +268,17 @@ public class EsoArchiveApiClientTests
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_MalformedResponseBodyWithHttp200_ReturnsFailureRatherThanEmptySuccess()
+    {
+        var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse("""{"QUERY_STATUS":"ERROR","message":"unknown dataset"}""")));
+
+        var result = await client.GetProductsAsync("ADP.123");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("eso.products_malformed_response", result.Error.Code);
     }
 
     [Fact]

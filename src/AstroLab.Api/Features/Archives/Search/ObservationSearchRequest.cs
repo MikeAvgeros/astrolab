@@ -8,12 +8,15 @@ public sealed record ObservationSearchRequest
 
     private ObservationSearchRequest(
         ArchiveSource archive, string target, string? mission = null, string? instrument = null,
+        DateTimeOffset? from = null, DateTimeOffset? to = null,
         double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
         Archive = archive;
         Target = target;
         Mission = mission;
         Instrument = instrument;
+        From = from;
+        To = to;
         SearchRadiusDegrees = searchRadiusDegrees;
         MaxResults = maxResults;
     }
@@ -26,12 +29,17 @@ public sealed record ObservationSearchRequest
 
     public string? Instrument { get; }
 
+    public DateTimeOffset? From { get; }
+
+    public DateTimeOffset? To { get; }
+
     public double? SearchRadiusDegrees { get; }
 
     public int MaxResults { get; }
 
     public static ObservationSearchRequest Create(
         ArchiveSource archive, string target, string? mission = null, string? instrument = null,
+        DateTimeOffset? from = null, DateTimeOffset? to = null,
         double? searchRadiusDegrees = null, int maxResults = DefaultMaxResults)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
@@ -43,6 +51,6 @@ public sealed record ObservationSearchRequest
             throw new ArgumentOutOfRangeException(nameof(archive), archive, "Unknown archive source.");
         }
 
-        return new ObservationSearchRequest(archive, target, mission, instrument, searchRadiusDegrees, maxResults);
+        return new ObservationSearchRequest(archive, target, mission, instrument, from, to, searchRadiusDegrees, maxResults);
     }
 }

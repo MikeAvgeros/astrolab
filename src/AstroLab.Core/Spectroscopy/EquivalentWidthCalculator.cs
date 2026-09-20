@@ -41,6 +41,16 @@ public static class EquivalentWidthCalculator
             Array.Reverse(orderedFlux);
         }
 
+        for (var i = 1; i < orderedWavelengths.Length; i++)
+        {
+            if (orderedWavelengths[i] < orderedWavelengths[i - 1])
+            {
+                return Error.Validation(
+                    "spectroscopy.equivalent_width.unsorted_wavelengths",
+                    "Wavelengths must be sorted in ascending or descending order to compute an equivalent width.");
+            }
+        }
+
         var startWavelength = orderedWavelengths[0];
 
         var endWavelength = orderedWavelengths[^1];

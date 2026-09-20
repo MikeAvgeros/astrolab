@@ -84,9 +84,7 @@ public sealed class FitsHeader : IReadOnlyList<FitsKeyword>
         for (var i = 0; i < cardCount; i++)
         {
             var cardBytes = headerBlock.Slice(i * FitsCardParser.CardLength, FitsCardParser.CardLength);
-
-            // Encoding.ASCII.GetChars silently replaces bytes outside 7-bit ASCII with '?' instead
-            // of failing, which would otherwise mask a corrupted/non-ASCII header as a valid card.
+            
             if (cardBytes.IndexOfAnyInRange((byte)0x80, (byte)0xFF) >= 0)
             {
                 return Error.Validation(

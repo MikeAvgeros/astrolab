@@ -57,12 +57,18 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
             var tapResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
 
-            if (tapResponse?.Data is null || tapResponse.Data.Count == 0)
+            if (tapResponse is null || tapResponse.Metadata is not { } metadata)
+            {
+                return Result<IReadOnlyList<ArchiveObservation>>.Failure(Error.Unexpected(
+                    "eso.search_malformed_response", "ESO returned a response that did not match the expected TAP result contract."));
+            }
+
+            if (tapResponse.Data is not { Count: > 0 } data)
             {
                 return Result<IReadOnlyList<ArchiveObservation>>.Success(Array.Empty<ArchiveObservation>());
             }
 
-            var observations = MapResponseToObservations(tapResponse);
+            var observations = MapResponseToObservations(metadata, data);
 
             return Result<IReadOnlyList<ArchiveObservation>>.Success(observations);
         }
@@ -102,7 +108,14 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
             var dataLinkResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
 
-            var products = MapDataLinkResponseToProducts(dataLinkResponse, datasetId);
+            if (dataLinkResponse is null || dataLinkResponse.Metadata is not { } metadata)
+            {
+                return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected(
+                    "eso.products_malformed_response",
+                    "ESO DataLink returned a response that did not match the expected TAP result contract."));
+            }
+
+            var products = MapDataLinkResponseToProducts(metadata, dataLinkResponse.Data, datasetId);
 
             return Result<IReadOnlyList<EsoProduct>>.Success(products);
         }
@@ -162,18 +175,13 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
             .Select((col, idx) => (col.Name.ToLowerInvariant(), idx))
             .ToDictionary(x => x.Item1, x => x.idx);
 
-    private static List<ArchiveObservation> MapResponseToObservations(EsoTapResponse response)
+    private static List<ArchiveObservation> MapResponseToObservations(List<EsoColumnMetadata> metadata, List<List<object>> data)
     {
         var observations = new List<ArchiveObservation>();
 
-        if (response.Metadata is null || response.Data is null)
-        {
-            return observations;
-        }
+        var columnIndex = BuildColumnIndex(metadata);
 
-        var columnIndex = BuildColumnIndex(response.Metadata);
-
-        foreach (var rowValues in response.Data)
+        foreach (var rowValues in data)
         {
             var row = new EsoTapRow(columnIndex, rowValues);
 
@@ -213,18 +221,18 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         return observations;
     }
 
-    private static List<EsoProduct> MapDataLinkResponseToProducts(EsoTapResponse? response, string datasetId)
+    private static List<EsoProduct> MapDataLinkResponseToProducts(List<EsoColumnMetadata> metadata, List<List<object>>? data, string datasetId)
     {
         var products = new List<EsoProduct>();
 
-        if (response?.Metadata is null || response.Data is null)
+        if (data is null)
         {
             return products;
         }
 
-        var columnIndex = BuildColumnIndex(response.Metadata);
+        var columnIndex = BuildColumnIndex(metadata);
 
-        foreach (var rowValues in response.Data)
+        foreach (var rowValues in data)
         {
             var row = new EsoTapRow(columnIndex, rowValues);
 

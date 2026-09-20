@@ -8,12 +8,7 @@ internal static class SyntheticFits
 {
     private const int CardLength = 80;
     private const int BlockSize = 2880;
-
-    /// <summary>
-    /// A 4x2, 8-bit-per-pixel image with pixel values 10, 20, ..., 80 (row-major), which gives
-    /// every downstream computation (statistics, aperture flux, spectral extraction) an exact,
-    /// hand-checkable expected result.
-    /// </summary>
+    
     public static byte[] SmallGradientImage() => BuildSingleHdu(
     [
         "SIMPLE  =                    T",
@@ -23,12 +18,17 @@ internal static class SyntheticFits
         "NAXIS2  =                    2",
         "END",
     ]);
-
-    /// <summary>
-    /// The same 4x2 gradient pixel data as <see cref="SmallGradientImage"/>, but carrying a
-    /// standard TAN-projection WCS solution (no rotation, 1 arcsec/pixel), so astrometry endpoints
-    /// have a usable pixel/sky mapping to exercise.
-    /// </summary>
+    
+    public static byte[] SmallGradientImageTransposed() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    2",
+        "NAXIS2  =                    4",
+        "END",
+    ]);
+    
     public static byte[] SmallGradientImageWithWcs() => BuildSingleHdu(
     [
         "SIMPLE  =                    T",
@@ -47,13 +47,7 @@ internal static class SyntheticFits
         "RADESYS = 'ICRS    '",
         "END",
     ]);
-
-    /// <summary>
-    /// The same 4x2 gradient pixel data as <see cref="SmallGradientImage"/>, but carrying a
-    /// <c>DISPAXIS</c> keyword — the standard FITS marker for a 2D spectroscopic frame (a
-    /// long-slit spectrogram with a spatial axis and a dispersion axis) — so
-    /// <c>FitsDatasetClassifier</c> identifies it as <c>Spectrum</c> rather than <c>Image</c>.
-    /// </summary>
+    
     public static byte[] SmallGradientSpectrumFrame() => BuildSingleHdu(
     [
         "SIMPLE  =                    T",
@@ -64,13 +58,7 @@ internal static class SyntheticFits
         "DISPAXIS=                    1",
         "END",
     ]);
-
-    /// <summary>
-    /// A 9x3, 8-bit spectroscopic frame (<c>DISPAXIS=1</c>, horizontal dispersion) where every
-    /// pixel is 10 except column 4, which is 100 across all 3 spatial rows. Collapsing the full
-    /// spatial extent therefore gives an exact, hand-checkable 1D spectrum: 30 everywhere except a
-    /// single 300-flux spike at dispersion bin 4.
-    /// </summary>
+    
     public static byte[] SmallSpectrumWithEmissionLine() => BuildMultiHdu(
     [
         (
@@ -86,11 +74,6 @@ internal static class SyntheticFits
             BuildEmissionLinePixelData())
     ]);
 
-    /// <summary>
-    /// The same 9x3, single-emission-spike spectroscopic frame as
-    /// <see cref="SmallSpectrumWithEmissionLine"/>, but also carrying a linear dispersion WCS
-    /// solution (<c>CRVAL1</c>/<c>CDELT1</c>), for cross-correlation velocity-shift tests.
-    /// </summary>
     public static byte[] SmallSpectrumWithEmissionLineAndDispersionWcs() => BuildMultiHdu(
     [
         (
@@ -107,14 +90,7 @@ internal static class SyntheticFits
             ],
             BuildEmissionLinePixelData())
     ]);
-
-    /// <summary>
-    /// A 9x3, 8-bit spectroscopic frame (<c>DISPAXIS=1</c>) carrying a linear dispersion WCS
-    /// (<c>CRVAL1</c>/<c>CDELT1</c>) whose collapsed spectrum is a smooth multi-bin bump rather than
-    /// a single-bin spike (flux 30, 30, 36, 60, 120, 60, 36, 30, 30 across the 9 dispersion bins) —
-    /// unlike <see cref="SmallSpectrumWithEmissionLineAndDispersionWcs"/>, more than one bin carries
-    /// genuine curvature information, so a 4-parameter Gaussian-plus-baseline fit is well-posed.
-    /// </summary>
+    
     public static byte[] SmallSpectrumWithGaussianBumpAndDispersionWcs() => BuildMultiHdu(
     [
         (
@@ -131,16 +107,7 @@ internal static class SyntheticFits
             ],
             BuildGaussianBumpPixelData())
     ]);
-
-    /// <summary>
-    /// A 3-HDU file where the ONLY HDU with pixel data (extension 1, a plain 4x2 gradient image)
-    /// carries no spectral marker of its own, but an unrelated, dataless extension (2) carries a
-    /// stray <c>DISPAXIS</c> card. Regression fixture for the classify/load HDU-selection mismatch:
-    /// <c>FitsDatasetClassifier</c> must classify based on the same HDU
-    /// <c>FitsDatasetReader</c> actually loads pixels from, not on whichever HDU happens to carry a
-    /// marker — otherwise this file misclassifies as <c>Spectrum</c> even though the HDU that gets
-    /// analyzed is a plain image.
-    /// </summary>
+    
     public static byte[] MultiHduImageWithUnrelatedSpectralMarker()
     {
         var primary = (
@@ -178,13 +145,7 @@ internal static class SyntheticFits
 
         return BuildMultiHdu([primary, imageExtension, strayMarkerExtension]);
     }
-
-    /// <summary>
-    /// A 12x12, 8-bit image with a low-contrast cyclic background (values 5..15) and a single
-    /// 3x3, constant-value-200 block at rows/columns 4-6 — orders of magnitude above the
-    /// background's robust noise estimate, so the default detection threshold finds exactly one
-    /// source at a hand-checkable centroid/pixel count.
-    /// </summary>
+    
     public static byte[] SmallImageWithSource() => BuildMultiHdu(
     [
         (
@@ -198,8 +159,7 @@ internal static class SyntheticFits
             ],
             BuildSourcePixelData())
     ]);
-
-    /// <summary>The same source field as <see cref="SmallImageWithSource"/>, but with a TAN WCS solution so detected sources can be resolved to RA/Dec.</summary>
+    
     public static byte[] SmallImageWithSourceAndWcs() => BuildMultiHdu(
     [
         (
@@ -222,13 +182,7 @@ internal static class SyntheticFits
             ],
             BuildSourcePixelData())
     ]);
-
-    /// <summary>
-    /// The same 4x2 gradient pixel data and WCS solution as <see cref="SmallGradientImageWithWcs"/>,
-    /// but with the reference pixel shifted by (+2, +3), so its pixel grid represents the same sky
-    /// but offset from the other file's grid by a known, hand-checkable amount — for alignment
-    /// tests.
-    /// </summary>
+    
     public static byte[] SmallGradientImageWithShiftedWcs() => BuildSingleHdu(
     [
         "SIMPLE  =                    T",
@@ -247,13 +201,7 @@ internal static class SyntheticFits
         "RADESYS = 'ICRS    '",
         "END",
     ]);
-
-    /// <summary>
-    /// The same 12x12 background field as <see cref="SmallImageWithSource"/>, but with the bright
-    /// 3x3 source block moved from rows/columns 4-6 to rows/columns 7-9 — a known, hand-checkable
-    /// (+3, +3) pixel shift from the other file's source centroid — for source-centroid-based
-    /// alignment tests.
-    /// </summary>
+    
     public static byte[] SmallImageWithSourceShifted() => BuildMultiHdu(
     [
         (
@@ -267,12 +215,7 @@ internal static class SyntheticFits
             ],
             BuildSourcePixelData(blockMin: 7, blockMax: 9))
     ]);
-
-    /// <summary>
-    /// A 2-HDU file whose extension HDU is a BINTABLE with a TIME and a FLUX column (both 1D,
-    /// 8-byte doubles, big-endian per the FITS standard), for exercising real cfitsio binary
-    /// table reads end-to-end.
-    /// </summary>
+    
     public static byte[] TimeSeriesBinaryTable(double[] time, double[] flux)
     {
         if (time.Length != flux.Length)

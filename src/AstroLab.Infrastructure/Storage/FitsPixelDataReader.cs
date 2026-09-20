@@ -22,6 +22,13 @@ public static class FitsPixelDataReader
             return Error.Validation("fits.data.no_pixels", "HDU has no pixel data (NAXIS = 0).");
         }
 
+        if (descriptor.PixelCount > int.MaxValue)
+        {
+            return Error.Validation(
+                "fits.data.image_too_large",
+                $"Image has {descriptor.PixelCount} pixels, which exceeds the supported maximum of {int.MaxValue}.");
+        }
+
         if (descriptor.DataSizeBytes is <= 0 or > MaxSupportedDataSizeBytes)
         {
             return Error.Validation(

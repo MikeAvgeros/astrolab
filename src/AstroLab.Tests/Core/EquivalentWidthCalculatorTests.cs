@@ -87,4 +87,18 @@ public class EquivalentWidthCalculatorTests
 
         Assert.Equal("spectroscopy.equivalent_width.zero_continuum", result.Error.Code);
     }
+
+    [Fact]
+    public void Calculate_RejectsNonMonotonicWavelengths()
+    {
+        double[] wavelengths = [0.0, 4.0, 1.0, 3.0, 2.0];
+
+        double[] flux = [10.0, 10.0, 1.0, 10.0, 10.0];
+
+        var result = EquivalentWidthCalculator.Calculate(wavelengths, flux);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("spectroscopy.equivalent_width.unsorted_wavelengths", result.Error.Code);
+    }
 }

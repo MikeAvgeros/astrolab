@@ -30,7 +30,7 @@ public readonly record struct FitsImageDescriptor
 
     public long PixelCount => NAxes.IsDefaultOrEmpty ? 0 : NAxes.Aggregate(1L, (acc, n) => acc * n);
 
-    public long DataSizeBytes => BitPix.BytesPerPixel() * PixelCount;
+    public long DataSizeBytes => SaturatingMultiply(BitPix.BytesPerPixel(), PixelCount);
 
     public double ToPhysical(double rawValue) => rawValue * BScale + BZero;
 
@@ -76,6 +76,18 @@ public readonly record struct FitsImageDescriptor
         }
 
         return result.Error.Category == ErrorCategory.NotFound ? Result<long?>.Success(null) : Result<long?>.Failure(result.Error);
+    }
+
+    private static long SaturatingMultiply(long a, long b)
+    {
+        try
+        {
+            return checked(a * b);
+        }
+        catch (OverflowException)
+        {
+            return long.MaxValue;
+        }
     }
 
     private static Result<BitPixType> ToBitPixType(long value) =>

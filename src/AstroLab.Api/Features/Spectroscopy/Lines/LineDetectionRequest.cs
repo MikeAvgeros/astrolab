@@ -19,6 +19,11 @@ public sealed record LineDetectionRequest
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(threshold);
         }
 
+        if (dispersionCoefficients is not null && !Array.TrueForAll(dispersionCoefficients, double.IsFinite))
+        {
+            throw new ArgumentException("dispersionCoefficients must all be finite.", nameof(dispersionCoefficients));
+        }
+
         return new LineDetectionRequest(significanceThreshold, dispersionCoefficients);
     }
 }

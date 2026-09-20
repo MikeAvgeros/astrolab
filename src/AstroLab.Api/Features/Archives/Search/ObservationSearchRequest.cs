@@ -38,6 +38,11 @@ public sealed record ObservationSearchRequest
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
 
+        if (!Enum.IsDefined(archive))
+        {
+            throw new ArgumentOutOfRangeException(nameof(archive), archive, "Unknown archive source.");
+        }
+
         return new ObservationSearchRequest(archive, target, mission, instrument, searchRadiusDegrees, maxResults);
     }
 }

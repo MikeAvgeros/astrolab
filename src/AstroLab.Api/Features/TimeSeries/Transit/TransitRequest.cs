@@ -21,6 +21,11 @@ public sealed record TransitRequest
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxPeriod);
 
+        if (!double.IsFinite(minTransitDepth))
+        {
+            throw new ArgumentOutOfRangeException(nameof(minTransitDepth), minTransitDepth, "minTransitDepth must be finite.");
+        }
+
         return new TransitRequest(minPeriod, maxPeriod, minTransitDepth);
     }
 }

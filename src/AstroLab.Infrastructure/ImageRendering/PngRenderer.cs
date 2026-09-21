@@ -53,8 +53,10 @@ public static class PngRenderer
             var rawRowOffset = y * (stride + 1);
 
             raw[rawRowOffset] = NoFilterScanlineTag;
+            
+            var sourceRow = image.Height - 1 - y;
 
-            Buffer.BlockCopy(image.Rgb, y * stride, raw, rawRowOffset + 1, stride);
+            Buffer.BlockCopy(image.Rgb, sourceRow * stride, raw, rawRowOffset + 1, stride);
         }
 
         return raw;

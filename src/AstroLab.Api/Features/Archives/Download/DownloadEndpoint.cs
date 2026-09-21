@@ -24,7 +24,7 @@ public static class DownloadEndpoint
     {
         request.Validate();
 
-        var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
+        var client = ArchiveClientResolver.Resolve(request.Archive.Value, esoClient, mastClient);
 
         var downloadResult = await client.DownloadAsync(request.DatasetId, cancellationToken);
 
@@ -40,6 +40,6 @@ public static class DownloadEndpoint
         var writeResult = await fileStore.WriteAsync(fileId, download.Content, cancellationToken);
 
         return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", DownloadResponse.Create(fileId, request.Archive, stored.SizeBytes)));
+            Results.Created($"/api/fits/{fileId}/header", DownloadResponse.Create(fileId, request.Archive.Value, stored.SizeBytes)));
     }
 }

@@ -153,4 +153,42 @@ public class ResultTests
 
         Assert.Equal(99, failure.GetValueOrDefault(99));
     }
+
+    [Fact]
+    public void Error_OnDefaultUninitializedResult_ThrowsInvalidOperationException_InsteadOfReturningZeroedError()
+    {
+        var uninitialized = default(Result<int>);
+
+        Assert.True(uninitialized.IsFailure);
+
+        Assert.Throws<InvalidOperationException>(() => uninitialized.Error);
+    }
+
+    [Fact]
+    public void Success_WithNullReferenceValue_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => Result<string>.Success(null!));
+    }
+
+    [Fact]
+    public void ImplicitConversion_FromNullReferenceValue_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            Result<string> result = (string)null!;
+        });
+    }
+
+    [Fact]
+    public void Success_WithNullableValueTypeCarryingNoValue_DoesNotThrow()
+    {
+        // Nullable<T> (e.g. double?) legitimately represents "successfully resolved as absent"
+        // (e.g. an optional FITS header keyword that was confirmed not present) — distinct from a
+        // reference-type null, which does indicate a missing/invalid Result construction.
+        var result = Result<double?>.Success(null);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Null(result.Value);
+    }
 }

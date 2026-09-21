@@ -81,8 +81,13 @@ public class PngRendererTests
     [Fact]
     public void Encode_RoundTripsPixelDataThroughPngStructure()
     {
+        // Source row 0 (bottom of the sky-oriented image, per FITS convention) is red/green;
+        // source row 1 (top) is blue/white. The PNG encoder must emit row 1 as the first
+        // (top) scanline and row 0 as the last (bottom) scanline to preserve orientation.
         byte[] rgb = [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
-        
+
+        byte[] expectedPngRowOrder = [0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255, 0];
+
         var image = RenderedImage.Create(2, 2, rgb);
 
         var png = PngRenderer.Encode(image);
@@ -92,8 +97,27 @@ public class PngRendererTests
         Assert.Equal(2, decoded.Width);
         
         Assert.Equal(2, decoded.Height);
-        
-        Assert.Equal(rgb, decoded.Rgb);
+
+        Assert.Equal(expectedPngRowOrder, decoded.Rgb);
+    }
+
+    [Fact]
+    public void Encode_ReversesRowOrderSoTopScanlineIsHighestSourceRow()
+    {
+        // A single-column image where each row has a distinct color makes the row order
+        // unambiguous: row index == pixel value, so the decoded PNG's row order can be
+        // checked directly against the expected top-to-bottom reversal of the source.
+        byte[] rgb = [0, 0, 0, 10, 10, 10, 20, 20, 20];
+
+        var image = RenderedImage.Create(1, 3, rgb);
+
+        var png = PngRenderer.Encode(image);
+
+        var decoded = Decode(png);
+
+        byte[] expected = [20, 20, 20, 10, 10, 10, 0, 0, 0];
+
+        Assert.Equal(expected, decoded.Rgb);
     }
 
     [Fact]

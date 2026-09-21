@@ -139,4 +139,16 @@ public class ImageStackerTests
 
         Assert.Equal("imaging.stack.invalid_sigma_clip_iterations", result.Error.Code);
     }
+
+    [Fact]
+    public void Combine_OnUndefinedMethod_ReturnsValidationError_InsteadOfThrowing()
+    {
+        List<ReadOnlyMemory<float>> frames = [Frame(1f), Frame(2f)];
+
+        var result = ImageStacker.Combine(frames, width: 1, height: 1, (StackCombinationMethod)99);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("imaging.stack.invalid_method", result.Error.Code);
+    }
 }

@@ -112,37 +112,6 @@ public static class CutoutEndpoint
             return Result<(int, int, int, int)>.Failure(wcsResult.Error);
         }
 
-        var wcs = wcsResult.Value;
-
-        var centerResult = wcs.WorldToPixel(rightAscension, declination);
-
-        if (centerResult.IsFailure)
-        {
-            return Result<(int, int, int, int)>.Failure(centerResult.Error);
-        }
-
-        var (centerPixelX, centerPixelY) = centerResult.Value;
-
-        if (wcs.PixelScaleXArcsecPerPixel is 0 || wcs.PixelScaleYArcsecPerPixel is 0 ||
-            !double.IsFinite(wcs.PixelScaleXArcsecPerPixel) || !double.IsFinite(wcs.PixelScaleYArcsecPerPixel))
-        {
-            return Error.Validation(
-                "image.cutout.degenerate_pixel_scale",
-                "The image's WCS solution has a zero or non-finite pixel scale, so a sky-region radius cannot be converted to pixels.");
-        }
-
-        var halfWidth = radiusArcseconds / wcs.PixelScaleXArcsecPerPixel;
-
-        var halfHeight = radiusArcseconds / wcs.PixelScaleYArcsecPerPixel;
-
-        var width = Math.Min(Math.Max(1, (int)Math.Round(2 * halfWidth)), imageWidth);
-
-        var height = Math.Min(Math.Max(1, (int)Math.Round(2 * halfHeight)), imageHeight);
-
-        var x = Math.Clamp((int)Math.Round(centerPixelX - halfWidth), 0, imageWidth - width);
-
-        var y = Math.Clamp((int)Math.Round(centerPixelY - halfHeight), 0, imageHeight - height);
-
-        return (x, y, width, height);
+        return wcsResult.Value.ResolveSkyRegionPixelBounds(rightAscension, declination, radiusArcseconds, imageWidth, imageHeight);
     }
 }

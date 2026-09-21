@@ -236,6 +236,41 @@ public readonly record struct Wcs
         return (CrPix1 + p1 - PixelCenterOffset, CrPix2 + p2 - PixelCenterOffset);
     }
     
+    public Result<(int X, int Y, int Width, int Height)> ResolveSkyRegionPixelBounds(
+        double rightAscension, double declination, double radiusArcseconds, int imageWidth, int imageHeight)
+    {
+        var centerResult = WorldToPixel(rightAscension, declination);
+
+        if (centerResult.IsFailure)
+        {
+            return Result<(int, int, int, int)>.Failure(centerResult.Error);
+        }
+
+        var (centerPixelX, centerPixelY) = centerResult.Value;
+
+        if (PixelScaleXArcsecPerPixel is 0 || PixelScaleYArcsecPerPixel is 0 ||
+            !double.IsFinite(PixelScaleXArcsecPerPixel) || !double.IsFinite(PixelScaleYArcsecPerPixel))
+        {
+            return Error.Validation(
+                "astrometry.degenerate_pixel_scale",
+                "The WCS solution has a zero or non-finite pixel scale, so a sky-region radius cannot be converted to pixels.");
+        }
+
+        var halfWidth = radiusArcseconds / PixelScaleXArcsecPerPixel;
+
+        var halfHeight = radiusArcseconds / PixelScaleYArcsecPerPixel;
+
+        var width = Math.Min(Math.Max(1, (int)Math.Round(2 * halfWidth)), imageWidth);
+
+        var height = Math.Min(Math.Max(1, (int)Math.Round(2 * halfHeight)), imageHeight);
+
+        var x = Math.Clamp((int)Math.Round(centerPixelX - halfWidth), 0, imageWidth - width);
+
+        var y = Math.Clamp((int)Math.Round(centerPixelY - halfHeight), 0, imageHeight - height);
+
+        return (x, y, width, height);
+    }
+
     public static Result<Wcs> FromHeader(FitsHeader header)
     {
         var cType1Result = header.GetString("CTYPE1");

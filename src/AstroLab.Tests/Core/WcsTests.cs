@@ -385,6 +385,63 @@ public class WcsTests
     }
 
     [Fact]
+    public void ResolveSkyRegionPixelBounds_CentersOnReferencePixel_WithExpectedDiameter()
+    {
+        // 0.0001 deg/pixel = 0.36 arcsec/pixel; a 3.6-arcsecond radius spans 10 pixels either side.
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
+
+        var result = wcs.ResolveSkyRegionPixelBounds(
+            wcs.ReferenceRightAscension, wcs.ReferenceDeclination, radiusArcseconds: 3.6, imageWidth: 200, imageHeight: 200);
+
+        Assert.True(result.IsSuccess);
+
+        var (x, y, width, height) = result.Value;
+
+        Assert.Equal(20, width);
+
+        Assert.Equal(20, height);
+
+        // The reference pixel (0.5, 0.5) should sit at the center of the returned region.
+        Assert.InRange(wcs.ReferencePixelX - x, 0, width);
+
+        Assert.InRange(wcs.ReferencePixelY - y, 0, height);
+    }
+
+    [Fact]
+    public void ResolveSkyRegionPixelBounds_RadiusExceedingImage_ClampsToImageBoundsInsteadOfFailing()
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
+
+        var result = wcs.ResolveSkyRegionPixelBounds(
+            wcs.ReferenceRightAscension, wcs.ReferenceDeclination, radiusArcseconds: 3600.0, imageWidth: 50, imageHeight: 40);
+
+        Assert.True(result.IsSuccess);
+
+        var (x, y, width, height) = result.Value;
+
+        Assert.Equal(0, x);
+
+        Assert.Equal(0, y);
+
+        Assert.Equal(50, width);
+
+        Assert.Equal(40, height);
+    }
+
+    [Fact]
+    public void ResolveSkyRegionPixelBounds_OnCenterCoordinateWorldToPixelFailure_PropagatesTheError()
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
+
+        var result = wcs.ResolveSkyRegionPixelBounds(
+            wcs.ReferenceRightAscension, declination: 91.0, radiusArcseconds: 10.0, imageWidth: 100, imageHeight: 100);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.invalid_declination", result.Error.Code);
+    }
+
+    [Fact]
     public void FromHeader_ExposesReferenceAndScaleMetadata()
     {
         var wcs = Wcs.FromHeader(BuildTanHeader(0.0004)).Value;

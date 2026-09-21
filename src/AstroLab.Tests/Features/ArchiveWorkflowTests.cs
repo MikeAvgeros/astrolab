@@ -151,6 +151,16 @@ public sealed class ArchiveWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task DownloadDataset_OmittedArchiveField_ReturnsBadRequest_InsteadOfDefaultingToEso()
+    {
+        var client = CreateClientWithStubArchives(NotCalledEsoClient(), NotCalledMastClient());
+
+        var response = await client.PostAsJsonAsync("/api/archives/download", new { DatasetId = "obs1" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task DownloadDataset_ArchiveReturnsFailure_MapsToProblemResponse()
     {
         var eso = new StubEsoArchiveClient(

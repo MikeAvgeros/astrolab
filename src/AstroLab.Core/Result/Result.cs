@@ -21,10 +21,22 @@ public readonly record struct Result<TValue>
         : throw new InvalidOperationException("Cannot access Value on a failed Result. Check IsSuccess or use Match.");
     
     public Error Error => IsFailure
-        ? _error
+        ? (_error.Code is not null
+            ? _error
+            : throw new InvalidOperationException(
+                "This Result<TValue> was never constructed via Success/Failure (e.g. default(Result<TValue>) or an " +
+                "uninitialized array/dictionary slot). There is no error to report."))
         : throw new InvalidOperationException("Cannot access Error on a successful Result. Check IsFailure or use Match.");
 
-    public static Result<TValue> Success(TValue value) => new(true, value, default);
+    public static Result<TValue> Success(TValue value)
+    {
+        if (!typeof(TValue).IsValueType && value is null)
+        {
+            throw new ArgumentNullException(nameof(value), "A successful Result cannot carry a null value.");
+        }
+
+        return new Result<TValue>(true, value, default);
+    }
 
     public static Result<TValue> Failure(Error error) => new(false, default, error);
 

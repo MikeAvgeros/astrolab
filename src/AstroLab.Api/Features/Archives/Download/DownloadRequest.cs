@@ -6,13 +6,13 @@ namespace AstroLab.Api.Features.Archives.Download;
 public sealed record DownloadRequest
 {
     [JsonConstructor]
-    private DownloadRequest(ArchiveSource archive, string datasetId)
+    private DownloadRequest(ArchiveSource? archive, string datasetId)
     {
         Archive = archive;
         DatasetId = datasetId;
     }
 
-    public ArchiveSource Archive { get; }
+    public ArchiveSource? Archive { get; }
 
     public string DatasetId { get; }
 
@@ -29,9 +29,9 @@ public sealed record DownloadRequest
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DatasetId);
 
-        if (!Enum.IsDefined(Archive))
+        if (Archive is null || !Enum.IsDefined(Archive.Value))
         {
-            throw new ArgumentOutOfRangeException(nameof(Archive), Archive, "Unknown archive source.");
+            throw new ArgumentOutOfRangeException(nameof(Archive), Archive, "Unknown or missing archive source.");
         }
     }
 }

@@ -17,11 +17,10 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 {
     private const string TapEndpoint = "tap_obs/sync";
     private const string DataLinkEndpoint = "datalink/links";
-    private const string DatasetIdIvoPrefix = "ivo://eso.org/csp#";
+    private const string DatasetIdIvoPrefix = "ivo://eso.org/ID?";
     private const string UnknownInstrument = "UNKNOWN";
     private const double MetresToMicrometres = 1e6;
     private const string LikeEscapeChar = "\\";
-
     private const string RequestedColumns =
         "dp_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
         "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,obs_creator_name,data_rights";

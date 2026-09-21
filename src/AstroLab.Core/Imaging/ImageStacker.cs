@@ -44,6 +44,11 @@ public static class ImageStacker
             }
         }
 
+        if (!Enum.IsDefined(method))
+        {
+            return Error.Validation("imaging.stack.invalid_method", $"Unsupported stack combination method: {method}.");
+        }
+
         if (sigmaClipThreshold <= 0.0 || !double.IsFinite(sigmaClipThreshold))
         {
             return Error.Validation("imaging.stack.invalid_sigma_clip_threshold", "sigmaClipThreshold must be a finite, positive value.");

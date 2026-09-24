@@ -7,14 +7,43 @@ namespace AstroLab.Core.Spectroscopy;
 /// systems produced by this namespace's least-squares fitters (dispersion-solution fitting,
 /// polynomial continuum fitting, and Gauss-Newton spectral line fitting). Extracted so those three
 /// fitters share one tested implementation rather than duplicating the same elimination logic.
+/// Every caller passes symmetric positive (semi-)definite normal equations, so the system is first
+/// Jacobi-equilibrated (scaled by the inverse square root of its diagonal to a unit diagonal). This
+/// makes the singularity test independent of each parameter's physical units: without it, a fixed
+/// pivot tolerance declares a perfectly well-posed fit singular whenever the data are small in
+/// absolute terms (e.g. flux-calibrated spectra in erg/s/cm²/Å, where JᵀJ scales with flux²).
 /// </summary>
 internal static class LinearSystemSolver
 {
-    private const double SingularSystemTolerance = 1e-10;
+    private const double SingularPivotTolerance = 1e-12;
 
     public static Result<double[]> Solve(double[,] matrix, double[] rhs, string singularSystemErrorCode, string singularSystemErrorMessage)
     {
         var n = rhs.Length;
+
+        var scale = new double[n];
+
+        for (var i = 0; i < n; i++)
+        {
+            var diagonal = matrix[i, i];
+
+            if (!(diagonal > 0.0) || !double.IsFinite(diagonal))
+            {
+                return Error.Validation(singularSystemErrorCode, singularSystemErrorMessage);
+            }
+
+            scale[i] = 1.0 / Math.Sqrt(diagonal);
+        }
+
+        for (var row = 0; row < n; row++)
+        {
+            for (var col = 0; col < n; col++)
+            {
+                matrix[row, col] *= scale[row] * scale[col];
+            }
+
+            rhs[row] *= scale[row];
+        }
 
         for (var pivotColumn = 0; pivotColumn < n; pivotColumn++)
         {
@@ -34,7 +63,7 @@ internal static class LinearSystemSolver
                 }
             }
 
-            if (largestPivotMagnitude < SingularSystemTolerance || double.IsNaN(largestPivotMagnitude))
+            if (largestPivotMagnitude < SingularPivotTolerance || double.IsNaN(largestPivotMagnitude))
             {
                 return Error.Validation(singularSystemErrorCode, singularSystemErrorMessage);
             }
@@ -69,6 +98,11 @@ internal static class LinearSystemSolver
             }
 
             solution[row] = sum / matrix[row, row];
+        }
+
+        for (var i = 0; i < n; i++)
+        {
+            solution[i] *= scale[i];
         }
 
         return solution;

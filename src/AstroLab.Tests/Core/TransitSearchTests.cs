@@ -24,6 +24,49 @@ public class TransitSearchTests
         Assert.True(result.Value.Duration is > 0.1 and < 1.0, $"Expected duration near 0.5, got {result.Value.Duration}.");
     }
 
+    [Theory]
+    [InlineData(3.0, 0.1, 0.0)]
+    [InlineData(10.0, 0.125, 0.0)]
+    [InlineData(4.3, 0.15, -0.05)]
+    public void Search_LongBaselineThirtyMinuteCadence_RecoversShortTransitPeriodDepthAndDuration(
+        double truePeriod, double trueDuration, double firstMidTransitOffset)
+    {
+        // 45 days at 30-minute cadence, searched over 0.5-20 days. A negative offset puts the first
+        // mid-transit before the first sample, so the series starts part-way through a transit.
+        const double cadence = 30.0 / 1440.0;
+
+        const double trueDepth = 0.01;
+
+        var sampleCount = (int)(45.0 / cadence);
+
+        var time = new double[sampleCount];
+
+        var flux = new double[sampleCount];
+
+        var epoch = trueDuration / 2.0 + firstMidTransitOffset;
+
+        for (var i = 0; i < sampleCount; i++)
+        {
+            time[i] = i * cadence;
+
+            var phaseTime = time[i] - epoch;
+
+            var offsetFromMidTransit = phaseTime - truePeriod * Math.Round(phaseTime / truePeriod);
+
+            flux[i] = Math.Abs(offsetFromMidTransit) < trueDuration / 2.0 ? 1.0 - trueDepth : 1.0;
+        }
+
+        var result = TransitSearch.Search(time, flux, minPeriod: 0.5, maxPeriod: 20.0, minTransitDepth: 0.005);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.InRange(result.Value.Period, truePeriod * 0.999, truePeriod * 1.001);
+
+        Assert.InRange(result.Value.Depth, 0.8 * trueDepth, 1.05 * trueDepth);
+
+        Assert.InRange(result.Value.Duration, 0.5 * trueDuration, 1.5 * trueDuration);
+    }
+
     [Fact]
     public void Search_DepthBelowRequestedThreshold_ReturnsNotFound()
     {

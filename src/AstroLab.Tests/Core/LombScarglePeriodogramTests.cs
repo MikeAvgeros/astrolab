@@ -5,6 +5,43 @@ namespace AstroLab.Tests.Core;
 public class LombScarglePeriodogramTests
 {
     [Fact]
+    public void SearchFull_ShortPeriodOverLongBaselineWithSuggestedRange_RecoversPeriod()
+    {
+        // 27 days at 30-minute cadence (a TESS-sector-like light curve) with a 0.2317-day signal:
+        // a grid uniform in period would step far past the ~1/T-wide frequency peak.
+        const double truePeriod = 0.2317;
+
+        const double cadenceDays = 30.0 / 1440.0;
+
+        var sampleCount = (int)(27.0 / cadenceDays);
+
+        var time = new double[sampleCount];
+
+        var flux = new double[sampleCount];
+
+        for (var i = 0; i < sampleCount; i++)
+        {
+            time[i] = i * cadenceDays;
+
+            flux[i] = Math.Sin(2.0 * Math.PI * time[i] / truePeriod);
+        }
+
+        var range = LombScarglePeriodogram.SuggestPeriodRange(time).Value;
+
+        var result = LombScarglePeriodogram.SearchFull(time, flux, range.MinPeriod, range.MaxPeriod);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.InRange(result.Value.BestPeriod, truePeriod * 0.999, truePeriod * 1.001);
+
+        Assert.True(result.Value.Power > 0.9 * (sampleCount - 1) / 2.0);
+
+        Assert.Equal(range.MinPeriod, result.Value.Periods[0], precision: 9);
+
+        Assert.Equal(range.MaxPeriod, result.Value.Periods[^1], precision: 9);
+    }
+
+    [Fact]
     public void Search_SinusoidalSignal_RecoversKnownPeriod()
     {
         const double truePeriod = 5.0;

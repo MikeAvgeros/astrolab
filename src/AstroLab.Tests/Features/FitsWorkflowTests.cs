@@ -974,31 +974,11 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task ComputeSpectralSnr_OnGradientSpectrum_ReportsMedianOverIqrSigma()
+    public async Task ComputeSpectralSnr_OnSpectrumShorterThanDerSnrStencil_ReturnsBadRequest()
     {
+        // The 4-bin gradient frame is too short for DER_SNR's 5-point second-difference stencil (and a
+        // noiseless ramp has no point-to-point scatter to measure in any case).
         var fileId = await UploadGradientSpectrumFrameAsync();
-
-        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/snr");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        var expectedSigma = 30.0 / 1.349;
-
-        Assert.Equal(90.0 / expectedSigma, body.GetProperty("overallSnr").GetDouble(), precision: 3);
-
-        var perSample = body.GetProperty("perSampleSnr").EnumerateArray().Select(e => e.GetDouble()).ToArray();
-
-        Assert.Equal(60.0 / expectedSigma, perSample[0], precision: 3);
-
-        Assert.Equal(120.0 / expectedSigma, perSample[3], precision: 3);
-    }
-
-    [Fact]
-    public async Task ComputeSpectralSnr_OnNearlyConstantSpectrum_ReturnsIndeterminateNoiseBadRequest()
-    {
-        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLineAndDispersionWcs());
 
         var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/snr");
 
@@ -1006,7 +986,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal("spectroscopy.snr.indeterminate_noise", body.GetProperty("title").GetString());
+        Assert.Equal("spectroscopy.snr.insufficient_bins", body.GetProperty("title").GetString());
     }
 
     [Fact]
@@ -1835,6 +1815,8 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
             CenterX = 5.5,
             CenterY = 5.5,
             ApertureRadius = 2.0,
+            AnnulusInnerRadius = 3.0,
+            AnnulusOuterRadius = 5.0,
         };
 
         var response = await _client.PostAsJsonAsync($"/api/measurements/{fileId}/stellar-colour", request);
@@ -1844,6 +1826,45 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(0.0, body.GetProperty("colourIndex").GetDouble(), precision: 9);
+    }
+
+    [Fact]
+    public async Task MeasureStellarColour_DifferentSkyLevels_ColourReflectsOnlyTheSourceFluxRatio()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallImageWithSourceOnFlatSky(skyLevel: 20, sourceExcess: 100));
+
+        var comparisonFileId = await UploadAsync(SyntheticFits.SmallImageWithSourceOnFlatSky(skyLevel: 150, sourceExcess: 50));
+
+        var request = new
+        {
+            ComparisonFileId = comparisonFileId,
+            CenterX = 5.5,
+            CenterY = 5.5,
+            ApertureRadius = 2.0,
+            AnnulusInnerRadius = 3.0,
+            AnnulusOuterRadius = 5.0,
+        };
+
+        var response = await _client.PostAsJsonAsync($"/api/measurements/{fileId}/stellar-colour", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // The source is twice as bright in the primary band once each image's own sky is removed.
+        Assert.Equal(-2.5 * Math.Log10(2.0), body.GetProperty("colourIndex").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task MeasureStellarColour_WithoutAnnulus_ReturnsBadRequest()
+    {
+        var fileId = await UploadImageWithSourceAsync();
+
+        var request = new { ComparisonFileId = fileId, CenterX = 5.5, CenterY = 5.5, ApertureRadius = 2.0 };
+
+        var response = await _client.PostAsJsonAsync($"/api/measurements/{fileId}/stellar-colour", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -1922,7 +1943,7 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var fileId = await UploadImageWithSourceAndWcsAsync();
 
         var response = await _client.GetAsync(
-            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2");
+            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2&annulusInnerRadius=3&annulusOuterRadius=5");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -1932,12 +1953,31 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task MeasureSurfaceBrightness_SameSourceOnDifferentSkyLevels_ReturnsSameValue()
+    {
+        var faintSkyFileId = await UploadAsync(SyntheticFits.SmallImageWithSourceOnFlatSky(skyLevel: 10, sourceExcess: 100, withWcs: true));
+
+        var brightSkyFileId = await UploadAsync(SyntheticFits.SmallImageWithSourceOnFlatSky(skyLevel: 120, sourceExcess: 100, withWcs: true));
+
+        const string query = "centerX=5.5&centerY=5.5&apertureRadius=2&annulusInnerRadius=3&annulusOuterRadius=5";
+
+        var faintSky = await _client.GetFromJsonAsync<JsonElement>($"/api/measurements/{faintSkyFileId}/surface-brightness?{query}");
+
+        var brightSky = await _client.GetFromJsonAsync<JsonElement>($"/api/measurements/{brightSkyFileId}/surface-brightness?{query}");
+
+        Assert.Equal(
+            faintSky.GetProperty("surfaceBrightnessMagPerArcsec2").GetDouble(),
+            brightSky.GetProperty("surfaceBrightnessMagPerArcsec2").GetDouble(),
+            precision: 9);
+    }
+
+    [Fact]
     public async Task MeasureSurfaceBrightness_WithoutWcs_ReturnsNotFound()
     {
         var fileId = await UploadImageWithSourceAsync();
 
         var response = await _client.GetAsync(
-            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2");
+            $"/api/measurements/{fileId}/surface-brightness?centerX=5.5&centerY=5.5&apertureRadius=2&annulusInnerRadius=3&annulusOuterRadius=5");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -1991,7 +2031,8 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        Assert.Equal(180.0, Math.Abs(body.GetProperty("rotationDegrees").GetDouble()), precision: 3);
+        // North-up, east-left (CDELT1 < 0, no CROTA2) is the unrotated reference orientation.
+        Assert.Equal(0.0, body.GetProperty("rotationDegrees").GetDouble(), precision: 6);
 
         Assert.True(body.GetProperty("isMirrored").GetBoolean());
     }

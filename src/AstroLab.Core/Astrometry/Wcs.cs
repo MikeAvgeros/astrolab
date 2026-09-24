@@ -93,11 +93,23 @@ public readonly record struct Wcs
 
     public double PixelScaleYArcsecPerPixel => PixelScaleYDegrees * ArcsecondsPerDegree;
 
-    public double RotationDegrees => Math.Atan2(Cd21, Cd11) * RadiansToDegrees;
+    public double RotationDegrees
+    {
+        get
+        {
+            var (longitudeRowX, longitudeRowY) = LongitudeAxisIndex == 0 ? (Cd11, Cd12) : (Cd21, Cd22);
+
+            var parity = Math.Sign(SkyDeterminant);
+
+            return Math.Atan2(parity * longitudeRowY, parity * longitudeRowX) * RadiansToDegrees;
+        }
+    }
 
     public double Determinant => Cd11 * Cd22 - Cd12 * Cd21;
 
-    public bool IsMirrored => Determinant < 0.0;
+    public bool IsMirrored => SkyDeterminant < 0.0;
+
+    private double SkyDeterminant => LongitudeAxisIndex == 0 ? Determinant : -Determinant;
 
     public bool IsInvertible
     {

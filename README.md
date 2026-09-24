@@ -1419,7 +1419,7 @@ Removes long-term trends from a light curve.
 Supported methods include:
 
 - `linear`
-- `median`
+- `median` — requires `windowDuration`, the moving-median window length in the light curve's own time units. Choose a window several times longer than any feature you want to keep (e.g. a transit), since shorter windows absorb and remove it.
 
 Detrending is useful when instrumental or observational trends are much larger than the variation being investigated.
 
@@ -1542,7 +1542,7 @@ The comparison image is supplied through:
 comparisonFileId
 ```
 
-along with the target position and aperture.
+along with the target position, aperture, and a background annulus (`annulusInnerRadius`, `annulusOuterRadius`, optional `backgroundMethod`). Each band's aperture flux is sky-subtracted using its own annulus before the magnitudes are formed.
 
 ---
 
@@ -1625,6 +1625,8 @@ mag / arcsec²
 ```
 
 The image WCS supplies the pixel scale required to convert an image aperture into an angular area on the sky.
+
+Query parameters: `centerX`, `centerY`, `apertureRadius`, `annulusInnerRadius`, `annulusOuterRadius`, and optional `backgroundMethod`. The aperture flux is sky-subtracted using the local annulus background.
 
 ---
 

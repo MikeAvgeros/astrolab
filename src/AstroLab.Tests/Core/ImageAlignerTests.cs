@@ -58,6 +58,69 @@ public class ImageAlignerTests
         Assert.Equal(1.0, transform.Scale, precision: 6);
     }
 
+    [Theory]
+    [InlineData(0.0, 90.0, false)]
+    [InlineData(15.0, -40.0, false)]
+    [InlineData(0.0, 90.0, true)]
+    [InlineData(-30.0, 60.0, true)]
+    public void AlignByWcs_OnRotatedGrids_MapsTargetPixelsOntoTheSameSkyPositionInTheReference(
+        double targetCrota2, double referenceCrota2, bool cdelt1Positive)
+    {
+        const double PixelTolerance = 0.01;
+
+        var target = BuildRotatedWcs(crPix1: 50.0, crPix2: 40.0, crVal1: 150.0, crVal2: 20.0, targetCrota2, cdelt1Positive);
+
+        var reference = BuildRotatedWcs(crPix1: 70.0, crPix2: 65.0, crVal1: 150.002, crVal2: 20.001, referenceCrota2, cdelt1Positive);
+
+        var result = ImageAligner.AlignByWcs(target, reference);
+
+        Assert.True(result.IsSuccess);
+
+        var transform = result.Value;
+
+        var radians = transform.RotationDegrees * Math.PI / 180.0;
+
+        foreach (var (x, y) in new[] { (0.0, 0.0), (99.0, 0.0), (0.0, 79.0), (60.0, 30.0) })
+        {
+            var world = target.PixelToWorld(x, y).Value;
+
+            var expected = reference.WorldToPixel(world.RightAscension, world.Declination).Value;
+
+            var mappedX = transform.Scale * (Math.Cos(radians) * x - Math.Sin(radians) * y) + transform.OffsetX;
+
+            var mappedY = transform.Scale * (Math.Sin(radians) * x + Math.Cos(radians) * y) + transform.OffsetY;
+
+            Assert.InRange(mappedX, expected.PixelX - PixelTolerance, expected.PixelX + PixelTolerance);
+
+            Assert.InRange(mappedY, expected.PixelY - PixelTolerance, expected.PixelY + PixelTolerance);
+        }
+    }
+
+    private static Wcs BuildRotatedWcs(
+        double crPix1, double crPix2, double crVal1, double crVal2, double crota2, bool cdelt1Positive)
+    {
+        const double cdelt = 0.0001;
+
+        string[] cards =
+        [
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            $"CRPIX1  =                {crPix1}",
+            $"CRPIX2  =                {crPix2}",
+            $"CRVAL1  =                {crVal1}",
+            $"CRVAL2  =                {crVal2}",
+            $"CDELT1  =                {(cdelt1Positive ? cdelt : -cdelt)}",
+            $"CDELT2  =                {cdelt}",
+            $"CROTA2  =                {crota2}",
+            "RADESYS = 'ICRS    '",
+            "END",
+        ];
+
+        var block = Encoding.ASCII.GetBytes(string.Concat(Array.ConvertAll(cards, PadCard)));
+
+        return Wcs.FromHeader(FitsHeader.Parse(block).Value).Value;
+    }
+
     [Fact]
     public void AlignByWcs_OnDifferentPixelScales_ReturnsScaleRatio()
     {

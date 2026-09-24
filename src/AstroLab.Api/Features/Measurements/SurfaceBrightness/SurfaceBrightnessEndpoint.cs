@@ -9,6 +9,8 @@ namespace AstroLab.Api.Features.Measurements.SurfaceBrightness;
 /// <summary>
 /// Measures surface brightness (magnitude per square arcsecond) within a circular aperture on a
 /// staged image, converting the aperture's pixel area to arcsec^2 via the image's WCS pixel scale.
+/// The aperture flux is background-subtracted using the local sky level estimated in the requested
+/// annulus, so the result describes the source rather than the source plus sky.
 /// </summary>
 public static class SurfaceBrightnessEndpoint
 {
@@ -28,10 +30,14 @@ public static class SurfaceBrightnessEndpoint
         double centerX,
         double centerY,
         double apertureRadius,
+        double annulusInnerRadius,
+        double annulusOuterRadius,
         FitsDatasetReader datasetReader,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        BackgroundEstimationMethod backgroundMethod = BackgroundEstimationMethod.Median)
     {
-        var request = SurfaceBrightnessRequest.Create(centerX, centerY, apertureRadius);
+        var request = SurfaceBrightnessRequest.Create(
+            centerX, centerY, apertureRadius, annulusInnerRadius, annulusOuterRadius, backgroundMethod);
 
         var datasetResult = await datasetReader.LoadImageAsync(fileId, cancellationToken);
 
@@ -44,13 +50,16 @@ public static class SurfaceBrightnessEndpoint
 
         var (width, height) = dataset.Image.Resolve2DDimensions();
 
-        var apertureResult = ApertureEngine.MeasureCircularAperture(
-            dataset.Pixels, width, height, request.CenterX, request.CenterY, request.ApertureRadius);
+        var measurementResult = ApertureEngine.MeasureNetFlux(
+            dataset.Pixels, width, height, request.CenterX, request.CenterY,
+            request.ApertureRadius, request.AnnulusInnerRadius, request.AnnulusOuterRadius, request.BackgroundMethod);
 
-        if (apertureResult.IsFailure)
+        if (measurementResult.IsFailure)
         {
-            return apertureResult.Error.ToProblem();
+            return measurementResult.Error.ToProblem();
         }
+
+        var measurement = measurementResult.Value;
 
         var statsResult = ImageStatistics.Compute(dataset.Pixels);
 
@@ -64,7 +73,7 @@ public static class SurfaceBrightnessEndpoint
         var gain = ResolveHeaderGain(dataset.Hdu.Header);
 
         var fluxUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
-            apertureResult.Value.Flux, apertureResult.Value.Area, skySigma, gain);
+            measurement.NetFlux, measurement.ApertureArea, skySigma, gain);
 
         if (fluxUncertaintyResult.IsFailure)
         {
@@ -72,7 +81,7 @@ public static class SurfaceBrightnessEndpoint
         }
 
         var magnitudeResult = InstrumentalPhotometry.ComputeMagnitude(
-            apertureResult.Value.Flux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
+            measurement.NetFlux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
 
         if (magnitudeResult.IsFailure)
         {
@@ -90,7 +99,7 @@ public static class SurfaceBrightnessEndpoint
 
         var surfaceBrightnessResult = InstrumentalPhotometry.ComputeSurfaceBrightness(
             magnitudeResult.Value.Magnitude, magnitudeResult.Value.MagnitudeUncertainty,
-            apertureResult.Value.Area, wcs.PixelScaleXDegrees, wcs.PixelScaleYDegrees);
+            measurement.ApertureArea, wcs.PixelScaleXDegrees, wcs.PixelScaleYDegrees);
 
         return surfaceBrightnessResult.ToApiResult(surfaceBrightness => Results.Ok(SurfaceBrightnessResponse.Create(
             fileId, surfaceBrightness.SurfaceBrightness, surfaceBrightness.SurfaceBrightnessUncertainty, InstrumentalPhotometry.DefaultZeroPoint)));

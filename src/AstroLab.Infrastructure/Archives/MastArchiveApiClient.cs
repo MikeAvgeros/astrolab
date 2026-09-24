@@ -29,7 +29,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string ObsIdParam = "obs_id";
     private const string UnknownInstrument = "UNKNOWN";
     private const string RequestFormFieldName = "request";
-    private const double MetresToMicrometres = 1e6;
+    private const double NanometresToMicrometres = 1e-3;
 
     private const string RequestedColumns =
         "obsid,obs_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
@@ -376,8 +376,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             rightAscension: observation.RightAscension,
             declination: observation.Declination,
             exposureTimeSeconds: observation.ExposureTime,
-            wavelengthMinMicrometres: observation.WavelengthMin * MetresToMicrometres,
-            wavelengthMaxMicrometres: observation.WavelengthMax * MetresToMicrometres,
+            wavelengthMinMicrometres: observation.WavelengthMin * NanometresToMicrometres,
+            wavelengthMaxMicrometres: observation.WavelengthMax * NanometresToMicrometres,
             proposalId: observation.ProposalId,
             proposalPi: observation.ProposalPi,
             dataRights: observation.DataRights);

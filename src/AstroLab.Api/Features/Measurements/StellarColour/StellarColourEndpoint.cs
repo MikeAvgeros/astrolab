@@ -9,8 +9,10 @@ namespace AstroLab.Api.Features.Measurements.StellarColour;
 /// <summary>
 /// Measures a star's brightness and colour index from aperture photometry at the same pixel
 /// position across two staged images taken in different bands: the primary image (<c>fileId</c>)
-/// and a comparison image (<see cref="StellarColourRequest.ComparisonFileId"/>). Both instrumental
-/// magnitudes share the same zero point, so the colour index (primary minus comparison magnitude)
+/// and a comparison image (<see cref="StellarColourRequest.ComparisonFileId"/>). Each band's flux
+/// is background-subtracted using the local sky level estimated in the requested annulus, since a
+/// sky-inclusive aperture sum would drive the colour index towards zero on a bright sky. Both
+/// instrumental magnitudes share the same zero point, so the colour index (primary minus comparison magnitude)
 /// is meaningful even though neither magnitude is independently calibrated.
 /// </summary>
 public static class StellarColourEndpoint
@@ -49,14 +51,14 @@ public static class StellarColourEndpoint
 
         using var secondaryDataset = secondaryDatasetResult.Value;
 
-        var primaryMagnitudeResult = MeasureInstrumentalMagnitude(primaryDataset, request.CenterX, request.CenterY, request.ApertureRadius);
+        var primaryMagnitudeResult = MeasureInstrumentalMagnitude(primaryDataset, request);
 
         if (primaryMagnitudeResult.IsFailure)
         {
             return primaryMagnitudeResult.Error.ToProblem();
         }
 
-        var secondaryMagnitudeResult = MeasureInstrumentalMagnitude(secondaryDataset, request.CenterX, request.CenterY, request.ApertureRadius);
+        var secondaryMagnitudeResult = MeasureInstrumentalMagnitude(secondaryDataset, request);
 
         if (secondaryMagnitudeResult.IsFailure)
         {
@@ -79,16 +81,20 @@ public static class StellarColourEndpoint
     }
 
     private static Result<(double Magnitude, double MagnitudeUncertainty)> MeasureInstrumentalMagnitude(
-        FitsDataset dataset, double centerX, double centerY, double apertureRadius)
+        FitsDataset dataset, StellarColourRequest request)
     {
         var (width, height) = dataset.Image.Resolve2DDimensions();
 
-        var apertureResult = ApertureEngine.MeasureCircularAperture(dataset.Pixels, width, height, centerX, centerY, apertureRadius);
+        var measurementResult = ApertureEngine.MeasureNetFlux(
+            dataset.Pixels, width, height, request.CenterX, request.CenterY,
+            request.ApertureRadius, request.AnnulusInnerRadius, request.AnnulusOuterRadius, request.BackgroundMethod);
 
-        if (apertureResult.IsFailure)
+        if (measurementResult.IsFailure)
         {
-            return Result<(double Magnitude, double MagnitudeUncertainty)>.Failure(apertureResult.Error);
+            return Result<(double Magnitude, double MagnitudeUncertainty)>.Failure(measurementResult.Error);
         }
+
+        var measurement = measurementResult.Value;
 
         var statsResult = ImageStatistics.Compute(dataset.Pixels);
 
@@ -102,7 +108,7 @@ public static class StellarColourEndpoint
         var gain = ResolveHeaderGain(dataset.Hdu.Header);
 
         var fluxUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
-            apertureResult.Value.Flux, apertureResult.Value.Area, skySigma, gain);
+            measurement.NetFlux, measurement.ApertureArea, skySigma, gain);
 
         if (fluxUncertaintyResult.IsFailure)
         {
@@ -110,7 +116,7 @@ public static class StellarColourEndpoint
         }
 
         return InstrumentalPhotometry.ComputeMagnitude(
-            apertureResult.Value.Flux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
+            measurement.NetFlux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
     }
 
     private static double? ResolveHeaderGain(FitsHeader header)

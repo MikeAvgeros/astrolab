@@ -8,7 +8,7 @@ namespace AstroLab.Api.Features.Spectroscopy.Compare;
 /// <summary>
 /// Compares two staged spectra (extracted from their full spatial extent, as in <c>Lines</c>): their
 /// flux ratio and RMS flux difference, and their cross-correlation peak and velocity shift (derived
-/// from the primary file's CRVAL1/CDELT1 dispersion WCS, if present).
+/// from the primary file's linear dispersion WCS on its DISPAXIS axis, if present).
 /// </summary>
 public static class CompareEndpoint
 {
@@ -96,33 +96,24 @@ public static class CompareEndpoint
 
     private static Result<double> ComputeVelocityShift(FitsHeader header, double lagBins)
     {
-        var referenceWavelengthResult = header.GetReal("CRVAL1");
+        var solutionResult = SpectrumExtractor.ResolveLinearDispersionSolution(header);
 
-        if (referenceWavelengthResult.IsFailure)
+        if (solutionResult.IsFailure)
         {
             return Error.Validation(
                 "spectroscopy.compare.no_wavelength_solution",
-                "The primary file's header carries no CRVAL1 dispersion reference wavelength; a velocity shift cannot be computed.");
+                $"{solutionResult.Error.Message} A velocity shift cannot be computed from the primary file.");
         }
 
-        var dispersionPerPixelResult = header.GetReal("CDELT1");
-
-        if (dispersionPerPixelResult.IsFailure)
-        {
-            return Error.Validation(
-                "spectroscopy.compare.no_wavelength_solution",
-                "The primary file's header carries no CDELT1 dispersion scale; a velocity shift cannot be computed.");
-        }
-
-        var referenceWavelength = referenceWavelengthResult.Value;
+        var (referenceWavelength, wavelengthPerPixel, _) = solutionResult.Value;
 
         if (referenceWavelength <= 0.0)
         {
             return Error.Validation(
-                "spectroscopy.compare.invalid_wavelength_solution", "CRVAL1 must be a positive reference wavelength.");
+                "spectroscopy.compare.invalid_wavelength_solution", "The dispersion axis reference wavelength (CRVALn) must be positive.");
         }
 
-        var observedWavelength = referenceWavelength + (lagBins * dispersionPerPixelResult.Value);
+        var observedWavelength = referenceWavelength + (lagBins * wavelengthPerPixel);
 
         return RadialVelocityEstimator.EstimateKilometersPerSecond(observedWavelength, referenceWavelength);
     }

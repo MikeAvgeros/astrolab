@@ -172,6 +172,34 @@ internal static class SyntheticFits
             BuildSourcePixelData())
     ]);
     
+    public static byte[] SmallImageWithSourceOnFlatSky(byte skyLevel, byte sourceExcess, bool withWcs = false)
+    {
+        string[] imageCards =
+        [
+            "SIMPLE  =                    T",
+            "BITPIX  =                    8",
+            "NAXIS   =                    2",
+            "NAXIS1  =                   12",
+            "NAXIS2  =                   12",
+        ];
+
+        string[] wcsCards =
+        [
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                  0.0",
+            "CDELT1  =            -0.0002778",
+            "CDELT2  =             0.0002778",
+        ];
+
+        string[] cards = [.. imageCards, .. withWcs ? wcsCards : [], "END"];
+
+        return BuildMultiHdu([(cards, BuildFlatSkySourcePixelData(skyLevel, sourceExcess))]);
+    }
+
     public static byte[] SmallImageWithSourceAndWcs() => BuildMultiHdu(
     [
         (
@@ -302,6 +330,26 @@ internal static class SyntheticFits
             for (var x = blockMin; x <= blockMax; x++)
             {
                 pixels[(y * width) + x] = 200;
+            }
+        }
+
+        return pixels;
+    }
+
+    private static byte[] BuildFlatSkySourcePixelData(byte skyLevel, byte sourceExcess)
+    {
+        const int width = 12;
+        const int height = 12;
+
+        var pixels = new byte[width * height];
+
+        Array.Fill(pixels, skyLevel);
+
+        for (var y = 4; y <= 6; y++)
+        {
+            for (var x = 4; x <= 6; x++)
+            {
+                pixels[(y * width) + x] = (byte)(skyLevel + sourceExcess);
             }
         }
 

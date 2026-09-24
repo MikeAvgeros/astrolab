@@ -4,8 +4,10 @@ namespace AstroLab.Core.Spectroscopy;
 /// Shared robust central-tendency and noise estimation for a 1D flux spectrum: the median (robust
 /// against a small number of strong emission/absorption features) and an inter-quartile-range-based
 /// estimate of the per-point noise sigma (assuming a normal noise distribution, for which
-/// IQR/1.349 is the standard robust sigma estimator). Used by both <see cref="SpectralLineDetector"/>
-/// (continuum/noise for line detection) and <see cref="SpectrumSignalToNoiseEstimator"/> (spectrum-wide SNR).
+/// IQR/1.349 is the standard robust sigma estimator). Used by <see cref="SpectralLineDetector"/>
+/// (continuum/noise for line detection). Because the IQR also measures the continuum's own shape, this
+/// is only a noise estimate for an approximately flat continuum; spectrum-wide SNR uses the
+/// shape-insensitive DER_SNR estimator instead (<see cref="SpectrumSignalToNoiseEstimator"/>).
 /// </summary>
 internal static class RobustSpectrumStatistics
 {

@@ -12,8 +12,6 @@ namespace AstroLab.Api.Features.Spectroscopy;
 /// </summary>
 internal static class SpectrumFrameExtraction
 {
-    private const double DefaultReferencePixel = 1.0;
-
     public static Result<double[]> ExtractFullFrame(FitsDataset dataset)
     {
         var (width, height) = dataset.Image.Resolve2DDimensions();
@@ -38,27 +36,20 @@ internal static class SpectrumFrameExtraction
     
     public static Result<double[]> ResolveWavelengths(FitsHeader header, int dispersionBins, string errorCode)
     {
-        var crVal1Result = header.GetReal("CRVAL1");
+        var solutionResult = SpectrumExtractor.ResolveLinearDispersionSolution(header);
 
-        if (crVal1Result.IsFailure)
+        if (solutionResult.IsFailure)
         {
-            return Error.Validation(errorCode, "The file's header carries no CRVAL1 dispersion reference wavelength; a wavelength axis cannot be resolved.");
+            return Error.Validation(errorCode, solutionResult.Error.Message);
         }
 
-        var cDelt1Result = header.GetReal("CDELT1");
-
-        if (cDelt1Result.IsFailure)
-        {
-            return Error.Validation(errorCode, "The file's header carries no CDELT1 dispersion scale; a wavelength axis cannot be resolved.");
-        }
-
-        var referencePixel = header.GetReal("CRPIX1").GetValueOrDefault(DefaultReferencePixel);
+        var (referenceWavelength, wavelengthPerPixel, referencePixel) = solutionResult.Value;
 
         var wavelengths = new double[dispersionBins];
 
         for (var i = 0; i < dispersionBins; i++)
         {
-            wavelengths[i] = crVal1Result.Value + (i - (referencePixel - 1.0)) * cDelt1Result.Value;
+            wavelengths[i] = referenceWavelength + (i - (referencePixel - 1.0)) * wavelengthPerPixel;
         }
 
         return wavelengths;

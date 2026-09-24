@@ -34,6 +34,8 @@ public readonly record struct FitsImageDescriptor
 
     public double ToPhysical(double rawValue) => rawValue * BScale + BZero;
 
+    public double IntegerToPhysical(long rawValue) => rawValue == Blank ? double.NaN : ToPhysical(rawValue);
+
     public (int Width, int Height) Resolve2DDimensions() => NAxes.Length switch
     {
         >= 2 => (NAxes[0], NAxes[1]),

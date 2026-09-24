@@ -19,6 +19,20 @@ public class EquivalentWidthCalculatorTests
     }
 
     [Fact]
+    public void Calculate_FluxCalibratedAbsorptionDip_IsIndependentOfFluxUnits()
+    {
+        double[] wavelengths = [0.0, 1.0, 2.0, 3.0, 4.0];
+
+        double[] flux = [1e-16, 1e-16, 1e-17, 1e-16, 1e-16];
+
+        var result = EquivalentWidthCalculator.Calculate(wavelengths, flux);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(0.9, result.Value, precision: 9);
+    }
+
+    [Fact]
     public void Calculate_EmissionBump_ReturnsNegativeEquivalentWidth()
     {
         double[] wavelengths = [0.0, 1.0, 2.0, 3.0, 4.0];

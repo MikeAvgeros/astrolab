@@ -1,3 +1,5 @@
+using System.Text;
+using AstroLab.Core.Fits;
 using AstroLab.Core.Spectroscopy;
 
 namespace AstroLab.Tests.Core;
@@ -293,5 +295,72 @@ public class SpectrumExtractorTests
         Assert.True(result.IsFailure);
 
         Assert.Equal("spectroscopy.calibration_singular_system", result.Error.Code);
+    }
+    private static FitsHeader BuildHeader(params string[] cards) =>
+        FitsHeader.Parse(Encoding.ASCII.GetBytes(string.Concat(cards.Append("END").Select(card => card.PadRight(FitsCardParser.CardLength))))).Value;
+
+    [Fact]
+    public void ResolveLinearDispersionSolution_WithoutDispAxis_ReadsAxisOneKeywords()
+    {
+        var header = BuildHeader(
+            "CRVAL1  =               4000.0",
+            "CDELT1  =                  2.0",
+            "CRPIX1  =                  3.0",
+            "CRVAL2  =                  0.0",
+            "CDELT2  =                  0.5");
+
+        var result = SpectrumExtractor.ResolveLinearDispersionSolution(header);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal((4000.0, 2.0, 3.0), result.Value);
+    }
+
+    [Fact]
+    public void ResolveLinearDispersionSolution_WithVerticalDispAxis_ReadsAxisTwoKeywords()
+    {
+        var header = BuildHeader(
+            "DISPAXIS=                    2",
+            "CRVAL1  =                  0.0",
+            "CDELT1  =                  0.2",
+            "CRVAL2  =               6500.0",
+            "CDELT2  =                  1.5",
+            "CRPIX2  =                 10.0");
+
+        var result = SpectrumExtractor.ResolveLinearDispersionSolution(header);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal((6500.0, 1.5, 10.0), result.Value);
+    }
+
+    [Fact]
+    public void ResolveLinearDispersionSolution_PrefersCdOverCdelt_AndDefaultsReferencePixel()
+    {
+        var header = BuildHeader(
+            "CRVAL1  =               5000.0",
+            "CDELT1  =                  9.0",
+            "CD1_1   =                  0.8");
+
+        var result = SpectrumExtractor.ResolveLinearDispersionSolution(header);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal((5000.0, 0.8, 1.0), result.Value);
+    }
+
+    [Fact]
+    public void ResolveLinearDispersionSolution_VerticalAxisWithOnlyAxisOneSolution_ReturnsValidationError()
+    {
+        var header = BuildHeader(
+            "DISPAXIS=                    2",
+            "CRVAL1  =               4000.0",
+            "CDELT1  =                  2.0");
+
+        var result = SpectrumExtractor.ResolveLinearDispersionSolution(header);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("spectroscopy.no_wavelength_solution", result.Error.Code);
     }
 }

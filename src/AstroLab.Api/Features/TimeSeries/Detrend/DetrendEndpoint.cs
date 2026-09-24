@@ -29,7 +29,7 @@ public static class DetrendEndpoint
 
         var data = lightCurveResult.Value;
 
-        var detrendResult = LightCurveDetrender.Detrend(data.Time, data.Flux, request.Method);
+        var detrendResult = LightCurveDetrender.Detrend(data.Time, data.Flux, request.Method, request.WindowDuration);
 
         return detrendResult.ToApiResult(detrended =>
             Results.Ok(DetrendResponse.Create(fileId, [.. data.Time], [.. detrended])));

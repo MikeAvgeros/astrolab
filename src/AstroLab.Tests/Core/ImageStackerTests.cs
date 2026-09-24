@@ -57,10 +57,47 @@ public class ImageStackerTests
     [Fact]
     public void Combine_SigmaClipped_RejectsOutlierAndReturnsMeanOfSurvivors()
     {
-        // A tighter-than-default threshold avoids the "masking" effect where one huge outlier among few samples inflates sigma enough to hide itself.
         List<ReadOnlyMemory<float>> frames = [Frame(10f), Frame(10f), Frame(10f), Frame(10f), Frame(1000f)];
 
-        var result = ImageStacker.Combine(frames, width: 1, height: 1, StackCombinationMethod.SigmaClipped, sigmaClipThreshold: 1.0);
+        var result = ImageStacker.Combine(frames, width: 1, height: 1, StackCombinationMethod.SigmaClipped);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(10.0, result.Value[0], precision: 3);
+    }
+
+    [Fact]
+    public void Combine_SigmaClipped_AtDefaultThreshold_RejectsCosmicRayAmongFewNoisyFrames()
+    {
+        // With a mean/standard-deviation clip, no sample of a 5-frame stack can exceed sqrt(4) = 2
+        // standard deviations, so a 3-sigma clip would never reject the hit.
+        List<ReadOnlyMemory<float>> frames = [Frame(10.1f), Frame(9.9f), Frame(10.0f), Frame(10.2f), Frame(1000f)];
+
+        var result = ImageStacker.Combine(frames, width: 1, height: 1, StackCombinationMethod.SigmaClipped);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(10.05, result.Value[0], precision: 3);
+    }
+
+    [Fact]
+    public void Combine_SigmaClipped_OnThreeFrames_RejectsSingleOutlier()
+    {
+        List<ReadOnlyMemory<float>> frames = [Frame(10.0f), Frame(10.2f), Frame(500f)];
+
+        var result = ImageStacker.Combine(frames, width: 1, height: 1, StackCombinationMethod.SigmaClipped);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(10.1, result.Value[0], precision: 3);
+    }
+
+    [Fact]
+    public void Combine_SigmaClipped_WithoutOutliers_MatchesMean()
+    {
+        List<ReadOnlyMemory<float>> frames = [Frame(9.0f), Frame(10.0f), Frame(11.0f), Frame(10.5f), Frame(9.5f)];
+
+        var result = ImageStacker.Combine(frames, width: 1, height: 1, StackCombinationMethod.SigmaClipped);
 
         Assert.True(result.IsSuccess);
 

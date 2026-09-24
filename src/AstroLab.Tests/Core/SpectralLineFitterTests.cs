@@ -58,6 +58,31 @@ public class SpectralLineFitterTests
     }
 
     [Fact]
+    public void FitGaussian_FluxCalibratedUnits_RecoversSameProfileAsUnscaledData()
+    {
+        // erg/s/cm^2/A-scale flux: J^T J scales with flux^2 (~1e-32 here), which must not be mistaken for singularity.
+        const double fluxScale = 1e-16;
+
+        var (x, flux) = BuildSyntheticGaussian();
+
+        var scaledFlux = flux.Select(value => value * fluxScale).ToArray();
+
+        var result = SpectralLineFitter.FitGaussian(x, scaledFlux, initialCenter: null, initialAmplitude: null, initialFwhm: null);
+
+        Assert.True(result.IsSuccess);
+
+        var fit = result.Value;
+
+        Assert.Equal(TrueAmplitude, fit.Amplitude / fluxScale, precision: 3);
+
+        Assert.Equal(TrueBaseline, fit.Baseline / fluxScale, precision: 3);
+
+        Assert.Equal(TrueCenter, fit.Center, precision: 3);
+
+        Assert.Equal(TrueSigma * 2.0 * Math.Sqrt(2.0 * Math.Log(2.0)), fit.Fwhm, precision: 3);
+    }
+
+    [Fact]
     public void FitGaussian_WithCloseInitialGuesses_Converges()
     {
         var (x, flux) = BuildSyntheticGaussian();

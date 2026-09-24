@@ -30,7 +30,7 @@ public class MastArchiveApiClientTests
             {
               "obs_id":"obs1","target_name":"M31","obs_collection":"HST","instrument_name":"ACS/WFC",
               "dataproduct_type":"image","calib_level":3,"t_min":58000.5,"t_max":58000.6,
-              "t_exptime":900.0,"s_ra":10.68,"s_dec":41.27,"em_min":4e-7,"em_max":7e-7,
+              "t_exptime":900.0,"s_ra":10.68,"s_dec":41.27,"em_min":400.0,"em_max":700.0,
               "proposal_id":"12345","proposal_pi":"Someone","dataRights":"PUBLIC"
             }
           ]

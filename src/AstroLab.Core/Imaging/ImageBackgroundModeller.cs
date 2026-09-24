@@ -15,7 +15,6 @@ public static class ImageBackgroundModeller
     private const double LowerQuartilePercentile = 25.0;
     private const double MedianPercentile = 50.0;
     private const double UpperQuartilePercentile = 75.0;
-    private const int MaxMeshHistogramBins = 4096;
 
     public static Result<ImageBackgroundModel> Model(ReadOnlySpan<float> pixels, int width, int height, int meshSizePixels)
     {
@@ -107,12 +106,10 @@ public static class ImageBackgroundModeller
 
         var stats = statsResult.Value;
 
-        var histogramBins = (int)Math.Min(stats.ValidPixelCount, MaxMeshHistogramBins);
-
         Span<double> percentileValues = stackalloc double[3];
 
         var percentilesResult = ImageStatistics.ComputePercentiles(
-            meshPixels, stats, [LowerQuartilePercentile, MedianPercentile, UpperQuartilePercentile], percentileValues, histogramBins);
+            meshPixels, stats, [LowerQuartilePercentile, MedianPercentile, UpperQuartilePercentile], percentileValues);
 
         if (percentilesResult.IsFailure)
         {

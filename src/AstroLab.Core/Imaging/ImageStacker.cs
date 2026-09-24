@@ -5,7 +5,11 @@ namespace AstroLab.Core.Imaging;
 /// <summary>
 /// Combines multiple equally-sized, pre-aligned pixel frames into a single composite image via
 /// mean, median, sum, or iterative sigma-clipped mean combination — the standard astronomical
-/// stacking techniques for improving signal-to-noise and rejecting cosmic rays/outliers.
+/// stacking techniques for improving signal-to-noise and rejecting cosmic rays/outliers. Sigma
+/// clipping is centred on the per-pixel median and scaled by the median absolute deviation
+/// (1.4826·MAD), so a single outlier cannot inflate the dispersion estimate enough to hide itself —
+/// with a mean/standard-deviation clip no sample of an n-frame stack can lie more than √(n−1)
+/// standard deviations from the mean, which makes a 3σ clip a no-op for ten frames or fewer.
 /// </summary>
 public static class ImageStacker
 {
@@ -13,6 +17,7 @@ public static class ImageStacker
     public const int DefaultSigmaClipIterations = 3;
     private const int MaxStackallocFrameCount = 64;
     private const int MinimumSigmaClipSampleCount = 3;
+    private const double MadToSigmaFactor = 1.4826;
 
     public static Result<float[]> Combine(
         IReadOnlyList<ReadOnlyMemory<float>> frames,
@@ -65,13 +70,15 @@ public static class ImageStacker
 
         Span<double> sampleBuffer = frameCount <= MaxStackallocFrameCount ? stackalloc double[frameCount] : new double[frameCount];
 
+        Span<double> deviationBuffer = frameCount <= MaxStackallocFrameCount ? stackalloc double[frameCount] : new double[frameCount];
+
         for (var pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
         {
             var sampleCount = CollectFiniteSamples(frames, pixelIndex, sampleBuffer);
 
             result[pixelIndex] = sampleCount == 0
                 ? float.NaN
-                : (float)CombineSamples(sampleBuffer[..sampleCount], method, sigmaClipThreshold, sigmaClipIterations);
+                : (float)CombineSamples(sampleBuffer[..sampleCount], deviationBuffer, method, sigmaClipThreshold, sigmaClipIterations);
         }
 
         return result;
@@ -94,12 +101,13 @@ public static class ImageStacker
         return count;
     }
 
-    private static double CombineSamples(Span<double> samples, StackCombinationMethod method, double sigmaClipThreshold, int sigmaClipIterations) => method switch
+    private static double CombineSamples(
+        Span<double> samples, Span<double> deviationBuffer, StackCombinationMethod method, double sigmaClipThreshold, int sigmaClipIterations) => method switch
     {
         StackCombinationMethod.Mean => Mean(samples),
         StackCombinationMethod.Median => Median(samples),
         StackCombinationMethod.Sum => Sum(samples),
-        StackCombinationMethod.SigmaClipped => SigmaClippedMean(samples, sigmaClipThreshold, sigmaClipIterations),
+        StackCombinationMethod.SigmaClipped => SigmaClippedMean(samples, deviationBuffer, sigmaClipThreshold, sigmaClipIterations),
         _ => throw new ArgumentOutOfRangeException(nameof(method), method, "Unsupported stack combination method."),
     };
 
@@ -126,34 +134,36 @@ public static class ImageStacker
         return samples.Length % 2 == 0 ? (samples[midpoint - 1] + samples[midpoint]) / 2.0 : samples[midpoint];
     }
 
-    private static double SigmaClippedMean(Span<double> samples, double threshold, int iterations)
+    private static double SigmaClippedMean(Span<double> samples, Span<double> deviationBuffer, double threshold, int iterations)
     {
         var activeCount = samples.Length;
 
-        for (var iteration = 0; iteration < iterations && activeCount > MinimumSigmaClipSampleCount; iteration++)
+        for (var iteration = 0; iteration < iterations && activeCount >= MinimumSigmaClipSampleCount; iteration++)
         {
             var active = samples[..activeCount];
 
-            var mean = Mean(active);
+            var center = Median(active);
 
-            var stdDev = StandardDeviation(active, mean);
+            var deviations = deviationBuffer[..activeCount];
 
-            if (stdDev <= 0.0)
+            for (var i = 0; i < activeCount; i++)
             {
-                break;
+                deviations[i] = Math.Abs(active[i] - center);
             }
+
+            var sigma = MadToSigmaFactor * Median(deviations);
 
             var survivorCount = 0;
 
             for (var i = 0; i < activeCount; i++)
             {
-                if (Math.Abs(active[i] - mean) <= threshold * stdDev)
+                if (Math.Abs(active[i] - center) <= threshold * sigma)
                 {
                     active[survivorCount++] = active[i];
                 }
             }
 
-            if (survivorCount == activeCount)
+            if (survivorCount == activeCount || survivorCount == 0)
             {
                 break;
             }
@@ -162,19 +172,5 @@ public static class ImageStacker
         }
 
         return Mean(samples[..activeCount]);
-    }
-
-    private static double StandardDeviation(ReadOnlySpan<double> samples, double mean)
-    {
-        var sumSquaredDeviation = 0.0;
-
-        foreach (var sample in samples)
-        {
-            var deviation = sample - mean;
-
-            sumSquaredDeviation += deviation * deviation;
-        }
-
-        return Math.Sqrt(sumSquaredDeviation / samples.Length);
     }
 }

@@ -5,15 +5,18 @@ namespace AstroLab.Core.TimeSeries;
 /// <summary>
 /// Pure light-curve detrending: removes a slowly-varying baseline from a flux series so that
 /// shorter-timescale variability (transits, pulsations, flares) stands out. Supports a "linear"
-/// method (subtracts the least-squares best-fit line) and a "median" method (subtracts a
-/// fixed-width moving median, edge-truncated at the series boundaries).
+/// method (subtracts the least-squares best-fit line) and a "median" method (subtracts a moving
+/// median over a caller-supplied time window centred on each sample, edge-truncated at the series
+/// boundaries). The median window is a duration in the light curve's own time units rather than a
+/// sample count, so it means the same thing across cadences and data gaps; it must be several times
+/// longer than any feature to be preserved, since a feature longer than about half the window is
+/// absorbed into the running median and removed along with the trend.
 /// </summary>
 public static class LightCurveDetrender
 {
-    private const int MovingMedianWindowPoints = 5;
     private const int MinimumPointsForMovingMedian = 3;
 
-    public static Result<double[]> Detrend(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, string method)
+    public static Result<double[]> Detrend(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, string method, double? windowDuration = null)
     {
         if (time.Length != flux.Length)
         {
@@ -43,7 +46,7 @@ public static class LightCurveDetrender
         return method.Trim().ToLowerInvariant() switch
         {
             "linear" => DetrendLinear(time, flux),
-            "median" => DetrendMovingMedian(time, flux),
+            "median" => DetrendMovingMedian(time, flux, windowDuration),
             _ => Error.Validation(
                 "timeseries.detrend.unknown_method",
                 $"Unknown detrend method '{method}'. Supported methods: 'linear', 'median'."),
@@ -89,8 +92,15 @@ public static class LightCurveDetrender
         return detrended;
     }
 
-    private static Result<double[]> DetrendMovingMedian(ReadOnlySpan<double> time, ReadOnlySpan<double> flux)
+    private static Result<double[]> DetrendMovingMedian(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double? windowDuration)
     {
+        if (windowDuration is not { } window || window <= 0.0 || !double.IsFinite(window))
+        {
+            return Error.Validation(
+                "timeseries.detrend.invalid_window_duration",
+                "Moving-median detrending requires a finite, positive windowDuration in the light curve's time units.");
+        }
+
         if (flux.Length < MinimumPointsForMovingMedian)
         {
             return Error.Validation(
@@ -108,21 +118,33 @@ public static class LightCurveDetrender
             }
         }
 
-        var halfWindow = MovingMedianWindowPoints / 2;
+        var halfWindow = window / 2.0;
 
         var detrended = new double[flux.Length];
 
-        Span<double> window = stackalloc double[MovingMedianWindowPoints];
+        var windowBuffer = new double[flux.Length];
+
+        var windowStart = 0;
+
+        var windowEnd = 0;
 
         for (var i = 0; i < flux.Length; i++)
         {
-            var windowStart = Math.Max(0, i - halfWindow);
+            while (time[windowStart] < time[i] - halfWindow)
+            {
+                windowStart++;
+            }
 
-            var windowEnd = Math.Min(flux.Length - 1, i + halfWindow);
+            windowEnd = Math.Max(windowEnd, i);
+
+            while (windowEnd + 1 < flux.Length && time[windowEnd + 1] <= time[i] + halfWindow)
+            {
+                windowEnd++;
+            }
 
             var windowLength = windowEnd - windowStart + 1;
 
-            var activeWindow = window[..windowLength];
+            var activeWindow = windowBuffer.AsSpan(0, windowLength);
 
             flux[windowStart..(windowEnd + 1)].CopyTo(activeWindow);
 

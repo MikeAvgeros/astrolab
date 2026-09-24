@@ -9,19 +9,10 @@ public class ImageBackgroundModellerTests
     {
         ReadOnlySpan<float> pixels = [10f, 20f, 30f, 40f, 50f, 60f, 70f, 80f];
 
-        var stats = ImageStatistics.Compute(pixels).Value;
+        // Exact linearly interpolated quartiles of 10..80: Q1 = 27.5, median = 45, Q3 = 62.5.
+        const double expectedMedian = 45.0;
 
-        const int histogramBinsMatchingModeller = 8;
-
-        Span<double> quartiles = stackalloc double[2];
-
-        ImageStatistics.ComputePercentiles(pixels, stats, [25.0, 75.0], quartiles, histogramBinsMatchingModeller);
-
-        Span<double> median = stackalloc double[1];
-
-        ImageStatistics.ComputePercentiles(pixels, stats, [50.0], median, histogramBinsMatchingModeller);
-
-        var expectedSigma = (quartiles[1] - quartiles[0]) / 1.349;
+        const double expectedSigma = (62.5 - 27.5) / 1.349;
 
         var result = ImageBackgroundModeller.Model(pixels, width: 4, height: 2, meshSizePixels: 64);
 
@@ -33,7 +24,7 @@ public class ImageBackgroundModellerTests
 
         Assert.Equal(1, model.MeshCountY);
 
-        Assert.Equal(median[0], model.MedianBackground, precision: 6);
+        Assert.Equal(expectedMedian, model.MedianBackground, precision: 6);
 
         Assert.Equal(expectedSigma, model.BackgroundRms, precision: 6);
     }

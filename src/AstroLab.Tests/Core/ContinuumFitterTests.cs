@@ -21,7 +21,24 @@ public class ContinuumFitterTests
 
         Assert.Equal(3.0, coefficients[1], precision: 6);
 
-        Assert.Equal(flux, continuum);
+        Assert.Equal(flux, continuum, (expected, actual) => Math.Abs(expected - actual) < 1e-9);
+    }
+
+    [Fact]
+    public void Fit_CubicContinuumOnOpticalWavelengthsInFluxCalibratedUnits_Succeeds()
+    {
+        var x = Enumerable.Range(0, 301).Select(i => 4000.0 + 10.0 * i).ToArray();
+
+        var flux = x.Select(wavelength => 1e-16 * (1.0 + 0.2 * ((wavelength - 5500.0) / 1500.0))).ToArray();
+
+        var result = ContinuumFitter.Fit(x, flux, polynomialDegree: 3, [], sigmaClipThreshold: null, sigmaClipIterations: null);
+
+        Assert.True(result.IsSuccess);
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            Assert.Equal(1.0, result.Value.Continuum[i] / flux[i], precision: 6);
+        }
     }
 
     [Fact]

@@ -203,6 +203,67 @@ public class WcsTests
         Assert.Equal(-42.0, pixel.Value.PixelY, precision: 6);
     }
 
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(33.5)]
+    [InlineData(-120.0)]
+    public void RotationDegrees_OnStandardEastLeftImage_EqualsCrota2(double crota2)
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0007, crota2)).Value;
+
+        Assert.Equal(crota2, wcs.RotationDegrees, precision: 6);
+
+        Assert.True(wcs.IsMirrored);
+    }
+
+    [Fact]
+    public void RotationDegrees_OnEastRightImageWithCrota2_MeasuresNorthCounterclockwiseFromPlusY()
+    {
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---TAN'",
+            "CTYPE2  = 'DEC--TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                180.0",
+            "CRVAL2  =                  0.0",
+            "CDELT1  =               0.0007",
+            "CDELT2  =               0.0007",
+            "CROTA2  =                 25.0");
+
+        var wcs = Wcs.FromHeader(header).Value;
+
+        // One pixel step towards north, measured counterclockwise from +y, is (-sin ρ, cos ρ).
+        var origin = wcs.PixelToWorld(0.0, 0.0).Value;
+
+        var northStep = wcs.WorldToPixel(origin.RightAscension, origin.Declination + 0.0007).Value;
+
+        var expectedDegrees = Math.Atan2(-northStep.PixelX, northStep.PixelY) * 180.0 / Math.PI;
+
+        Assert.Equal(expectedDegrees, wcs.RotationDegrees, precision: 3);
+
+        Assert.False(wcs.IsMirrored);
+    }
+
+    [Fact]
+    public void RotationDegrees_OnSwappedCelestialAxes_MatchesEquivalentUnswappedOrientation()
+    {
+        // Declination along pixel x (increasing to +x) and right ascension along pixel y: north points
+        // along +x, i.e. 90 degrees clockwise from +y.
+        var header = BuildHeader(
+            "CTYPE1  = 'DEC--TAN'",
+            "CTYPE2  = 'RA---TAN'",
+            "CRPIX1  =                  1.0",
+            "CRPIX2  =                  1.0",
+            "CRVAL1  =                  0.0",
+            "CRVAL2  =                180.0",
+            "CDELT1  =               0.0007",
+            "CDELT2  =              -0.0007");
+
+        var wcs = Wcs.FromHeader(header).Value;
+
+        Assert.Equal(-90.0, wcs.RotationDegrees, precision: 6);
+    }
+
     [Fact]
     public void PixelToWorld_ThenWorldToPixel_RoundTripsForCdMatrixConvention()
     {

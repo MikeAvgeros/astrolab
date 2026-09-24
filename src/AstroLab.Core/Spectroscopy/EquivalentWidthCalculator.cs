@@ -12,7 +12,7 @@ namespace AstroLab.Core.Spectroscopy;
 public static class EquivalentWidthCalculator
 {
     private const int MinimumPoints = 2;
-    private const double ContinuumZeroTolerance = 1e-12;
+    private const double ContinuumZeroRelativeTolerance = 1e-12;
 
     public static Result<double> Calculate(ReadOnlySpan<double> wavelengths, ReadOnlySpan<double> flux)
     {
@@ -98,6 +98,8 @@ public static class EquivalentWidthCalculator
             ? startFlux
             : startFlux + (endFlux - startFlux) * (wavelength - startWavelength) / span;
 
-        return Math.Abs(continuum) <= ContinuumZeroTolerance ? double.NaN : 1.0 - (flux / continuum);
+        var zeroTolerance = ContinuumZeroRelativeTolerance * Math.Max(Math.Abs(startFlux), Math.Abs(endFlux));
+
+        return Math.Abs(continuum) <= zeroTolerance ? double.NaN : 1.0 - (flux / continuum);
     }
 }

@@ -4,22 +4,26 @@ namespace AstroLab.Core.TimeSeries;
 
 /// <summary>
 /// Pure (non-generalized) Lomb-Scargle periodogram (Press &amp; Rybicki 1989 formulation) for
-/// detecting periodic signals in an unevenly-sampled, already-detrended flux series. Searches a
-/// linear grid of trial periods between <c>minPeriod</c> and <c>maxPeriod</c> and reports the period
-/// whose normalized power is highest. Power is normalized by the sample variance (dividing the sum
+/// detecting periodic signals in an unevenly-sampled, already-detrended flux series. Searches trial
+/// frequencies spaced uniformly between <c>1/maxPeriod</c> and <c>1/minPeriod</c> and reports the
+/// period whose normalized power is highest. A periodogram peak is ~1/T wide in frequency for a
+/// baseline T, so a grid uniform in period badly undersamples short periods (VanderPlas 2018, §7.1);
+/// unless the caller fixes the grid size, it is chosen to oversample that peak width. Power is normalized by the sample variance (dividing the sum
 /// of squared deviations by N-1), matching the standard Lomb-Scargle normalization used by the
 /// Horne &amp; Baliunas (1986) false-alarm-probability approximation in <see cref="SearchFull"/>.
 /// </summary>
 public static class LombScarglePeriodogram
 {
     public const int DefaultGridSize = 2000;
+    private const int MaxAutoGridSize = 200_000;
 
     private const int MinimumPoints = 3;
     private const double NyquistCadenceFactor = 2.0;
     private const double MaxPeriodBaselineFactor = 0.5;
+    private const double FrequencyOversamplingFactor = 5.0;
 
     public static Result<(double BestPeriod, double Power)> Search(
-        ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double minPeriod, double maxPeriod, int gridSize = DefaultGridSize)
+        ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double minPeriod, double maxPeriod, int? gridSize = null)
     {
         if (time.Length != flux.Length)
         {
@@ -81,11 +85,11 @@ public static class LombScarglePeriodogram
 
         var bestPower = -1.0;
 
-        var periodStep = (maxPeriod - minPeriod) / (gridSize - 1);
+        var resolvedGridSize = ResolveGridSize(time, minPeriod, maxPeriod, gridSize);
 
-        for (var k = 0; k < gridSize; k++)
+        for (var k = 0; k < resolvedGridSize; k++)
         {
-            var period = minPeriod + (k * periodStep);
+            var period = TrialPeriod(k, minPeriod, maxPeriod, resolvedGridSize);
 
             var power = ComputePower(time, flux, mean, sampleVariance, period);
 
@@ -101,7 +105,7 @@ public static class LombScarglePeriodogram
     }
     
     public static Result<(double BestPeriod, double Power, double[] Periods, double[] Powers, double FalseAlarmProbability)> SearchFull(
-        ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double minPeriod, double maxPeriod, int gridSize = DefaultGridSize)
+        ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double minPeriod, double maxPeriod, int? gridSize = null)
     {
         if (time.Length != flux.Length)
         {
@@ -159,19 +163,19 @@ public static class LombScarglePeriodogram
 
         var sampleVariance = sumSquaredDeviation / (time.Length - 1);
 
-        var periods = new double[gridSize];
+        var resolvedGridSize = ResolveGridSize(time, minPeriod, maxPeriod, gridSize);
 
-        var powers = new double[gridSize];
+        var periods = new double[resolvedGridSize];
+
+        var powers = new double[resolvedGridSize];
 
         var bestPeriod = minPeriod;
 
         var bestPower = -1.0;
 
-        var periodStep = (maxPeriod - minPeriod) / (gridSize - 1);
-
-        for (var k = 0; k < gridSize; k++)
+        for (var k = 0; k < resolvedGridSize; k++)
         {
-            var period = minPeriod + k * periodStep;
+            var period = TrialPeriod(k, minPeriod, maxPeriod, resolvedGridSize);
 
             var power = ComputePower(time, flux, mean, sampleVariance, period);
 
@@ -189,7 +193,7 @@ public static class LombScarglePeriodogram
             }
         }
         
-        var falseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-bestPower), gridSize), 0.0, 1.0);
+        var falseAlarmProbability = Math.Clamp(1.0 - Math.Pow(1.0 - Math.Exp(-bestPower), resolvedGridSize), 0.0, 1.0);
 
         return (bestPeriod, Math.Max(bestPower, 0.0), periods, powers, falseAlarmProbability);
     }
@@ -254,6 +258,38 @@ public static class LombScarglePeriodogram
         }
 
         return (minPeriod, maxPeriod);
+    }
+
+    private static int ResolveGridSize(ReadOnlySpan<double> time, double minPeriod, double maxPeriod, int? gridSize)
+    {
+        if (gridSize is { } explicitGridSize)
+        {
+            return explicitGridSize;
+        }
+
+        var earliest = double.PositiveInfinity;
+
+        var latest = double.NegativeInfinity;
+
+        foreach (var t in time)
+        {
+            earliest = Math.Min(earliest, t);
+
+            latest = Math.Max(latest, t);
+        }
+
+        var peakWidthsInRange = (latest - earliest) * (1.0 / minPeriod - 1.0 / maxPeriod);
+
+        return (int)Math.Clamp(Math.Ceiling(FrequencyOversamplingFactor * peakWidthsInRange), DefaultGridSize, MaxAutoGridSize);
+    }
+
+    private static double TrialPeriod(int index, double minPeriod, double maxPeriod, int gridSize)
+    {
+        var maxFrequency = 1.0 / minPeriod;
+
+        var frequencyStep = (maxFrequency - 1.0 / maxPeriod) / (gridSize - 1);
+
+        return 1.0 / (maxFrequency - index * frequencyStep);
     }
 
     private static double ComputePower(ReadOnlySpan<double> time, ReadOnlySpan<double> flux, double mean, double sampleVariance, double period)

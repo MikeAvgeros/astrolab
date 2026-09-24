@@ -16,11 +16,42 @@ public static class SpectrumExtractor
     private const string DispersionAxisHeaderKeyword = "DISPAXIS";
     private const long DefaultDispersionAxisValue = 1;
     private const long VerticalDispersionAxisValue = 2;
-    
+    private const double DefaultReferencePixel = 1.0;
+
     public static DispersionAxis ResolveDispersionAxis(FitsHeader header) =>
         header.GetInteger(DispersionAxisHeaderKeyword).GetValueOrDefault(DefaultDispersionAxisValue) == VerticalDispersionAxisValue
             ? DispersionAxis.Vertical
             : DispersionAxis.Horizontal;
+    
+    public static Result<(double ReferenceWavelength, double WavelengthPerPixel, double ReferencePixel)> ResolveLinearDispersionSolution(
+        FitsHeader header)
+    {
+        var axisNumber = ResolveDispersionAxis(header) == DispersionAxis.Horizontal ? DefaultDispersionAxisValue : VerticalDispersionAxisValue;
+
+        var referenceWavelengthResult = header.GetReal($"CRVAL{axisNumber}");
+
+        if (referenceWavelengthResult.IsFailure)
+        {
+            return Error.Validation(
+                "spectroscopy.no_wavelength_solution",
+                $"The file's header carries no CRVAL{axisNumber} dispersion reference wavelength; a wavelength axis cannot be resolved.");
+        }
+
+        var cdResult = header.GetReal($"CD{axisNumber}_{axisNumber}");
+
+        var incrementResult = cdResult.IsSuccess ? cdResult : header.GetReal($"CDELT{axisNumber}");
+
+        if (incrementResult.IsFailure || incrementResult.Value == 0.0)
+        {
+            return Error.Validation(
+                "spectroscopy.no_wavelength_solution",
+                $"The file's header carries no non-zero CD{axisNumber}_{axisNumber} or CDELT{axisNumber} dispersion scale; a wavelength axis cannot be resolved.");
+        }
+
+        var referencePixel = header.GetReal($"CRPIX{axisNumber}").GetValueOrDefault(DefaultReferencePixel);
+
+        return (referenceWavelengthResult.Value, incrementResult.Value, referencePixel);
+    }
 
     public static Result<Unit> ExtractBoxcar(
         ReadOnlySpan<float> image,

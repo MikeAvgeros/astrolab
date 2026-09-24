@@ -180,6 +180,75 @@ public class ImageStatisticsTests
     }
 
     [Fact]
+    public void ComputePercentiles_MatchesLinearlyInterpolatedDefinition()
+    {
+        ReadOnlySpan<float> pixels = [7f, float.NaN, 1f, 3f, 9f, float.PositiveInfinity, 5f];
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        ReadOnlySpan<double> percentiles = [0.0, 10.0, 25.0, 50.0, 90.0, 100.0];
+
+        Span<double> results = stackalloc double[percentiles.Length];
+
+        var result = ImageStatistics.ComputePercentiles(pixels, stats, percentiles, results);
+
+        Assert.True(result.IsSuccess);
+
+        // numpy.percentile([1, 3, 5, 7, 9], [0, 10, 25, 50, 90, 100]) == [1, 1.8, 3, 5, 8.2, 9]
+        Assert.Equal([1.0, 1.8, 3.0, 5.0, 8.2, 9.0], results.ToArray(), (expected, actual) => Math.Abs(expected - actual) < 1e-9);
+    }
+
+    [Fact]
+    public void ComputeSkyBackground_SingleExtremeOutlier_DoesNotCollapseSigma()
+    {
+        // A faint float sky (0.05 ± ~0.01) plus one cosmic-ray hit at 5000 stretches the value range
+        // so far that a fixed-width histogram bin is wider than the whole sky distribution.
+        var pixels = new float[10_001];
+
+        for (var i = 0; i < pixels.Length - 1; i++)
+        {
+            pixels[i] = 0.04f + 0.02f * i / (pixels.Length - 2);
+        }
+
+        pixels[^1] = 5000f;
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        var skyBackground = ImageStatistics.ComputeSkyBackground(pixels, stats);
+
+        Assert.Equal(0.045, skyBackground.Q1, precision: 4);
+
+        Assert.Equal(0.055, skyBackground.Q3, precision: 4);
+
+        Assert.Equal(0.01 / 1.349, skyBackground.SkySigma, precision: 4);
+    }
+
+    [Fact]
+    public void ComputePercentiles_ManyValuesInOneCoarseBin_RefinesToExactOrderStatistic()
+    {
+        var pixels = new float[20_001];
+
+        for (var i = 0; i < pixels.Length - 1; i++)
+        {
+            pixels[i] = i % 997;
+        }
+
+        pixels[^1] = 1e9f;
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        Span<double> results = stackalloc double[1];
+
+        var result = ImageStatistics.ComputePercentiles(pixels, stats, [50.0], results);
+
+        Assert.True(result.IsSuccess);
+
+        var sorted = pixels.Order().ToArray();
+
+        Assert.Equal(sorted[10_000], results[0]);
+    }
+
+    [Fact]
     public void ComputePercentiles_RejectsMismatchedResultsLength()
     {
         ReadOnlySpan<float> pixels = [1f, 2f, 3f];

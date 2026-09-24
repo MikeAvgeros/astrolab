@@ -1309,6 +1309,8 @@ Detects significant spectral features, including potential absorption and emissi
 
 A significance threshold can be supplied to control detection sensitivity.
 
+Lines are measured against a local continuum: a running median over `continuumWindowBins` dispersion bins (default `101`, minimum `3`). Choose a window several times wider than the lines of interest, since a line wider than about half the window is absorbed into the continuum.
+
 ---
 
 ## Spectral-Line Fitting

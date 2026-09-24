@@ -619,6 +619,32 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task DetectLines_RejectsContinuumWindowBelowMinimum()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines?continuumWindowBins=2");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetectLines_WithExplicitContinuumWindow_StillFindsEmissionLine()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallSpectrumWithEmissionLine());
+
+        var response = await _client.GetAsync($"/api/spectroscopy/{fileId}/lines?significanceThreshold=3&continuumWindowBins=5");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var line = Assert.Single(body.GetProperty("lines").EnumerateArray());
+
+        Assert.Equal(4.0, line.GetProperty("wavelength").GetDouble(), precision: 6);
+    }
+
+    [Fact]
     public async Task EstimateRedshift_ComputesMeanFractionalWavelengthShift()
     {
         var request = new

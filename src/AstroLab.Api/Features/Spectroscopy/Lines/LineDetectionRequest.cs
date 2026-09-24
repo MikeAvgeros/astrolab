@@ -1,18 +1,26 @@
+using AstroLab.Core.Spectroscopy;
+
 namespace AstroLab.Api.Features.Spectroscopy.Lines;
 
 public sealed record LineDetectionRequest
 {
-    private LineDetectionRequest(double? significanceThreshold, double[]? dispersionCoefficients)
+    private LineDetectionRequest(double? significanceThreshold, double[]? dispersionCoefficients, int continuumWindowBins)
     {
         SignificanceThreshold = significanceThreshold;
         DispersionCoefficients = dispersionCoefficients;
+        ContinuumWindowBins = continuumWindowBins;
     }
 
     public double? SignificanceThreshold { get; }
     
     public double[]? DispersionCoefficients { get; }
 
-    public static LineDetectionRequest Create(double? significanceThreshold = null, double[]? dispersionCoefficients = null)
+    public int ContinuumWindowBins { get; }
+
+    public static LineDetectionRequest Create(
+        double? significanceThreshold = null,
+        double[]? dispersionCoefficients = null,
+        int continuumWindowBins = SpectralLineDetector.DefaultContinuumWindowBins)
     {
         if (significanceThreshold is { } threshold)
         {
@@ -24,6 +32,8 @@ public sealed record LineDetectionRequest
             throw new ArgumentException("dispersionCoefficients must all be finite.", nameof(dispersionCoefficients));
         }
 
-        return new LineDetectionRequest(significanceThreshold, dispersionCoefficients);
+        ArgumentOutOfRangeException.ThrowIfLessThan(continuumWindowBins, SpectralLineDetector.MinimumContinuumWindowBins);
+
+        return new LineDetectionRequest(significanceThreshold, dispersionCoefficients, continuumWindowBins);
     }
 }

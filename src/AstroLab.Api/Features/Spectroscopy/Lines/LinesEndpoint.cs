@@ -7,7 +7,10 @@ namespace AstroLab.Api.Features.Spectroscopy.Lines;
 /// Detects and characterises spectral lines in a 1D spectrum collapsed from the full spatial extent
 /// of a staged spectroscopic frame (no trace/aperture is requested here, unlike <c>Extract</c>).
 /// When a wavelength-dispersion solution is supplied, line centroids and widths are reported as
-/// physical wavelengths (see <c>Calibrate</c>); otherwise they remain dispersion-bin indices.
+/// physical wavelengths (see <c>Calibrate</c>); otherwise they remain dispersion-bin indices. The
+/// continuum is a running median over <c>continuumWindowBins</c> bins (default
+/// <see cref="SpectralLineDetector.DefaultContinuumWindowBins"/>), which should be several times wider
+/// than the lines being sought.
 /// </summary>
 public static class LinesEndpoint
 {
@@ -25,9 +28,10 @@ public static class LinesEndpoint
         FitsDatasetReader datasetReader,
         CancellationToken cancellationToken,
         double? significanceThreshold = null,
-        double[]? dispersionCoefficients = null)
+        double[]? dispersionCoefficients = null,
+        int continuumWindowBins = SpectralLineDetector.DefaultContinuumWindowBins)
     {
-        var request = LineDetectionRequest.Create(significanceThreshold, dispersionCoefficients);
+        var request = LineDetectionRequest.Create(significanceThreshold, dispersionCoefficients, continuumWindowBins);
 
         var datasetResult = await datasetReader.LoadSpectrumImageAsync(fileId, cancellationToken);
 
@@ -45,7 +49,8 @@ public static class LinesEndpoint
             return extractResult.Error.ToProblem();
         }
 
-        var detectResult = SpectralLineDetector.Detect(extractResult.Value, request.SignificanceThreshold ?? SpectralLineDetector.DefaultSignificanceSigma);
+        var detectResult = SpectralLineDetector.Detect(
+            extractResult.Value, request.SignificanceThreshold ?? SpectralLineDetector.DefaultSignificanceSigma, request.ContinuumWindowBins);
 
         return detectResult.ToApiResult(lines => Results.Ok(LineDetectionResponse.Create(
             fileId,

@@ -100,4 +100,50 @@ public class SpectrumCrossCorrelatorTests
 
     private static double RestFrameProfile(double wavelength) =>
         1.0 - (0.5 * Math.Exp(-Math.Pow(wavelength - 5000.0, 2) / 50.0));
+
+    [Fact]
+    public void CorrelateAgainstTemplate_DifferentContinuumSlopes_RecoversRedshiftFromLineFeatures()
+    {
+        // Rest-frame template: rising continuum with three absorption lines. The observed spectrum is the
+        // same lines at z = 0.3 on a falling continuum, so only the line pattern (not the continuum shape)
+        // can identify the redshift; a raw Pearson search is dominated by the slopes.
+        const double trueRedshift = 0.3;
+
+        double[] restLineCenters = [4340.0, 4861.0, 5890.0];
+
+        var templateWavelengths = Enumerable.Range(0, 2001).Select(i => 4000.0 + i).ToArray();
+
+        var templateFlux = templateWavelengths.Select(w => 1.0 + 0.0002 * (w - 4000.0) - Absorption(w, restLineCenters, 1.0)).ToArray();
+
+        var observedWavelengths = Enumerable.Range(0, 1501).Select(i => 5000.0 + 2.0 * i).ToArray();
+
+        var observedLineCenters = restLineCenters.Select(center => center * (1.0 + trueRedshift)).ToArray();
+
+        var random = new Random(99);
+
+        var observedFlux = observedWavelengths
+            .Select(w => 3.0 - 0.0003 * (w - 5000.0) - Absorption(w, observedLineCenters, 1.3) + 0.01 * (random.NextDouble() - 0.5))
+            .ToArray();
+
+        var result = SpectrumCrossCorrelator.CorrelateAgainstTemplate(
+            observedWavelengths, observedFlux, templateWavelengths, templateFlux, minRedshift: 0.0, maxRedshift: 1.0, gridSize: 1001);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(trueRedshift, result.Value.Redshift, precision: 3);
+    }
+
+    private static double Absorption(double wavelength, double[] centers, double sigma)
+    {
+        var depth = 0.0;
+
+        foreach (var center in centers)
+        {
+            var offset = (wavelength - center) / (sigma * 4.0);
+
+            depth += 0.4 * Math.Exp(-0.5 * offset * offset);
+        }
+
+        return depth;
+    }
 }

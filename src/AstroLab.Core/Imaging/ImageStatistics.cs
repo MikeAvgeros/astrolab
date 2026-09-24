@@ -9,7 +9,6 @@ public readonly record struct ImageStatistics
     private const double MaxPercentile = 100.0;
     internal const double IqrToSigmaFactor = 1.349;
     private const double PercentageScale = 100.0;
-    private const double Epsilon = 1e-12;
 
     public const int DefaultDisplayHistogramBinCount = 256;
     public const int MaxDisplayHistogramBinCount = 65536;
@@ -165,7 +164,7 @@ public readonly record struct ImageStatistics
 
         var counts = new long[binCount];
 
-        if (Math.Abs(stats.Max - stats.Min) < Epsilon)
+        if (stats.Max <= stats.Min)
         {
             Array.Fill(binEdges, stats.Min);
 

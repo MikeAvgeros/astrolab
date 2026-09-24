@@ -12,7 +12,7 @@ namespace AstroLab.Infrastructure.Storage;
 public static class FitsPixelDataReader
 {
     private const int ChunkSize = 81_920;
-    private const long MaxSupportedDataSizeBytes = 64L * 1024 * 1024 * 1024;
+    private const long MaxContiguousBufferBytes = int.MaxValue;
 
     public static async Task<Result<UnmanagedFitsBuffer>> ReadImageDataAsync(
         Stream stream, FitsImageDescriptor descriptor, CancellationToken cancellationToken = default)
@@ -22,18 +22,21 @@ public static class FitsPixelDataReader
             return Error.Validation("fits.data.no_pixels", "HDU has no pixel data (NAXIS = 0).");
         }
 
-        if (descriptor.PixelCount > int.MaxValue)
+        // Both the raw on-disk pixels and the converted float pixels are processed as contiguous spans,
+        // so each must fit in Span<T>'s 2 GiB addressable length.
+        var maxPixelCount = MaxContiguousBufferBytes / Math.Max(descriptor.BitPix.BytesPerPixel(), sizeof(float));
+
+        if (descriptor.PixelCount > maxPixelCount)
         {
             return Error.Validation(
                 "fits.data.image_too_large",
-                $"Image has {descriptor.PixelCount} pixels, which exceeds the supported maximum of {int.MaxValue}.");
+                $"Image has {descriptor.PixelCount:N0} pixels; at BITPIX {(int)descriptor.BitPix} at most {maxPixelCount:N0} pixels can be loaded.");
         }
 
-        if (descriptor.DataSizeBytes is <= 0 or > MaxSupportedDataSizeBytes)
+        if (descriptor.DataSizeBytes <= 0)
         {
             return Error.Validation(
-                "fits.data.invalid_size",
-                $"Computed pixel data size ({descriptor.DataSizeBytes} bytes) is negative, zero, or exceeds the supported maximum of {MaxSupportedDataSizeBytes} bytes.");
+                "fits.data.invalid_size", $"Computed pixel data size ({descriptor.DataSizeBytes} bytes) is not positive.");
         }
 
         var totalBytes = (nuint)descriptor.DataSizeBytes;

@@ -27,11 +27,15 @@ public readonly record struct Wcs
     
     private const double RelativeSingularityTolerance = 1e-10;
 
+    private const string SipDistortionCode = "SIP";
+
+    private static readonly string[] SinProjectionParameterKeywords = ["PV1_1", "PV1_2", "PV2_1", "PV2_2"];
+
     private Wcs(
         string cType1, string cType2, WcsProjection projection,
         double crPix1, double crPix2, double crVal1, double crVal2,
         double cd11, double cd12, double cd21, double cd22,
-        int longitudeAxisIndex, int latitudeAxisIndex, string? radeSys)
+        int longitudeAxisIndex, int latitudeAxisIndex, string? radeSys, SipDistortion? sip)
     {
         CType1 = cType1;
         CType2 = cType2;
@@ -47,6 +51,7 @@ public readonly record struct Wcs
         LongitudeAxisIndex = longitudeAxisIndex;
         LatitudeAxisIndex = latitudeAxisIndex;
         RadeSys = radeSys;
+        Sip = sip;
     }
 
     public string CType1 { get; }
@@ -76,6 +81,8 @@ public readonly record struct Wcs
     public int LatitudeAxisIndex { get; }
 
     public string? RadeSys { get; }
+
+    public SipDistortion? Sip { get; }
 
     public double ReferenceRightAscension => LongitudeAxisIndex == 0 ? CrVal1 : CrVal2;
 
@@ -128,9 +135,12 @@ public readonly record struct Wcs
             return Error.Validation("astrometry.non_finite_coordinate", "Pixel coordinates must be finite.");
         }
 
-        var p1 = pixelX + PixelCenterOffset - CrPix1;
+        var (p1, p2) = (pixelX + PixelCenterOffset - CrPix1, pixelY + PixelCenterOffset - CrPix2);
 
-        var p2 = pixelY + PixelCenterOffset - CrPix2;
+        if (Sip is not null)
+        {
+            (p1, p2) = Sip.Distort(p1, p2);
+        }
 
         var iwc1 = Cd11 * p1 + Cd12 * p2;
 
@@ -245,12 +255,29 @@ public readonly record struct Wcs
 
         var p2 = (Cd11 * iwc2 - Cd21 * iwc1) / determinant;
 
+        if (Sip is not null)
+        {
+            var undistortResult = Sip.Undistort(p1, p2);
+
+            if (undistortResult.IsFailure)
+            {
+                return Result<(double, double)>.Failure(undistortResult.Error);
+            }
+
+            (p1, p2) = undistortResult.Value;
+        }
+
         return (CrPix1 + p1 - PixelCenterOffset, CrPix2 + p2 - PixelCenterOffset);
     }
     
     public Result<(int X, int Y, int Width, int Height)> ResolveSkyRegionPixelBounds(
         double rightAscension, double declination, double radiusArcseconds, int imageWidth, int imageHeight)
     {
+        if (!(radiusArcseconds > 0.0) || !double.IsFinite(radiusArcseconds))
+        {
+            return Error.Validation("astrometry.invalid_region_radius", "radiusArcseconds must be a finite, positive value.");
+        }
+
         var centerResult = WorldToPixel(rightAscension, declination);
 
         if (centerResult.IsFailure)
@@ -259,6 +286,13 @@ public readonly record struct Wcs
         }
 
         var (centerPixelX, centerPixelY) = centerResult.Value;
+
+        if (centerPixelX < 0.0 || centerPixelX >= imageWidth || centerPixelY < 0.0 || centerPixelY >= imageHeight)
+        {
+            return Error.Validation(
+                "astrometry.position_outside_image",
+                $"The requested sky position maps to pixel ({centerPixelX:F1}, {centerPixelY:F1}), outside the {imageWidth}x{imageHeight} image.");
+        }
 
         if (PixelScaleXArcsecPerPixel is 0 || PixelScaleYArcsecPerPixel is 0 ||
             !double.IsFinite(PixelScaleXArcsecPerPixel) || !double.IsFinite(PixelScaleYArcsecPerPixel))
@@ -272,13 +306,9 @@ public readonly record struct Wcs
 
         var halfHeight = radiusArcseconds / PixelScaleYArcsecPerPixel;
 
-        var width = Math.Min(Math.Max(1, (int)Math.Round(2 * halfWidth)), imageWidth);
+        var (x, width) = TrimToImage(centerPixelX, halfWidth, imageWidth);
 
-        var height = Math.Min(Math.Max(1, (int)Math.Round(2 * halfHeight)), imageHeight);
-
-        var x = Math.Clamp((int)Math.Round(centerPixelX - halfWidth), 0, imageWidth - width);
-
-        var y = Math.Clamp((int)Math.Round(centerPixelY - halfHeight), 0, imageHeight - height);
+        var (y, height) = TrimToImage(centerPixelY, halfHeight, imageHeight);
 
         return (x, y, width, height);
     }
@@ -294,9 +324,9 @@ public readonly record struct Wcs
             return Error.NotFound("astrometry.wcs_not_present", "CTYPE1/CTYPE2 were not found; this file carries no usable WCS.");
         }
 
-        var (axis1Type, axis1Projection) = ParseCType(cType1Result.Value);
+        var (axis1Type, axis1Projection, axis1Distortion) = ParseCType(cType1Result.Value);
 
-        var (axis2Type, axis2Projection) = ParseCType(cType2Result.Value);
+        var (axis2Type, axis2Projection, axis2Distortion) = ParseCType(cType2Result.Value);
 
         var axis1Kind = ClassifyAxis(axis1Type);
 
@@ -330,6 +360,27 @@ public readonly record struct Wcs
         {
             return Error.NotImplemented(
                 "astrometry.unsupported_projection", $"WCS projection '{projectionCode}' is not yet supported (supported: TAN, SIN, ARC).");
+        }
+
+        var distortionCheck = ValidateDistortion(header, projection.Value, axis1Distortion, axis2Distortion);
+
+        if (distortionCheck.IsFailure)
+        {
+            return Result<Wcs>.Failure(distortionCheck.Error);
+        }
+
+        SipDistortion? sip = null;
+
+        if (axis1Distortion is not null)
+        {
+            var sipResult = SipDistortion.FromHeader(header);
+
+            if (sipResult.IsFailure)
+            {
+                return Result<Wcs>.Failure(sipResult.Error);
+            }
+
+            sip = sipResult.Value;
         }
 
         var crPix1 = header.GetReal("CRPIX1");
@@ -370,7 +421,20 @@ public readonly record struct Wcs
         return Create(
             cType1Result.Value, cType2Result.Value, projection.Value,
             crPix1.Value, crPix2.Value, crVal1.Value, crVal2.Value,
-            cd11, cd12, cd21, cd22, longitudeAxisIndex, latitudeAxisIndex, radeSys);
+            cd11, cd12, cd21, cd22, longitudeAxisIndex, latitudeAxisIndex, radeSys, sip);
+    }
+
+    private static (int Start, int Length) TrimToImage(double center, double halfExtent, int imageExtent)
+    {
+        var fullLength = Math.Max(1.0, Math.Round(2.0 * halfExtent, MidpointRounding.AwayFromZero));
+
+        var start = Math.Round(center - fullLength / 2.0, MidpointRounding.AwayFromZero);
+
+        var trimmedStart = (int)Math.Clamp(start, 0.0, imageExtent - 1);
+
+        var trimmedEnd = (int)Math.Clamp(start + fullLength, trimmedStart + 1, imageExtent);
+
+        return (trimmedStart, trimmedEnd - trimmedStart);
     }
 
     private Result<Unit> ValidateProjectionRadius(double radiusDegrees) => Projection switch
@@ -400,7 +464,7 @@ public readonly record struct Wcs
         return normalized < 0.0 ? normalized + FullCircleDegrees : normalized;
     }
 
-    private static (string AxisType, string? ProjectionCode) ParseCType(string cType)
+    private static (string AxisType, string? ProjectionCode, string? DistortionCode) ParseCType(string cType)
     {
         var trimmed = cType.Trim();
 
@@ -408,7 +472,51 @@ public readonly record struct Wcs
 
         var projectionCode = trimmed.Length >= 8 ? trimmed[5..8] : null;
 
-        return (axisType, projectionCode);
+        var distortionCode = trimmed.Length > 8 ? trimmed[8..].TrimStart('-') : null;
+
+        return (axisType, projectionCode, distortionCode);
+    }
+
+    private static Result<Unit> ValidateDistortion(
+        FitsHeader header, WcsProjection projection, string? axis1Distortion, string? axis2Distortion)
+    {
+        if (!string.Equals(axis1Distortion, axis2Distortion, StringComparison.Ordinal))
+        {
+            return Error.Validation(
+                "astrometry.inconsistent_projection",
+                $"CTYPE1/CTYPE2 must carry the same distortion suffix (found '{axis1Distortion}' / '{axis2Distortion}').");
+        }
+
+        if (projection == WcsProjection.Sin && HasNonZeroSinProjectionParameters(header))
+        {
+            return Error.NotImplemented(
+                "astrometry.unsupported_projection",
+                "Generalized (slant orthographic) SIN projections with non-zero PV2_1/PV2_2 are not yet supported.");
+        }
+
+        if (axis1Distortion is not null && (axis1Distortion != SipDistortionCode || projection != WcsProjection.Tan))
+        {
+            return Error.NotImplemented(
+                "astrometry.unsupported_distortion",
+                $"The '{axis1Distortion}' distortion convention is not supported for this projection (supported: TAN-SIP).");
+        }
+
+        return Result<Unit>.Success(Unit.Value);
+    }
+
+    private static bool HasNonZeroSinProjectionParameters(FitsHeader header)
+    {
+        foreach (var keyword in SinProjectionParameterKeywords)
+        {
+            var result = header.GetReal(keyword);
+
+            if (result.IsSuccess && result.Value != 0.0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static WcsAxisKind ClassifyAxis(string axisType) => axisType switch
@@ -513,7 +621,7 @@ public readonly record struct Wcs
         string cType1, string cType2, WcsProjection projection,
         double crPix1, double crPix2, double crVal1, double crVal2,
         double cd11, double cd12, double cd21, double cd22,
-        int longitudeAxisIndex, int latitudeAxisIndex, string? radeSys)
+        int longitudeAxisIndex, int latitudeAxisIndex, string? radeSys, SipDistortion? sip)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(cType1);
 
@@ -521,6 +629,6 @@ public readonly record struct Wcs
 
         return new Wcs(
             cType1, cType2, projection, crPix1, crPix2, crVal1, crVal2,
-            cd11, cd12, cd21, cd22, longitudeAxisIndex, latitudeAxisIndex, radeSys);
+            cd11, cd12, cd21, cd22, longitudeAxisIndex, latitudeAxisIndex, radeSys, sip);
     }
 }

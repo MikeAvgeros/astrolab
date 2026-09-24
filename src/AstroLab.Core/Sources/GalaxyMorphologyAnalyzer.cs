@@ -5,78 +5,96 @@ using AstroLab.Core.Result;
 namespace AstroLab.Core.Sources;
 
 /// <summary>
-/// Estimates the size, shape, and coarse morphological type of the detected source nearest a
-/// requested pixel position. Effective radius and ellipticity come from the same flux-weighted
-/// second-moment shape analysis as <see cref="SourceShapeAnalyzer"/>, circularized as
-/// sqrt(semiMajorAxis * semiMinorAxis). The morphological type is a concentration-index
-/// classification (C = R90/R50, the ratio of the radii enclosing 90% and 50% of the source's
-/// curve-of-growth flux) — a standard, lightweight substitute for a full non-linear Sersic profile
-/// fit used for automated galaxy classification (Strateva et al. 2001; Shimasaku et al. 2001), since a
-/// de Vaucouleurs (n=4, elliptical) profile is far more centrally concentrated than an exponential
-/// (n=1, disk) profile carrying the same total flux. The classification threshold of 2.6 is the
-/// published dividing line for this specific R90/R50 ratio; it does not apply to other concentration
-/// definitions (e.g. Conselice 2003's C = 5*log10(R80/R20)). When the concentration index cannot be
+/// Estimates the size, shape, and coarse morphological type of the detected source at a requested
+/// pixel position. Ellipticity comes from the same flux-weighted second-moment shape analysis as
+/// <see cref="SourceShapeAnalyzer"/>. Size and concentration follow the SDSS Petrosian system
+/// (Blanton et al. 2001; Strateva et al. 2001): the Petrosian radius r_P is where the local surface
+/// brightness in the annulus [0.8r, 1.25r] falls to 0.2 × the mean surface brightness within r, the
+/// Petrosian flux is the background-subtracted flux within 2 r_P, and R50/R90 are the radii
+/// enclosing 50% and 90% of that flux. The effective radius reported is the Petrosian half-light
+/// radius R50, and the morphological type is a concentration-index classification (C = R90/R50) — a
+/// standard, lightweight substitute for a full non-linear Sersic profile fit used for automated
+/// galaxy classification, since a de Vaucouleurs (n=4, elliptical) profile is far more centrally
+/// concentrated than an exponential (n=1, disk) profile. The classification threshold of 2.6 is the
+/// published dividing line for this Petrosian R90/R50 ratio; it does not apply to other concentration
+/// definitions (e.g. Conselice 2003's C = 5*log10(R80/R20)). When the Petrosian aperture cannot be
 /// measured (the source sits too close to the image edge, or encloses no net positive flux), the
-/// morphological type falls back to "Irregular" rather than failing the whole estimate, since the
-/// effective radius and ellipticity remain meaningful on their own.
+/// effective radius and concentration are reported as unavailable and the morphological type falls
+/// back to "Irregular", since the ellipticity remains meaningful on its own.
 /// </summary>
 public static class GalaxyMorphologyAnalyzer
 {
-    public const string MethodName = "Concentration index (R90/R50) with circularized flux-weighted second-moment shape";
+    public const string MethodName = "Petrosian concentration index (R90/R50) with flux-weighted second-moment shape";
 
     private const double EllipticalConcentrationThreshold = 2.6;
-    private const double AnalysisRadiusMultiple = 3.0;
-    private const double BackgroundAnnulusMultiple = 1.5;
-    private const double MinimumEffectiveRadiusPixels = 1.0;
-    private const int CurveOfGrowthSampleCount = 12;
-    private const double MinimumSampleFraction = 0.15;
+    private const double PetrosianRatioThreshold = 0.2;
+    private const double PetrosianInnerAnnulusFactor = 0.8;
+    private const double PetrosianOuterAnnulusFactor = 1.25;
+    private const double PetrosianApertureMultiple = 2.0;
+    private const double MinimumProfileRadiusPixels = 0.5;
+    private const int CurveOfGrowthSampleCount = 60;
+    private const double MatchRadiusMultiple = 2.0;
+    private const double MinimumMatchRadiusPixels = 3.0;
     private const double LowerConcentrationFraction = 0.50;
     private const double UpperConcentrationFraction = 0.90;
     private const string IrregularMorphologicalType = "Irregular";
     private const string EllipticalMorphologicalType = "Elliptical";
     private const string SpiralMorphologicalType = "Spiral";
-    private const double Epsilon = 1e-12;
 
     public static Result<GalaxyMorphologyEstimate> Analyze(ReadOnlySpan<float> pixels, int width, int height, double centerX, double centerY)
     {
-        var regionSetResult = SourceDetector.DetectRegions(pixels, width, height);
+        if (!double.IsFinite(centerX) || !double.IsFinite(centerY))
+        {
+            return Error.Validation("sources.galaxymorphology.invalid_position", "centerX and centerY must be finite.");
+        }
+
+        var regionSetResult = SourceDetector.DetectRegions(pixels, width, height, maxSources: int.MaxValue);
 
         if (regionSetResult.IsFailure)
         {
             return Result<GalaxyMorphologyEstimate>.Failure(regionSetResult.Error);
         }
 
-        var candidates = regionSetResult.Value.Candidates;
+        var regionSet = regionSetResult.Value;
 
-        if (candidates.IsEmpty)
+        if (regionSet.Candidates.IsEmpty)
         {
             return Error.NotFound("sources.galaxymorphology.no_source_found", "No source was detected in this image.");
         }
 
-        var candidate = candidates[FindNearestCandidateIndex(candidates, centerX, centerY)];
+        if (FindCandidateAtPosition(regionSet.Candidates, centerX, centerY) is not { } candidateIndex)
+        {
+            return Error.NotFound(
+                "sources.galaxymorphology.no_source_at_position", "No detected source covers the requested pixel position.");
+        }
 
-        var (semiMajorAxisPixels, semiMinorAxisPixels, ellipticity, _) = SourceShapeAnalyzer.ComputeShape(candidate);
+        var candidate = regionSet.Candidates[candidateIndex];
 
-        var effectiveRadiusPixels = Math.Max(MinimumEffectiveRadiusPixels, Math.Sqrt(semiMajorAxisPixels * semiMinorAxisPixels));
+        var (_, _, ellipticity, _) = SourceShapeAnalyzer.ComputeShape(candidate);
 
         var centroidX = candidate.WeightedXSum / candidate.WeightSum;
 
         var centroidY = candidate.WeightedYSum / candidate.WeightSum;
 
-        var concentrationResult = MeasureConcentrationIndex(pixels, width, height, centroidX, centroidY, effectiveRadiusPixels);
+        var petrosianResult = MeasurePetrosianRadii(pixels, width, height, centroidX, centroidY, regionSet.Background);
 
-        var morphologicalType = concentrationResult.Match(
-            concentration => concentration >= EllipticalConcentrationThreshold ? EllipticalMorphologicalType : SpiralMorphologicalType,
-            _ => IrregularMorphologicalType);
+        if (petrosianResult.IsFailure)
+        {
+            return GalaxyMorphologyEstimate.Create(null, ellipticity, IrregularMorphologicalType, null);
+        }
 
-        var concentrationIndex = concentrationResult.IsSuccess ? concentrationResult.Value : (double?)null;
+        var (r50, r90) = petrosianResult.Value;
 
-        return GalaxyMorphologyEstimate.Create(effectiveRadiusPixels, ellipticity, morphologicalType, concentrationIndex);
+        var concentration = r90 / r50;
+
+        var morphologicalType = concentration >= EllipticalConcentrationThreshold ? EllipticalMorphologicalType : SpiralMorphologicalType;
+
+        return GalaxyMorphologyEstimate.Create(r50, ellipticity, morphologicalType, concentration);
     }
 
-    private static int FindNearestCandidateIndex(ImmutableArray<SourceCandidate> candidates, double centerX, double centerY)
+    private static int? FindCandidateAtPosition(ImmutableArray<SourceCandidate> candidates, double centerX, double centerY)
     {
-        var nearestIndex = 0;
+        int? nearestIndex = null;
 
         var nearestDistanceSquared = double.PositiveInfinity;
 
@@ -88,7 +106,9 @@ public static class GalaxyMorphologyAnalyzer
 
             var distanceSquared = dx * dx + dy * dy;
 
-            if (distanceSquared < nearestDistanceSquared)
+            var matchRadius = Math.Max(MinimumMatchRadiusPixels, MatchRadiusMultiple * Math.Sqrt(candidates[i].PixelCount / Math.PI));
+
+            if (distanceSquared <= matchRadius * matchRadius && distanceSquared < nearestDistanceSquared)
             {
                 nearestDistanceSquared = distanceSquared;
 
@@ -99,43 +119,31 @@ public static class GalaxyMorphologyAnalyzer
         return nearestIndex;
     }
 
-    private static Result<double> MeasureConcentrationIndex(
-        ReadOnlySpan<float> pixels, int width, int height, double centerX, double centerY, double effectiveRadiusPixels)
+    private static Result<(double R50, double R90)> MeasurePetrosianRadii(
+        ReadOnlySpan<float> pixels, int width, int height, double centerX, double centerY, double backgroundPerPixel)
     {
-        var maxRadius = Math.Min(
-            AnalysisRadiusMultiple * effectiveRadiusPixels, MaxRadiusWithinBounds(width, height, centerX, centerY));
+        var maxRadius = MaxRadiusWithinBounds(width, height, centerX, centerY);
 
-        if (maxRadius <= 0.0)
+        if (maxRadius <= MinimumProfileRadiusPixels * PetrosianApertureMultiple)
         {
-            return Error.Validation(
-                "sources.galaxymorphology.insufficient_area", "The source is too close to the image edge to measure a concentration index.");
+            return EdgeError();
         }
-
-        var annulusResult = ApertureEngine.MeasureAnnulusBackground(
-            pixels, width, height, centerX, centerY, maxRadius, maxRadius * BackgroundAnnulusMultiple);
-
-        if (annulusResult.IsFailure)
-        {
-            return Result<double>.Failure(annulusResult.Error);
-        }
-
-        var backgroundPerPixel = annulusResult.Value.BackgroundPerPixel;
 
         Span<double> radii = stackalloc double[CurveOfGrowthSampleCount];
 
         Span<double> netFlux = stackalloc double[CurveOfGrowthSampleCount];
 
+        var logRange = Math.Log(maxRadius / MinimumProfileRadiusPixels);
+
         for (var i = 0; i < CurveOfGrowthSampleCount; i++)
         {
-            var fraction = MinimumSampleFraction + (1.0 - MinimumSampleFraction) * i / (CurveOfGrowthSampleCount - 1);
-
-            var radius = fraction * maxRadius;
+            var radius = MinimumProfileRadiusPixels * Math.Exp(logRange * i / (CurveOfGrowthSampleCount - 1));
 
             var apertureResult = ApertureEngine.MeasureCircularAperture(pixels, width, height, centerX, centerY, radius);
 
             if (apertureResult.IsFailure)
             {
-                return Result<double>.Failure(apertureResult.Error);
+                return Result<(double, double)>.Failure(apertureResult.Error);
             }
 
             radii[i] = radius;
@@ -143,35 +151,108 @@ public static class GalaxyMorphologyAnalyzer
             netFlux[i] = apertureResult.Value.Flux - backgroundPerPixel * apertureResult.Value.Area;
         }
 
-        var totalFlux = netFlux[^1];
-
-        if (totalFlux <= 0.0)
+        if (FindPetrosianRadius(radii, netFlux) is not { } petrosianRadius)
         {
-            return Error.Validation(
-                "sources.galaxymorphology.non_positive_flux", "No positive net flux was enclosed within the analysis aperture.");
+            return EdgeError();
         }
 
-        var r50 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, LowerConcentrationFraction);
+        var petrosianApertureRadius = PetrosianApertureMultiple * petrosianRadius;
 
-        var r90 = InterpolateRadiusAtFraction(radii, netFlux, totalFlux, UpperConcentrationFraction);
-
-        if (r50 <= 0.0)
+        if (petrosianApertureRadius > maxRadius)
         {
-            return Error.Validation(
-                "sources.galaxymorphology.compact_source", "The source's flux is too centrally compact to resolve a concentration index.");
+            return EdgeError();
         }
 
-        return r90 / r50;
+        var petrosianFlux = InterpolateFlux(radii, netFlux, petrosianApertureRadius);
+
+        if (petrosianFlux <= 0.0)
+        {
+            return Error.Validation(
+                "sources.galaxymorphology.non_positive_flux", "No positive net flux was enclosed within the Petrosian aperture.");
+        }
+
+        var r50 = InterpolateRadiusAtFlux(radii, netFlux, LowerConcentrationFraction * petrosianFlux);
+
+        var r90 = InterpolateRadiusAtFlux(radii, netFlux, UpperConcentrationFraction * petrosianFlux);
+
+        return (r50, r90);
     }
+
+    private static Error EdgeError() => Error.Validation(
+        "sources.galaxymorphology.insufficient_area",
+        "The source is too close to the image edge (or too extended) to measure its Petrosian aperture.");
 
     private static double MaxRadiusWithinBounds(int width, int height, double centerX, double centerY) =>
         Math.Min(Math.Min(centerX, width - centerX), Math.Min(centerY, height - centerY));
 
-    private static double InterpolateRadiusAtFraction(
-        ReadOnlySpan<double> radii, ReadOnlySpan<double> netFlux, double totalFlux, double targetFraction)
+    private static double? FindPetrosianRadius(ReadOnlySpan<double> radii, ReadOnlySpan<double> netFlux)
     {
-        var targetFlux = targetFraction * totalFlux;
+        var maxEvaluableRadius = radii[^1] / PetrosianOuterAnnulusFactor;
 
+        double? previousRadius = null;
+
+        var previousRatio = 0.0;
+
+        for (var i = 0; i < radii.Length && radii[i] <= maxEvaluableRadius; i++)
+        {
+            var radius = radii[i];
+
+            var enclosedFlux = netFlux[i];
+
+            if (enclosedFlux <= 0.0 || radius * PetrosianInnerAnnulusFactor < radii[0])
+            {
+                continue;
+            }
+
+            var innerRadius = PetrosianInnerAnnulusFactor * radius;
+
+            var outerRadius = PetrosianOuterAnnulusFactor * radius;
+
+            var annulusFlux = InterpolateFlux(radii, netFlux, outerRadius) - InterpolateFlux(radii, netFlux, innerRadius);
+
+            var localSurfaceBrightness = annulusFlux / (Math.PI * (outerRadius * outerRadius - innerRadius * innerRadius));
+
+            var meanSurfaceBrightness = enclosedFlux / (Math.PI * radius * radius);
+
+            var ratio = localSurfaceBrightness / meanSurfaceBrightness;
+
+            if (ratio <= PetrosianRatioThreshold)
+            {
+                return previousRadius is { } lastRadius
+                    ? lastRadius + (previousRatio - PetrosianRatioThreshold) / (previousRatio - ratio) * (radius - lastRadius)
+                    : radius;
+            }
+
+            previousRadius = radius;
+
+            previousRatio = ratio;
+        }
+
+        return null;
+    }
+
+    private static double InterpolateFlux(ReadOnlySpan<double> radii, ReadOnlySpan<double> netFlux, double radius)
+    {
+        if (radius <= radii[0])
+        {
+            return netFlux[0] * (radius * radius) / (radii[0] * radii[0]);
+        }
+
+        for (var i = 1; i < radii.Length; i++)
+        {
+            if (radius <= radii[i])
+            {
+                var fraction = (radius - radii[i - 1]) / (radii[i] - radii[i - 1]);
+
+                return netFlux[i - 1] + fraction * (netFlux[i] - netFlux[i - 1]);
+            }
+        }
+
+        return netFlux[^1];
+    }
+
+    private static double InterpolateRadiusAtFlux(ReadOnlySpan<double> radii, ReadOnlySpan<double> netFlux, double targetFlux)
+    {
         var previousRadius = 0.0;
 
         var previousFlux = 0.0;
@@ -182,7 +263,7 @@ public static class GalaxyMorphologyAnalyzer
 
             if (flux >= targetFlux)
             {
-                return Math.Abs(flux - previousFlux) < Epsilon
+                return flux == previousFlux
                     ? previousRadius
                     : previousRadius + (targetFlux - previousFlux) / (flux - previousFlux) * (radii[i] - previousRadius);
             }

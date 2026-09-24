@@ -99,12 +99,32 @@ public static class CompositeEndpoint
 
         var (width, height) = dataset.Image.Resolve2DDimensions();
 
-        return ([.. dataset.Pixels], width, height);
+        var factorResult = ImageDownsampler.ComputeFactor(width, height, RenderOptions.DefaultMaxDimension);
+
+        if (factorResult.IsFailure)
+        {
+            return Result<(float[], int, int)>.Failure(factorResult.Error);
+        }
+
+        if (factorResult.Value == 1)
+        {
+            return ([.. dataset.Pixels], width, height);
+        }
+
+        var (downsampledWidth, downsampledHeight) = ImageDownsampler.ComputeDownsampledDimensions(width, height, factorResult.Value);
+
+        var downsampled = new float[downsampledWidth * downsampledHeight];
+
+        var downsampleResult = ImageDownsampler.Downsample(dataset.Pixels, width, height, factorResult.Value, downsampled);
+
+        return downsampleResult.IsFailure
+            ? Result<(float[], int, int)>.Failure(downsampleResult.Error)
+            : (downsampled, downsampledWidth, downsampledHeight);
     }
 
     private static Result<byte[]> ScaleChannelToGrayscale(ReadOnlySpan<float> pixels)
     {
-        var boundsResult = ImageStatistics.ComputePercentileBounds(pixels, LowerPercentile, UpperPercentile);
+        var boundsResult = ImageScaler.ResolveAutoScaleBounds(pixels, LowerPercentile, UpperPercentile);
 
         if (boundsResult.IsFailure)
         {

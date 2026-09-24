@@ -1,4 +1,3 @@
-using AstroLab.Core.Fits;
 using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Infrastructure.Storage;
@@ -8,8 +7,6 @@ namespace AstroLab.Api.Features.Images.Snr;
 /// <summary>Computes the signal-to-noise ratio of an aperture photometry measurement.</summary>
 public static class SnrEndpoint
 {
-    private const string GainKeyword = "GAIN";
-
     extension(IEndpointRouteBuilder group)
     {
         public void MapSnrEndpoint()
@@ -55,10 +52,10 @@ public static class SnrEndpoint
 
         var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
 
-        var gain = request.DetectorGain ?? ResolveHeaderGain(dataset.Hdu.Header);
+        var gain = request.DetectorGain ?? PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header);
 
         var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
-            measurement.NetFlux, measurement.ApertureArea, skySigma, gain, request.ReadNoiseElectrons);
+            measurement, skySigma, gain, request.ReadNoiseElectrons);
 
         if (uncertaintyResult.IsFailure)
         {
@@ -70,12 +67,5 @@ public static class SnrEndpoint
         var snrResult = PhotometricUncertainty.ComputeSignalToNoiseRatio(measurement.NetFlux, fluxUncertainty);
 
         return snrResult.ToApiResult(snr => Results.Ok(SnrResponse.Create(fileId, measurement.NetFlux, fluxUncertainty, snr)));
-    }
-
-    private static double? ResolveHeaderGain(FitsHeader header)
-    {
-        var gainResult = header.GetReal(GainKeyword);
-
-        return gainResult.IsSuccess ? gainResult.Value : null;
     }
 }

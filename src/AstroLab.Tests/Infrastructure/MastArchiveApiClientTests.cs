@@ -1,3 +1,4 @@
+using AstroLab.Core.Result;
 using System.Net;
 using System.Text;
 using AstroLab.Infrastructure.Archives;
@@ -292,6 +293,25 @@ public class MastArchiveApiClientTests
         Assert.True(result.IsFailure);
         Assert.Equal("mast.target_not_resolved", result.Error.Code);
         Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ExecutingStatus_ReturnsPendingInfrastructureFailure()
+    {
+        var (client, _) = CreateClient(async request =>
+        {
+            var requestJson = await ReadRequestJsonAsync(request);
+
+            return RequestContainsService(requestJson, "Mast.Name.Lookup")
+                ? JsonResponse(NameLookupResponseJson)
+                : JsonResponse("""{"status":"EXECUTING","msg":"","data":[]}""");
+        });
+
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("mast.search_pending", result.Error.Code);
+        Assert.Equal(ErrorCategory.Infrastructure, result.Error.Category);
     }
 
     [Fact]

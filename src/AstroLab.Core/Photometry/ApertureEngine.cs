@@ -180,7 +180,8 @@ public static class ApertureEngine
             rawFlux: aperture.Flux,
             apertureArea: aperture.Area,
             backgroundPerPixel: annulus.BackgroundPerPixel,
-            netFlux: aperture.Flux - (annulus.BackgroundPerPixel * aperture.Area));
+            netFlux: aperture.Flux - (annulus.BackgroundPerPixel * aperture.Area),
+            backgroundPixelCount: annulus.SampledPixelCount);
     }
 
     private static Result<AnnulusMeasurement> MeasureAnnulusMean(

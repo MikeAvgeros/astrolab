@@ -4,7 +4,7 @@ public sealed record AperturePhotometryResponse
 {
     private AperturePhotometryResponse(
         string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux,
-        double fluxUncertainty, double signalToNoiseRatio)
+        double fluxUncertainty, double? signalToNoiseRatio)
     {
         FileId = fileId;
 
@@ -33,11 +33,11 @@ public sealed record AperturePhotometryResponse
 
     public double FluxUncertainty { get; }
 
-    public double SignalToNoiseRatio { get; }
+    public double? SignalToNoiseRatio { get; }
 
     public static AperturePhotometryResponse Create(
         string fileId, double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux,
-        double fluxUncertainty, double signalToNoiseRatio)
+        double fluxUncertainty, double? signalToNoiseRatio)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 

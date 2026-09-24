@@ -76,7 +76,7 @@ public static class CompareEndpoint
             return correlateResult.Error.ToProblem();
         }
 
-        var velocityResult = ComputeVelocityShift(primaryDataset.Hdu.Header, correlateResult.Value.LagBins);
+        var velocityResult = ComputeVelocityShift(primaryDataset.Hdu.Header, primarySpectrum.Length, correlateResult.Value.LagBins);
 
         if (velocityResult.IsFailure)
         {
@@ -94,7 +94,7 @@ public static class CompareEndpoint
             compare.RmsFluxDifference));
     }
 
-    private static Result<double> ComputeVelocityShift(FitsHeader header, double lagBins)
+    private static Result<double> ComputeVelocityShift(FitsHeader header, int dispersionBins, double lagBins)
     {
         var solutionResult = SpectrumExtractor.ResolveLinearDispersionSolution(header);
 
@@ -105,16 +105,18 @@ public static class CompareEndpoint
                 $"{solutionResult.Error.Message} A velocity shift cannot be computed from the primary file.");
         }
 
-        var (referenceWavelength, wavelengthPerPixel, _) = solutionResult.Value;
+        var (referenceWavelength, wavelengthPerPixel, referencePixel) = solutionResult.Value;
+        
+        var centralWavelength = referenceWavelength + ((dispersionBins - 1) / 2.0 - (referencePixel - 1.0)) * wavelengthPerPixel;
 
-        if (referenceWavelength <= 0.0)
+        if (centralWavelength <= 0.0)
         {
             return Error.Validation(
-                "spectroscopy.compare.invalid_wavelength_solution", "The dispersion axis reference wavelength (CRVALn) must be positive.");
+                "spectroscopy.compare.invalid_wavelength_solution", "The spectrum's central wavelength must be positive.");
         }
 
-        var observedWavelength = referenceWavelength + (lagBins * wavelengthPerPixel);
+        var observedWavelength = centralWavelength + (lagBins * wavelengthPerPixel);
 
-        return RadialVelocityEstimator.EstimateKilometersPerSecond(observedWavelength, referenceWavelength);
+        return RadialVelocityEstimator.EstimateKilometersPerSecond(observedWavelength, centralWavelength);
     }
 }

@@ -8,7 +8,10 @@ namespace AstroLab.Core.Astrometry;
 /// Computes the similarity transform (offset, rotation, scale) needed to register a target image
 /// onto a reference image's pixel grid. Prefers each image's own WCS solution when both are
 /// available; otherwise falls back to a translation-only estimate from the images' brightest
-/// detected sources, paired by descending flux rank.
+/// detected sources: every target/reference pairing proposes an offset, the offset under which the
+/// most target sources land within a small tolerance of some reference source wins, and the result
+/// is the median offset of those matched pairs. Unlike pairing sources by flux rank, this tolerates
+/// sources entering or leaving the field and differing detection lists.
 /// </summary>
 public static class ImageAligner
 {
@@ -17,6 +20,9 @@ public static class ImageAligner
     private const double DefaultScale = 1.0;
     private const double FullCircleDegrees = 360.0;
     private const double HalfCircleDegrees = 180.0;
+    private const int MaxVotingSources = 30;
+    private const int MinimumConsistentMatches = 2;
+    private const double MatchTolerancePixels = 2.0;
 
     public static Result<AlignmentTransform> AlignByWcs(Wcs target, Wcs reference)
     {
@@ -78,20 +84,112 @@ public static class ImageAligner
                 "At least one detected source is required in each image (or a WCS solution on both) to compute an alignment transform.");
         }
 
-        var pairCount = Math.Min(targetSources.Length, referenceSources.Length);
+        var targets = targetSources.AsSpan()[..Math.Min(targetSources.Length, MaxVotingSources)];
 
-        var offsetXSum = 0.0;
+        var references = referenceSources.AsSpan()[..Math.Min(referenceSources.Length, MaxVotingSources)];
 
-        var offsetYSum = 0.0;
+        var bestOffset = (X: 0.0, Y: 0.0);
 
-        for (var i = 0; i < pairCount; i++)
+        var bestVotes = 0;
+
+        foreach (var target in targets)
         {
-            offsetXSum += referenceSources[i].PixelX - targetSources[i].PixelX;
+            foreach (var reference in references)
+            {
+                var candidate = (X: reference.PixelX - target.PixelX, Y: reference.PixelY - target.PixelY);
 
-            offsetYSum += referenceSources[i].PixelY - targetSources[i].PixelY;
+                var votes = CountMatches(targets, references, candidate);
+
+                if (votes > bestVotes)
+                {
+                    bestVotes = votes;
+
+                    bestOffset = candidate;
+                }
+            }
         }
 
-        return AlignmentTransform.Create(offsetXSum / pairCount, offsetYSum / pairCount, DefaultRotationDegrees, DefaultScale);
+        var requiredVotes = Math.Min(MinimumConsistentMatches, Math.Min(targets.Length, references.Length));
+
+        if (bestVotes < requiredVotes)
+        {
+            return Error.Validation(
+                "images.align.no_consistent_offset",
+                "No translation brings at least two detected sources of the two images into agreement; the images may not overlap.");
+        }
+
+        var (offsetX, offsetY) = RefineOffset(targets, references, bestOffset);
+
+        return AlignmentTransform.Create(offsetX, offsetY, DefaultRotationDegrees, DefaultScale);
+    }
+
+    private static int CountMatches(ReadOnlySpan<DetectedSource> targets, ReadOnlySpan<DetectedSource> references, (double X, double Y) offset)
+    {
+        var matches = 0;
+
+        foreach (var target in targets)
+        {
+            if (FindMatch(references, target.PixelX + offset.X, target.PixelY + offset.Y) is not null)
+            {
+                matches++;
+            }
+        }
+
+        return matches;
+    }
+
+    private static (double X, double Y) RefineOffset(
+        ReadOnlySpan<DetectedSource> targets, ReadOnlySpan<DetectedSource> references, (double X, double Y) offset)
+    {
+        var offsetsX = new List<double>(targets.Length);
+
+        var offsetsY = new List<double>(targets.Length);
+
+        foreach (var target in targets)
+        {
+            if (FindMatch(references, target.PixelX + offset.X, target.PixelY + offset.Y) is { } reference)
+            {
+                offsetsX.Add(reference.PixelX - target.PixelX);
+
+                offsetsY.Add(reference.PixelY - target.PixelY);
+            }
+        }
+
+        return (Median(offsetsX), Median(offsetsY));
+    }
+
+    private static DetectedSource? FindMatch(ReadOnlySpan<DetectedSource> references, double predictedX, double predictedY)
+    {
+        DetectedSource? match = null;
+
+        var bestDistanceSquared = MatchTolerancePixels * MatchTolerancePixels;
+
+        foreach (var reference in references)
+        {
+            var dx = reference.PixelX - predictedX;
+
+            var dy = reference.PixelY - predictedY;
+
+            var distanceSquared = dx * dx + dy * dy;
+
+            if (distanceSquared <= bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+
+                match = reference;
+            }
+        }
+
+        return match;
+    }
+
+    private static double Median(List<double> values)
+    {
+        values.Sort();
+
+        var mid = values.Count / 2;
+
+        return values.Count % 2 == 1 ? values[mid] : (values[mid - 1] + values[mid]) / 2.0;
     }
 
     private static double NormalizeRotationDegrees(double degrees)

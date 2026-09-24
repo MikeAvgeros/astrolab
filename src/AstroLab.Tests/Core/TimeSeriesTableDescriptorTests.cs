@@ -138,16 +138,6 @@ public class TimeSeriesTableDescriptorTests
     }
 
     [Fact]
-    public void Resolve_ColumnFormIsCharacterString_ResolvesAsScalarRegardlessOfWidth()
-    {
-        var hdu = BuildTableHduWithForms(10, [("TIME", "20A"), ("FLUX", "1D")]);
-
-        var result = TimeSeriesTableDescriptor.Resolve(hdu);
-
-        Assert.True(result.IsSuccess);
-    }
-
-    [Fact]
     public void Resolve_FluxColumnIsVariableLengthArray_ReturnsUnsupportedColumnShapeFailure()
     {
         var hdu = BuildTableHduWithForms(10, [("TIME", "1D"), ("FLUX", "PD(100)")]);
@@ -186,5 +176,31 @@ public class TimeSeriesTableDescriptorTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("fits.header.keyword_missing", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("23A")]
+    [InlineData("1L")]
+    [InlineData("1C")]
+    public void Resolve_NonNumericTimeColumn_ReturnsUnsupportedColumnType(string timeForm)
+    {
+        var hdu = BuildTableHduWithForms(10, [("TIME", timeForm), ("FLUX", "1D")]);
+
+        var result = TimeSeriesTableDescriptor.Resolve(hdu);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("fits.data.unsupported_column_type", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("J")]
+    [InlineData("1E")]
+    [InlineData("1K")]
+    public void Resolve_NumericScalarColumns_AreAccepted(string form)
+    {
+        var hdu = BuildTableHduWithForms(10, [("TIME", form), ("FLUX", form)]);
+
+        Assert.True(TimeSeriesTableDescriptor.Resolve(hdu).IsSuccess);
     }
 }

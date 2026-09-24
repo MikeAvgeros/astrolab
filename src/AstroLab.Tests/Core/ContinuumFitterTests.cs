@@ -114,4 +114,47 @@ public class ContinuumFitterTests
 
         Assert.Equal("spectroscopy.continuum.insufficient_points", result.Error.Code);
     }
+
+    [Fact]
+    public void Fit_HighDegreePolynomialOnOpticalWavelengths_RecoversItExactly()
+    {
+        // A degree-7 continuum over 4000-7000 A: in raw powers of x the normal equations are hopelessly
+        // ill-conditioned; in the normalized variable the fit is exact to rounding.
+        var x = Enumerable.Range(0, 601).Select(i => 4000.0 + 5.0 * i).ToArray();
+
+        static double Truth(double wavelength)
+        {
+            var t = (wavelength - 5500.0) / 1500.0;
+
+            return 1.0 + 0.3 * t - 0.2 * t * t + 0.05 * Math.Pow(t, 5) - 0.04 * Math.Pow(t, 7);
+        }
+
+        var flux = x.Select(Truth).ToArray();
+
+        var result = ContinuumFitter.Fit(x, flux, polynomialDegree: 7, [], sigmaClipThreshold: null, sigmaClipIterations: null);
+
+        Assert.True(result.IsSuccess);
+
+        var (continuum, coefficients) = result.Value;
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            Assert.Equal(flux[i], continuum[i], precision: 9);
+        }
+
+        // The raw power-basis coefficients describe the same polynomial.
+        Assert.Equal(flux[300], SpectrumExtractor.EvaluateWavelength(x[300], coefficients), precision: 4);
+    }
+
+    [Fact]
+    public void Fit_DegreeAboveMaximum_ReturnsValidationError()
+    {
+        var x = Enumerable.Range(0, 100).Select(i => (double)i).ToArray();
+
+        var result = ContinuumFitter.Fit(x, x, polynomialDegree: ContinuumFitter.MaxPolynomialDegree + 1, [], null, null);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("spectroscopy.continuum.invalid_degree", result.Error.Code);
+    }
 }

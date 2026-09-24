@@ -29,9 +29,8 @@ public static class SearchEndpoint
     {
         var request = ObservationSearchRequest.Create(archive, target, mission, instrument, from, to, searchRadiusDegrees, maxResults);
 
-        var query = request.SearchRadiusDegrees is { } searchRadiusDegreesValue
-            ? ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, request.From, request.To, searchRadiusDegreesValue, request.MaxResults)
-            : ArchiveSearchQuery.Create(request.Target, request.Mission, request.Instrument, request.From, request.To, maxResults: request.MaxResults);
+        var query = ArchiveSearchQuery.Create(
+            request.Target, request.Mission, request.Instrument, request.From, request.To, request.SearchRadiusDegrees, request.MaxResults);
 
         var client = ArchiveClientResolver.Resolve(request.Archive, esoClient, mastClient);
 

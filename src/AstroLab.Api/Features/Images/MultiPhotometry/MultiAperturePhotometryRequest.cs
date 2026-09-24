@@ -58,6 +58,11 @@ public sealed record MultiAperturePhotometryRequest
 
     private void Validate()
     {
+        if (!double.IsFinite(MagnitudeZeroPoint))
+        {
+            throw new ArgumentOutOfRangeException(nameof(MagnitudeZeroPoint), MagnitudeZeroPoint, "magnitudeZeroPoint must be finite.");
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ApertureRadius);
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(AnnulusInnerRadius);

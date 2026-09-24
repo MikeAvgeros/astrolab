@@ -104,6 +104,30 @@ public sealed class CataloguesWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal("catalogues.vizier.unknown_catalogue", body.GetProperty("title").GetString());
     }
 
+    [Theory]
+    [InlineData("rightAscension=400&declination=0&radiusArcsec=5")]
+    [InlineData("rightAscension=10&declination=95&radiusArcsec=5")]
+    [InlineData("rightAscension=10&declination=0&radiusArcsec=Infinity")]
+    [InlineData("rightAscension=10&declination=0&radiusArcsec=5&maxResults=2147483647")]
+    public async Task Query_InvalidOrUnboundedParameters_ReturnBadRequestWithoutQueryingVizier(string query)
+    {
+        var calls = 0;
+
+        var catalogueClient = new StubCatalogueClient((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(Result<IReadOnlyList<CatalogueRecord>>.Success([]));
+        });
+
+        var client = CreateClientWithStubCatalogue(catalogueClient);
+
+        var response = await client.GetAsync($"/api/catalogues/query?catalogueId=I%2F355%2Fgaiadr3&{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        Assert.Equal(0, calls);
+    }
+
     [Fact]
     public async Task CrossMatch_CandidateNearDetectedSource_ReturnsMatch()
     {
@@ -135,6 +159,46 @@ public sealed class CataloguesWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal("Gaia DR3 999", match.GetProperty("catalogueIdentifier").GetString());
         Assert.Equal("I/355/gaiadr3", match.GetProperty("catalogueId").GetString());
         Assert.Equal(0.0, match.GetProperty("separationArcsec").GetDouble(), precision: 6);
+    }
+
+    [Fact]
+    public async Task CrossMatch_FieldSearchHitsRowCap_FallsBackToPerSourceSearches()
+    {
+        var fileId = await UploadImageWithSourceAndWcsAsync();
+
+        var queries = new List<CatalogueConeSearchQuery>();
+
+        var catalogueClient = new StubCatalogueClient(
+            (query, _) =>
+            {
+                queries.Add(query);
+
+                // The field-covering search returns only far-away rows, filling its cap; the per-source cone
+                // search (at the match radius) is what finds the real counterpart.
+                IReadOnlyList<CatalogueRecord> records = query.MaxResults >= 2000
+                    ? Enumerable.Range(0, query.MaxResults)
+                        .Select(i => CatalogueRecord.Create($"Filler {i}", query.RightAscension + 1.0, query.Declination))
+                        .ToList()
+                    : [CatalogueRecord.Create("Gaia DR3 777", query.RightAscension, query.Declination)];
+
+                return Task.FromResult(Result<IReadOnlyList<CatalogueRecord>>.Success(records));
+            });
+
+        var client = CreateClientWithStubCatalogue(catalogueClient);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/catalogues/cross-match",
+            new { FileId = fileId, CatalogueIds = new[] { "I/355/gaiadr3" }, RadiusArcsec = 5.0 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var match = Assert.Single(body.GetProperty("matches").EnumerateArray());
+
+        Assert.Equal("Gaia DR3 777", match.GetProperty("catalogueIdentifier").GetString());
+
+        Assert.True(queries.Count > 1);
     }
 
     [Fact]

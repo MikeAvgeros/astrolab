@@ -167,4 +167,46 @@ public class ImageSegmenterTests
 
         Assert.Equal("sources.segmentation.invalid_minimum_area", result.Error.Code);
     }
+
+    [Fact]
+    public void Segment_SkyGradientAcrossFrame_FindsOnlyTheRealSource()
+    {
+        // Sky rising from 1000 to 1200 ADU across a 256-pixel frame with sigma = 10 noise: a single global
+        // threshold (median + 5 sigma = 1150) would flag the whole bright quarter as one spurious segment.
+        const int size = 256;
+
+        var random = new Random(7);
+
+        var pixels = new float[size * size];
+
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                var gaussian = Math.Sqrt(-2.0 * Math.Log(1.0 - random.NextDouble())) * Math.Cos(2.0 * Math.PI * random.NextDouble());
+
+                pixels[y * size + x] = (float)(1000.0 + 200.0 * x / (size - 1) + 10.0 * gaussian);
+            }
+        }
+
+        for (var y = 52; y <= 72; y++)
+        {
+            for (var x = 52; x <= 72; x++)
+            {
+                var radiusSquared = (x - 62) * (x - 62) + (y - 62) * (y - 62);
+
+                pixels[y * size + x] += (float)(500.0 * Math.Exp(-radiusSquared / (2.0 * 1.5 * 1.5)));
+            }
+        }
+
+        var result = ImageSegmenter.Segment(pixels, size, size, thresholdSigma: 5.0, minimumArea: 5);
+
+        Assert.True(result.IsSuccess);
+
+        var segment = Assert.Single(result.Value);
+
+        Assert.Equal(62.5, segment.CentroidX, precision: 1);
+
+        Assert.Equal(62.5, segment.CentroidY, precision: 1);
+    }
 }

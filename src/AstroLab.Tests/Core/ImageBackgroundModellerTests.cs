@@ -156,4 +156,35 @@ public class ImageBackgroundModellerTests
 
         Assert.Equal("imaging.background.no_valid_meshes", result.Error.Code);
     }
+
+    [Fact]
+    public void Model_BackgroundAt_InterpolatesBetweenMeshCentresAndClampsBeyondThem()
+    {
+        const int width = 8;
+
+        const int height = 4;
+
+        var pixels = new float[width * height];
+
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                pixels[y * width + x] = x < 4 ? 100f : 200f;
+            }
+        }
+
+        var model = ImageBackgroundModeller.Model(pixels, width, height, meshSizePixels: 4).Value;
+
+        Assert.Equal([100.0, 200.0], model.MeshBackgrounds.ToArray());
+
+        // Mesh centres sit at x = 2 and x = 6; halfway between them the background is the average.
+        Assert.Equal(150.0, model.BackgroundAt(4.0, 2.0), precision: 9);
+
+        Assert.Equal(125.0, model.BackgroundAt(3.0, 2.0), precision: 9);
+
+        Assert.Equal(100.0, model.BackgroundAt(0.5, 2.0), precision: 9);
+
+        Assert.Equal(200.0, model.BackgroundAt(7.5, 2.0), precision: 9);
+    }
 }

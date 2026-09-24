@@ -69,6 +69,11 @@ public sealed class MastArchiveDownloadClient : IMastArchiveDownloadClient
             _logger.LogWarning("Download canceled for MAST product {DataUri}", product.DataUri);
             throw;
         }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Unexpected error during download for MAST product {DataUri}", product.DataUri);
+            return Result<ArchiveDownload>.Failure(UpstreamFailure.ToError("mast.download", "MAST"));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error during download for MAST product {DataUri}", product.DataUri);

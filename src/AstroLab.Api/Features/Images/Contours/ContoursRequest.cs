@@ -1,3 +1,5 @@
+using AstroLab.Core.Imaging;
+
 namespace AstroLab.Api.Features.Images.Contours;
 
 public sealed record ContoursRequest
@@ -17,6 +19,18 @@ public sealed record ContoursRequest
         if (levelCount is { } levelCountValue)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(levelCountValue);
+
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(levelCountValue, ImageContourGenerator.MaxLevelCount);
+        }
+
+        if (levels is not null)
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(levels.Length, ImageContourGenerator.MaxLevelCount, nameof(levels));
+
+            if (!Array.TrueForAll(levels, double.IsFinite))
+            {
+                throw new ArgumentException("Every contour level must be finite.", nameof(levels));
+            }
         }
 
         return new ContoursRequest(levels, levelCount);

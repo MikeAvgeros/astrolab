@@ -55,22 +55,51 @@ public static class ImageSegmenter
 
         var model = modelResult.Value;
 
-        var background = model.MedianBackground;
-
-        var sigma = model.BackgroundRms;
-
-        if (sigma <= 0.0)
+        if (model.BackgroundRms <= 0.0)
         {
             return ImmutableArray<ImageSegment>.Empty;
         }
 
-        var thresholdValue = background + (thresholdSigma * sigma);
+        var pixelCount = pixels.Length;
 
-        return BuildSegments(pixels, width, height, background, thresholdValue, minimumArea);
+        var background = ArrayPool<float>.Shared.Rent(pixelCount);
+
+        var threshold = ArrayPool<float>.Shared.Rent(pixelCount);
+
+        try
+        {
+            BuildBackgroundAndThresholdMaps(model, width, height, thresholdSigma, background, threshold);
+
+            return BuildSegments(pixels, width, height, background, threshold, minimumArea);
+        }
+        finally
+        {
+            ArrayPool<float>.Shared.Return(background);
+
+            ArrayPool<float>.Shared.Return(threshold);
+        }
+    }
+
+    private static void BuildBackgroundAndThresholdMaps(
+        ImageBackgroundModel model, int width, int height, double thresholdSigma, float[] background, float[] threshold)
+    {
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+
+                var localBackground = model.BackgroundAt(x + PixelCenterOffset, y + PixelCenterOffset);
+
+                background[index] = (float)localBackground;
+
+                threshold[index] = (float)(localBackground + thresholdSigma * model.RmsAt(x + PixelCenterOffset, y + PixelCenterOffset));
+            }
+        }
     }
 
     private static ImmutableArray<ImageSegment> BuildSegments(
-        ReadOnlySpan<float> pixels, int width, int height, double background, double thresholdValue, int minimumArea)
+        ReadOnlySpan<float> pixels, int width, int height, float[] background, float[] threshold, int minimumArea)
     {
         var pixelCount = pixels.Length;
 
@@ -93,12 +122,12 @@ public static class ImageSegmenter
 
                 var value = pixels[startIndex];
 
-                if (!float.IsFinite(value) || value <= thresholdValue)
+                if (!float.IsFinite(value) || value <= threshold[startIndex])
                 {
                     continue;
                 }
 
-                var members = FloodFillMembers(pixels, width, height, startIndex, thresholdValue, regionId, stack);
+                var members = FloodFillMembers(pixels, width, height, startIndex, threshold, regionId, stack);
 
                 if (members.Count < minimumArea)
                 {
@@ -152,7 +181,7 @@ public static class ImageSegmenter
     }
 
     private static List<int> FloodFillMembers(
-        ReadOnlySpan<float> pixels, int width, int height, int startIndex, double thresholdValue, int[] regionId, int[] stack)
+        ReadOnlySpan<float> pixels, int width, int height, int startIndex, float[] threshold, int[] regionId, int[] stack)
     {
         var stackTop = 0;
 
@@ -204,7 +233,7 @@ public static class ImageSegmenter
 
                     var neighborValue = pixels[neighborIndex];
 
-                    if (!float.IsFinite(neighborValue) || neighborValue <= thresholdValue)
+                    if (!float.IsFinite(neighborValue) || neighborValue <= threshold[neighborIndex])
                     {
                         continue;
                     }
@@ -350,7 +379,7 @@ public static class ImageSegmenter
         return partitions;
     }
 
-    private static SegmentAccumulation Accumulate(ReadOnlySpan<float> pixels, int width, double background, List<int> members)
+    private static SegmentAccumulation Accumulate(ReadOnlySpan<float> pixels, int width, float[] background, List<int> members)
     {
         var minX = int.MaxValue;
 
@@ -374,7 +403,7 @@ public static class ImageSegmenter
 
             var y = index / width;
 
-            var weight = pixels[index] - background;
+            var weight = pixels[index] - background[index];
 
             weightedXSum += (x + PixelCenterOffset) * weight;
 

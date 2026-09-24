@@ -7,11 +7,17 @@ namespace AstroLab.Core.Spectroscopy;
 /// degree against the flux, optionally excluding caller-supplied wavelength ranges (e.g. known
 /// emission/absorption features) from the fit and/or iteratively sigma-clipping outliers, then
 /// evaluates the fitted polynomial back across every original sample to produce a full continuum
-/// array the same length as the input. Does not mutate the input spectrum — see
-/// <see cref="SpectrumExtractor.SubtractBackground"/> for continuum subtraction.
+/// array the same length as the input. The fit is carried out in the normalized variable
+/// t = (x - centre) / half-range, which maps the wavelength range onto [-1, 1]: raw powers of optical
+/// wavelengths (x^k with x ~ 5000) make the normal equations catastrophically ill-conditioned for
+/// anything beyond a low degree. Returned coefficients are converted back to the raw power basis.
+/// Does not mutate the input spectrum — see <see cref="SpectrumExtractor.SubtractBackground"/> for
+/// continuum subtraction.
 /// </summary>
 public static class ContinuumFitter
 {
+    public const int MaxPolynomialDegree = 15;
+
     public static Result<(double[] Continuum, double[] Coefficients)> Fit(
         ReadOnlySpan<double> x,
         ReadOnlySpan<double> flux,
@@ -31,9 +37,10 @@ public static class ContinuumFitter
             return Error.Validation("spectroscopy.continuum.empty_spectrum", "The spectrum contains no points to fit a continuum to.");
         }
 
-        if (polynomialDegree < 0)
+        if (polynomialDegree is < 0 or > MaxPolynomialDegree)
         {
-            return Error.Validation("spectroscopy.continuum.invalid_degree", "polynomialDegree must be non-negative.");
+            return Error.Validation(
+                "spectroscopy.continuum.invalid_degree", $"polynomialDegree must be between 0 and {MaxPolynomialDegree}.");
         }
 
         for (var i = 0; i < x.Length; i++)
@@ -53,7 +60,16 @@ public static class ContinuumFitter
             included[i] = !IsExcluded(x[i], excludedRanges);
         }
 
-        var fitResult = FitOnce(x, flux, included, polynomialDegree, minimumPoints);
+        var (center, halfRange) = ResolveNormalization(x);
+
+        var t = new double[x.Length];
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            t[i] = (x[i] - center) / halfRange;
+        }
+
+        var fitResult = FitOnce(t, flux, included, polynomialDegree, minimumPoints);
 
         if (fitResult.IsFailure)
         {
@@ -66,7 +82,7 @@ public static class ContinuumFitter
         {
             for (var iteration = 0; iteration < iterations; iteration++)
             {
-                var sigma = ComputeResidualStandardDeviation(x, flux, included, coefficients);
+                var sigma = ComputeResidualStandardDeviation(t, flux, included, coefficients);
 
                 var newlyMasked = false;
 
@@ -77,7 +93,7 @@ public static class ContinuumFitter
                         continue;
                     }
 
-                    var residual = flux[i] - SpectrumExtractor.EvaluateWavelength(x[i], coefficients);
+                    var residual = flux[i] - SpectrumExtractor.EvaluateWavelength(t[i], coefficients);
 
                     if (Math.Abs(residual) > threshold * sigma)
                     {
@@ -92,7 +108,7 @@ public static class ContinuumFitter
                     break;
                 }
 
-                var refitResult = FitOnce(x, flux, included, polynomialDegree, minimumPoints);
+                var refitResult = FitOnce(t, flux, included, polynomialDegree, minimumPoints);
 
                 if (refitResult.IsFailure)
                 {
@@ -107,10 +123,49 @@ public static class ContinuumFitter
 
         for (var i = 0; i < x.Length; i++)
         {
-            continuum[i] = SpectrumExtractor.EvaluateWavelength(x[i], coefficients);
+            continuum[i] = SpectrumExtractor.EvaluateWavelength(t[i], coefficients);
         }
 
-        return (continuum, coefficients);
+        return (continuum, ToRawPowerBasis(coefficients, center, halfRange));
+    }
+
+    private static (double Center, double HalfRange) ResolveNormalization(ReadOnlySpan<double> x)
+    {
+        var min = double.PositiveInfinity;
+
+        var max = double.NegativeInfinity;
+
+        foreach (var value in x)
+        {
+            min = Math.Min(min, value);
+
+            max = Math.Max(max, value);
+        }
+
+        var halfRange = (max - min) / 2.0;
+
+        return ((min + max) / 2.0, halfRange > 0.0 ? halfRange : 1.0);
+    }
+
+    private static double[] ToRawPowerBasis(double[] normalizedCoefficients, double center, double halfRange)
+    {
+        var raw = new double[normalizedCoefficients.Length];
+
+        for (var k = 0; k < normalizedCoefficients.Length; k++)
+        {
+            var scaled = normalizedCoefficients[k] / Math.Pow(halfRange, k);
+
+            var binomial = 1.0;
+
+            for (var j = 0; j <= k; j++)
+            {
+                raw[j] += scaled * binomial * Math.Pow(-center, k - j);
+
+                binomial = binomial * (k - j) / (j + 1);
+            }
+        }
+
+        return raw;
     }
 
     private static bool IsExcluded(double value, ReadOnlySpan<(double Min, double Max)> excludedRanges)

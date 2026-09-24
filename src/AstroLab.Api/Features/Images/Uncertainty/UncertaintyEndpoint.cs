@@ -1,4 +1,3 @@
-using AstroLab.Core.Fits;
 using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Infrastructure.Storage;
@@ -8,8 +7,6 @@ namespace AstroLab.Api.Features.Images.Uncertainty;
 /// <summary>Estimates propagated flux uncertainty for an aperture photometry measurement, using the CCD equation when a detector gain is available.</summary>
 public static class UncertaintyEndpoint
 {
-    private const string GainKeyword = "GAIN";
-
     extension(IEndpointRouteBuilder group)
     {
         public void MapUncertaintyEndpoint()
@@ -55,19 +52,12 @@ public static class UncertaintyEndpoint
 
         var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
 
-        var gain = request.DetectorGain ?? ResolveHeaderGain(dataset.Hdu.Header);
+        var gain = request.DetectorGain ?? PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header);
 
         var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
-            measurement.NetFlux, measurement.ApertureArea, skySigma, gain, request.ReadNoiseElectrons);
+            measurement, skySigma, gain, request.ReadNoiseElectrons);
 
         return uncertaintyResult.ToApiResult(fluxUncertainty =>
             Results.Ok(UncertaintyResponse.Create(fileId, measurement.NetFlux, fluxUncertainty, gain)));
-    }
-
-    private static double? ResolveHeaderGain(FitsHeader header)
-    {
-        var gainResult = header.GetReal(GainKeyword);
-
-        return gainResult.IsSuccess ? gainResult.Value : null;
     }
 }

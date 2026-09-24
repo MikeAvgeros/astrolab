@@ -5,6 +5,32 @@ namespace AstroLab.Tests.Infrastructure;
 
 public class FitsPixelDataReaderTests
 {
+    [Theory]
+    [InlineData(-32, 30000, 30000)]
+    [InlineData(-64, 20000, 15000)]
+    public async Task ReadImageDataAsync_ImageTooLargeForContiguousBuffers_ReturnsValidationErrorWithoutReading(int bitPix, int width, int height)
+    {
+        string[] cards =
+        [
+            "SIMPLE  =                    T",
+            $"BITPIX  = {bitPix,20}",
+            "NAXIS   =                    2",
+            $"NAXIS1  = {width,20}",
+            $"NAXIS2  = {height,20}",
+            "END",
+        ];
+
+        var block = System.Text.Encoding.ASCII.GetBytes(string.Concat(cards.Select(card => card.PadRight(80))));
+
+        var descriptor = FitsImageDescriptor.FromHeader(FitsHeader.Parse(block).Value).Value;
+
+        var result = await FitsPixelDataReader.ReadImageDataAsync(new MemoryStream(), descriptor, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("fits.data.image_too_large", result.Error.Code);
+    }
+
     [Fact]
     public async Task ReadImageDataAsync_SeekableStreamShorterThanDeclaredSize_ReturnsTruncatedFailureWithoutAllocating()
     {

@@ -19,6 +19,8 @@ public static class CrossMatchEndpoint
     /// <summary>Per-catalogue candidate cap for the single field-covering cone search backing a cross-match request.</summary>
     private const int CandidateSearchMaxResults = 2000;
 
+    private const int PerSourceSearchMaxResults = 50;
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapCrossMatchEndpoint()
@@ -82,7 +84,8 @@ public static class CrossMatchEndpoint
             return fieldResult.Error.ToProblem();
         }
 
-        var candidatesResult = await ResolveCandidatesAsync(request.CatalogueIds, fieldResult.Value, catalogueClient, cancellationToken);
+        var candidatesResult = await ResolveCandidatesAsync(
+            request.CatalogueIds, fieldResult.Value, sourcePositions, request.RadiusArcsec, catalogueClient, cancellationToken);
 
         if (candidatesResult.IsFailure)
         {
@@ -151,6 +154,8 @@ public static class CrossMatchEndpoint
     private static async Task<Result<ImmutableList<CatalogueMatchCandidate>>> ResolveCandidatesAsync(
         IReadOnlyList<string> catalogueIds,
         (double CenterRightAscension, double CenterDeclination, double RadiusArcsec) field,
+        IReadOnlyList<(int SourceId, double RightAscension, double Declination)> sourcePositions,
+        double matchRadiusArcsec,
         ICatalogueClient catalogueClient,
         CancellationToken cancellationToken)
     {
@@ -158,17 +163,29 @@ public static class CrossMatchEndpoint
 
         foreach (var catalogueId in catalogueIds)
         {
-            var query = CatalogueConeSearchQuery.Create(
+            var fieldQuery = CatalogueConeSearchQuery.Create(
                 catalogueId, field.CenterRightAscension, field.CenterDeclination, field.RadiusArcsec, CandidateSearchMaxResults);
 
-            var result = await catalogueClient.ConeSearchAsync(query, cancellationToken);
+            var fieldResult = await catalogueClient.ConeSearchAsync(fieldQuery, cancellationToken);
 
-            if (result.IsFailure)
+            if (fieldResult.IsFailure)
             {
-                return Result<ImmutableList<CatalogueMatchCandidate>>.Failure(result.Error);
+                return Result<ImmutableList<CatalogueMatchCandidate>>.Failure(fieldResult.Error);
             }
 
-            foreach (var record in result.Value)
+            // A result at the row cap may be truncated (VizieR returns the rows nearest the field centre),
+            // which would silently drop candidates for sources near the field edge; fall back to one small
+            // cone per source, which is complete for the requested match radius.
+            var recordsResult = fieldResult.Value.Count < CandidateSearchMaxResults
+                ? fieldResult
+                : await SearchAroundEachSourceAsync(catalogueId, sourcePositions, matchRadiusArcsec, catalogueClient, cancellationToken);
+
+            if (recordsResult.IsFailure)
+            {
+                return Result<ImmutableList<CatalogueMatchCandidate>>.Failure(recordsResult.Error);
+            }
+
+            foreach (var record in recordsResult.Value)
             {
                 builder.Add(CatalogueMatchCandidate.Create(
                     catalogueId, record.Identifier, record.RightAscension, record.Declination, record.Magnitude));
@@ -176,5 +193,40 @@ public static class CrossMatchEndpoint
         }
 
         return builder.ToImmutable();
+    }
+
+    private static async Task<Result<IReadOnlyList<CatalogueRecord>>> SearchAroundEachSourceAsync(
+        string catalogueId,
+        IReadOnlyList<(int SourceId, double RightAscension, double Declination)> sourcePositions,
+        double matchRadiusArcsec,
+        ICatalogueClient catalogueClient,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<CatalogueRecord>();
+
+        var seenIdentifiers = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var source in sourcePositions)
+        {
+            var query = CatalogueConeSearchQuery.Create(
+                catalogueId, source.RightAscension, source.Declination, matchRadiusArcsec, PerSourceSearchMaxResults);
+
+            var result = await catalogueClient.ConeSearchAsync(query, cancellationToken);
+
+            if (result.IsFailure)
+            {
+                return result;
+            }
+
+            foreach (var record in result.Value)
+            {
+                if (seenIdentifiers.Add(record.Identifier))
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        return records;
     }
 }

@@ -3,7 +3,7 @@ namespace AstroLab.Api.Features.Measurements.GalaxyMorphology;
 public sealed record GalaxyMorphologyResponse
 {
     private GalaxyMorphologyResponse(
-        string fileId, double effectiveRadiusPixels, double ellipticity, string estimatedMorphologicalType,
+        string fileId, double? effectiveRadiusPixels, double ellipticity, string estimatedMorphologicalType,
         double? concentrationIndex, string method)
     {
         FileId = fileId;
@@ -16,7 +16,7 @@ public sealed record GalaxyMorphologyResponse
 
     public string FileId { get; }
 
-    public double EffectiveRadiusPixels { get; }
+    public double? EffectiveRadiusPixels { get; }
 
     public double Ellipticity { get; }
 
@@ -27,7 +27,7 @@ public sealed record GalaxyMorphologyResponse
     public string Method { get; }
 
     public static GalaxyMorphologyResponse Create(
-        string fileId, double effectiveRadiusPixels, double ellipticity, string estimatedMorphologicalType,
+        string fileId, double? effectiveRadiusPixels, double ellipticity, string estimatedMorphologicalType,
         double? concentrationIndex, string method)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);

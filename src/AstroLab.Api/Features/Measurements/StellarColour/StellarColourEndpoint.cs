@@ -1,4 +1,3 @@
-using AstroLab.Core.Fits;
 using AstroLab.Core.Imaging;
 using AstroLab.Core.Photometry;
 using AstroLab.Core.Result;
@@ -17,8 +16,6 @@ namespace AstroLab.Api.Features.Measurements.StellarColour;
 /// </summary>
 public static class StellarColourEndpoint
 {
-    private const string GainKeyword = "GAIN";
-
     extension(IEndpointRouteBuilder group)
     {
         public void MapStellarColourEndpoint()
@@ -105,10 +102,10 @@ public static class StellarColourEndpoint
 
         var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
 
-        var gain = ResolveHeaderGain(dataset.Hdu.Header);
+        var gain = PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header);
 
         var fluxUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
-            measurement.NetFlux, measurement.ApertureArea, skySigma, gain);
+            measurement, skySigma, gain);
 
         if (fluxUncertaintyResult.IsFailure)
         {
@@ -117,12 +114,5 @@ public static class StellarColourEndpoint
 
         return InstrumentalPhotometry.ComputeMagnitude(
             measurement.NetFlux, fluxUncertaintyResult.Value, InstrumentalPhotometry.DefaultZeroPoint);
-    }
-
-    private static double? ResolveHeaderGain(FitsHeader header)
-    {
-        var gainResult = header.GetReal(GainKeyword);
-
-        return gainResult.IsSuccess ? gainResult.Value : null;
     }
 }

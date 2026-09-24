@@ -63,6 +63,11 @@ public sealed class EsoArchiveDownloadClient : IEsoArchiveDownloadClient
             _logger.LogWarning("ESO download was canceled for product {ProductId}", product.Id);
             throw;
         }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Exception occurred while downloading ESO product {ProductId}", product.Id);
+            return Result<ArchiveDownload>.Failure(UpstreamFailure.ToError("eso.download", "The ESO archive"));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception occurred while downloading ESO product {ProductId}", product.Id);

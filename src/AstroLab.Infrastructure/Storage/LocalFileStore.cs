@@ -28,6 +28,11 @@ public sealed class LocalFileStore : ILocalFileStore
             return Error.Validation("storage.invalid_key", "relativeKey must not be empty.");
         }
 
+        if (relativeKey.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            return Error.Validation("storage.invalid_key", "relativeKey contains characters that are not valid in a file path.");
+        }
+
         var combined = Path.GetFullPath(Path.Combine(_rootPath, relativeKey));
 
         var rootWithSeparator = _rootPath.EndsWith(Path.DirectorySeparatorChar)
@@ -70,6 +75,8 @@ public sealed class LocalFileStore : ILocalFileStore
 
         FileStream? fileStream = null;
 
+        var readingSource = false;
+
         try
         {
             if (!string.IsNullOrEmpty(directory))
@@ -81,7 +88,11 @@ public sealed class LocalFileStore : ILocalFileStore
 
             while (true)
             {
+                readingSource = true;
+
                 var readResult = await source.ReadAsync(cancellationToken);
+
+                readingSource = false;
 
                 var buffer = readResult.Buffer;
 
@@ -110,6 +121,14 @@ public sealed class LocalFileStore : ILocalFileStore
         }
         catch (OperationCanceledException ex)
         {
+            await source.CompleteAsync(ex);
+
+            throw;
+        }
+        catch (Exception ex) when (readingSource)
+        {
+            // A failure reading the source (e.g. the request body exceeding the server's size limit, or
+            // the client disconnecting) is not a storage failure; let the caller map it.
             await source.CompleteAsync(ex);
 
             throw;

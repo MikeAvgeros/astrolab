@@ -1,3 +1,4 @@
+using AstroLab.Core.Result;
 using System.Net;
 using System.Text;
 using AstroLab.Infrastructure.Archives;
@@ -229,6 +230,43 @@ public class EsoArchiveApiClientTests
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithSearchRadius_ReturnsNotImplementedWithoutSendingARequest()
+    {
+        var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
+
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31", searchRadiusDegrees: 0.5));
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("eso.radius_search_not_supported", result.Error.Code);
+
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task SearchAsync_NetworkFailure_ReturnsUnavailableInfrastructureFailure()
+    {
+        var (client, _) = CreateClient(_ => throw new HttpRequestException("connection refused"));
+
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("eso.search_unavailable", result.Error.Code);
+        Assert.Equal(ErrorCategory.Infrastructure, result.Error.Category);
+    }
+
+    [Fact]
+    public async Task SearchAsync_HttpClientTimeout_ReturnsUnavailableInfrastructureFailure()
+    {
+        var (client, _) = CreateClient(_ => throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
+
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31"), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("eso.search_unavailable", result.Error.Code);
     }
 
     [Fact]

@@ -119,4 +119,42 @@ public class ImageScalerTests
 
         Assert.Equal("imaging.invalid_scale_range", result.Error.Code);
     }
+
+    [Fact]
+    public void ResolveAutoScaleBounds_ConstantImage_ReturnsNonEmptyRange()
+    {
+        var result = ImageScaler.ResolveAutoScaleBounds([7f, 7f, 7f, 7f], 1.0, 99.0);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(7.0, result.Value.BlackPoint);
+
+        Assert.True(result.Value.WhitePoint > result.Value.BlackPoint);
+    }
+
+    [Fact]
+    public void ResolveAutoScaleBounds_PercentilesCollapseOnMostlyZeroImage_FallsBackToFullRange()
+    {
+        var pixels = new float[1000];
+
+        pixels[^1] = 500f;
+
+        var result = ImageScaler.ResolveAutoScaleBounds(pixels, 1.0, 99.0);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal((0.0, 500.0), result.Value);
+    }
+
+    [Fact]
+    public void ResolveAutoScaleBounds_OrdinaryImage_UsesPercentileBounds()
+    {
+        var pixels = Enumerable.Range(0, 101).Select(i => (float)i).ToArray();
+
+        var result = ImageScaler.ResolveAutoScaleBounds(pixels, 10.0, 90.0);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal((10.0, 90.0), result.Value);
+    }
 }

@@ -22,10 +22,7 @@ public static class InfrastructureServiceCollectionExtensions
     private const int ArchiveApiRetryDelaySeconds = 2;
     private const int ArchiveApiAttemptTimeoutSeconds = 30;
     private const int ArchiveApiRetryBackoffBufferSeconds = 30;
-
-    // Must comfortably exceed one attempt per try (the initial attempt plus every retry) so the
-    // total-timeout budget never cuts off a retry the policy above was just configured to make;
-    // the buffer covers the delay-with-backoff between attempts.
+    
     private const int ArchiveApiTotalRequestTimeoutSeconds =
         ArchiveApiAttemptTimeoutSeconds * (ArchiveApiRetryMaxAttempts + 1) + ArchiveApiRetryBackoffBufferSeconds;
 
@@ -64,7 +61,7 @@ public static class InfrastructureServiceCollectionExtensions
         var baseAddress = new Uri(options.BaseAddress);
 
         services
-            .AddHttpClient<IEsoArchiveApiClient, EsoArchiveApiClient>(client => client.BaseAddress = baseAddress)
+            .AddHttpClient<IEsoArchiveApiClient, EsoArchiveApiClient>(client => ConfigureArchiveApiClient(client, baseAddress))
             .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
 
         services.AddHttpClient<IEsoArchiveDownloadClient, EsoArchiveDownloadClient>(client =>
@@ -83,7 +80,7 @@ public static class InfrastructureServiceCollectionExtensions
         var baseAddress = new Uri(options.BaseAddress);
 
         services
-            .AddHttpClient<IMastArchiveApiClient, MastArchiveApiClient>(client => client.BaseAddress = baseAddress)
+            .AddHttpClient<IMastArchiveApiClient, MastArchiveApiClient>(client => ConfigureArchiveApiClient(client, baseAddress))
             .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
 
         services.AddHttpClient<IMastArchiveDownloadClient, MastArchiveDownloadClient>(client =>
@@ -102,8 +99,15 @@ public static class InfrastructureServiceCollectionExtensions
         var baseAddress = new Uri(options.BaseAddress);
 
         services
-            .AddHttpClient<ICatalogueClient, VizierTapClient>(client => client.BaseAddress = baseAddress)
+            .AddHttpClient<ICatalogueClient, VizierTapClient>(client => ConfigureArchiveApiClient(client, baseAddress))
             .AddStandardResilienceHandler(ConfigureArchiveApiResilience);
+    }
+    
+    private static void ConfigureArchiveApiClient(HttpClient client, Uri baseAddress)
+    {
+        client.BaseAddress = baseAddress;
+
+        client.Timeout = Timeout.InfiniteTimeSpan;
     }
 
     private static void ConfigureArchiveApiResilience(HttpStandardResilienceOptions options)

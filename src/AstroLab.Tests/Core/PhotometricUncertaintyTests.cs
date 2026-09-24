@@ -15,6 +15,43 @@ public class PhotometricUncertaintyTests
     }
 
     [Fact]
+    public void EstimateFluxUncertainty_WithBackgroundPixelCount_IncludesBackgroundEstimateError()
+    {
+        // Howell's n_pix * (1 + n_pix / n_B) * sigma^2 term: 25 aperture pixels, 100 annulus pixels.
+        var result = PhotometricUncertainty.EstimateFluxUncertainty(
+            netFlux: 1000.0, apertureArea: 25.0, skyBackgroundSigma: 2.0, backgroundPixelCount: 100);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(Math.Sqrt(25.0 * (1.0 + 25.0 / 100.0) * 4.0), result.Value, precision: 9);
+    }
+
+    [Fact]
+    public void EstimateFluxUncertainty_WithGainAndBackgroundPixelCount_InflatesOnlyTheBackgroundTerm()
+    {
+        var result = PhotometricUncertainty.EstimateFluxUncertainty(
+            netFlux: 1000.0, apertureArea: 25.0, skyBackgroundSigma: 2.0, detectorGain: 2.0, backgroundPixelCount: 50);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(Math.Sqrt(1000.0 / 2.0 + 25.0 * 4.0 * (1.0 + 25.0 / 50.0)), result.Value, precision: 9);
+    }
+
+    [Theory]
+    [InlineData("GAIN    =                  2.5", 2.5)]
+    [InlineData("GAIN    =                  0.0", null)]
+    [InlineData("GAIN    =                 -1.0", null)]
+    [InlineData("OBJECT  = 'M31'", null)]
+    public void ReadDetectorGain_TreatsMissingOrNonPositiveGainAsAbsent(string card, double? expected)
+    {
+        var block = System.Text.Encoding.ASCII.GetBytes(card.PadRight(80) + "END".PadRight(80));
+
+        var header = AstroLab.Core.Fits.FitsHeader.Parse(block).Value;
+
+        Assert.Equal(expected, PhotometricUncertainty.ReadDetectorGain(header));
+    }
+
+    [Fact]
     public void EstimateFluxUncertainty_WithGain_IncludesSourceShotNoise()
     {
         var withoutGainResult = PhotometricUncertainty.EstimateFluxUncertainty(netFlux: 1000.0, apertureArea: 25.0, skyBackgroundSigma: 2.0);

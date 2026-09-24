@@ -37,6 +37,14 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     public async Task<Result<IReadOnlyList<ArchiveObservation>>> SearchAsync(
         ArchiveSearchQuery query, CancellationToken cancellationToken = default)
     {
+        if (query.SearchRadiusDegrees is not null)
+        {
+            return Result<IReadOnlyList<ArchiveObservation>>.Failure(Error.NotImplemented(
+                "eso.radius_search_not_supported",
+                "ESO searches match target names; a positional search radius would need the target resolved to coordinates, " +
+                "which is not implemented for ESO. Omit searchRadiusDegrees for ESO searches."));
+        }
+
         try
         {
             var adqlQuery = BuildAdqlQuery(query);
@@ -77,6 +85,11 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         {
             _logger.LogWarning("ESO search query was canceled for target '{Target}'", query.Target);
             throw;
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Exception occurred during ESO archive search for target {Target}", query.Target);
+            return Result<IReadOnlyList<ArchiveObservation>>.Failure(UpstreamFailure.ToError("eso.search", "The ESO archive"));
         }
         catch (Exception ex)
         {
@@ -131,6 +144,11 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
             return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected(
                 "eso.products_malformed_response",
                 "ESO DataLink returned a response that did not match the expected DataLink contract."));
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Exception occurred during ESO product discovery for dataset {DatasetId}", datasetId);
+            return Result<IReadOnlyList<EsoProduct>>.Failure(UpstreamFailure.ToError("eso.products", "The ESO archive"));
         }
         catch (Exception ex)
         {

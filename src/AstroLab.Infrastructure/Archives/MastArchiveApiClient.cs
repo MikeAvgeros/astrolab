@@ -22,6 +22,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string CaomFilteredPositionService = "Mast.Caom.Filtered.Position";
     private const string ProductsService = "Mast.Caom.Products";
     private const string CompleteStatus = "COMPLETE";
+    private const string ExecutingStatus = "EXECUTING";
     private const string CollectionParam = "obs_collection";
     private const string InstrumentNameParam = "instrument_name";
     private const string MinParam = "t_min";
@@ -29,6 +30,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string ObsIdParam = "obs_id";
     private const string UnknownInstrument = "UNKNOWN";
     private const string RequestFormFieldName = "request";
+    private const double DefaultSearchRadiusDegrees = 0.1;
     private const double NanometresToMicrometres = 1e-3;
 
     private const string RequestedColumns =
@@ -89,6 +91,11 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             _logger.LogWarning("MAST target resolution was canceled for target '{Target}'", target);
             throw;
         }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Unexpected error resolving MAST target '{Target}'", target);
+            return Result<MastTarget>.Failure(UpstreamFailure.ToError("mast.resolve", "MAST"));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error resolving MAST target '{Target}'", target);
@@ -126,7 +133,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             MastMashupParams.Create(
                 RequestedColumns,
                 BuildFilters(query),
-                FormattableString.Invariant($"{target.RightAscension}, {target.Declination}, {query.SearchRadiusDegrees}")),
+                FormattableString.Invariant($"{target.RightAscension}, {target.Declination}, {query.SearchRadiusDegrees ?? DefaultSearchRadiusDegrees}")),
             query.MaxResults);
 
         try
@@ -152,7 +159,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                     mashupResponse?.Status, mashupResponse?.Msg);
 
                 return Result<IReadOnlyList<ArchiveObservation>>.Failure(
-                    Error.Unexpected("mast.search_failed", mashupResponse?.Msg ?? "Failed to parse MAST search response."));
+                    MapIncompleteStatus(mashupResponse?.Status, "mast.search",
+                        mashupResponse?.Msg ?? "Failed to parse MAST search response."));
             }
 
             var observations = new List<ArchiveObservation>();
@@ -173,6 +181,11 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         {
             _logger.LogWarning("MAST search query was canceled for target '{Target}'", query.Target);
             throw;
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Unexpected error occurred during MAST archive search for target '{Target}'", query.Target);
+            return Result<IReadOnlyList<ArchiveObservation>>.Failure(UpstreamFailure.ToError("mast.search", "MAST"));
         }
         catch (Exception ex)
         {
@@ -224,7 +237,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                     productResponse?.Status, productResponse?.Msg);
 
                 return Result<IReadOnlyList<MastProduct>>.Failure(
-                    Error.Unexpected("mast.products_failed", productResponse?.Msg ?? "Failed to parse MAST products response."));
+                    MapIncompleteStatus(productResponse?.Status, "mast.products",
+                        productResponse?.Msg ?? "Failed to parse MAST products response."));
             }
 
             var products = new List<MastProduct>();
@@ -247,6 +261,11 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         {
             _logger.LogWarning("MAST products lookup was canceled for observation {ObservationId}", observationId);
             throw;
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Unexpected error retrieving MAST products for observation {ObservationId}", observationId);
+            return Result<IReadOnlyList<MastProduct>>.Failure(UpstreamFailure.ToError("mast.products", "MAST"));
         }
         catch (Exception ex)
         {
@@ -286,7 +305,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
                     mashupResponse?.Status, mashupResponse?.Msg);
 
                 return Result<long>.Failure(
-                    Error.Unexpected("mast.products_failed", mashupResponse?.Msg ?? "Failed to resolve the MAST observation identifier."));
+                    MapIncompleteStatus(mashupResponse?.Status, "mast.products",
+                        mashupResponse?.Msg ?? "Failed to resolve the MAST observation identifier."));
             }
 
             var caomObsId = mashupResponse.Data.Select(record => record.CaomObsId).FirstOrDefault(id => id is not null);
@@ -303,6 +323,11 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         {
             _logger.LogWarning("MAST observation id lookup was canceled for observation {ObservationId}", observationId);
             throw;
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "Unexpected error resolving MAST observation id for observation {ObservationId}", observationId);
+            return Result<long>.Failure(UpstreamFailure.ToError("mast.products", "MAST"));
         }
         catch (Exception ex)
         {
@@ -382,6 +407,13 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             proposalPi: observation.ProposalPi,
             dataRights: observation.DataRights);
     }
+
+    private static Error MapIncompleteStatus(string? status, string errorCodePrefix, string message) =>
+        status == ExecutingStatus
+            ? Error.Infrastructure(
+                $"{errorCodePrefix}_pending",
+                "MAST is still executing this query (status EXECUTING); resubmit the same request shortly to retrieve the result.")
+            : Error.Infrastructure($"{errorCodePrefix}_failed", message);
 
     private async Task<Error> MapHttpErrorAsync(HttpResponseMessage response, string errorCodePrefix, CancellationToken cancellationToken)
     {

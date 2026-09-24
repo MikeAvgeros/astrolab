@@ -181,11 +181,11 @@ public class ImageAlignerTests
     }
 
     [Fact]
-    public void AlignBySourceCentroids_AveragesPerAxisOffsetOverMatchedPairs()
+    public void AlignBySourceCentroids_ReturnsMedianOffsetOfConsistentPairs()
     {
-        ImmutableArray<DetectedSource> targetSources = [Source(10.0, 10.0, 1), Source(20.0, 30.0, 2)];
+        ImmutableArray<DetectedSource> targetSources = [Source(10.0, 10.0, 1), Source(20.0, 30.0, 2), Source(50.0, 5.0, 3)];
 
-        ImmutableArray<DetectedSource> referenceSources = [Source(15.0, 12.0, 1), Source(23.0, 34.0, 2)];
+        ImmutableArray<DetectedSource> referenceSources = [Source(14.2, 13.1, 1), Source(23.8, 32.9, 2), Source(54.0, 8.0, 3)];
 
         var result = ImageAligner.AlignBySourceCentroids(targetSources, referenceSources);
 
@@ -210,5 +210,39 @@ public class ImageAlignerTests
         Assert.True(result.IsFailure);
 
         Assert.Equal("images.align.no_reference_points", result.Error.Code);
+    }
+
+    [Fact]
+    public void AlignBySourceCentroids_SourceLeavingAndEnteringField_IgnoresUnmatchedSourcesAndRankChanges()
+    {
+        // The reference field is shifted by (+5, -3): target source 2 falls off the reference frame and a
+        // new source appears, so ranks no longer line up one-to-one.
+        ImmutableArray<DetectedSource> targetSources =
+            [Source(40.0, 40.0, 1), Source(2.0, 60.0, 2), Source(70.0, 20.0, 3), Source(25.0, 80.0, 4)];
+
+        ImmutableArray<DetectedSource> referenceSources =
+            [Source(45.0, 37.0, 1), Source(90.0, 90.0, 2), Source(75.0, 17.0, 3), Source(30.0, 77.0, 4)];
+
+        var result = ImageAligner.AlignBySourceCentroids(targetSources, referenceSources);
+
+        Assert.True(result.IsSuccess);
+
+        Assert.Equal(5.0, result.Value.OffsetX, precision: 6);
+
+        Assert.Equal(-3.0, result.Value.OffsetY, precision: 6);
+    }
+
+    [Fact]
+    public void AlignBySourceCentroids_NoTwoSourcesAgreeOnAnOffset_ReturnsValidationError()
+    {
+        ImmutableArray<DetectedSource> targetSources = [Source(10.0, 10.0, 1), Source(20.0, 30.0, 2)];
+
+        ImmutableArray<DetectedSource> referenceSources = [Source(15.0, 12.0, 1), Source(23.0, 38.0, 2)];
+
+        var result = ImageAligner.AlignBySourceCentroids(targetSources, referenceSources);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("images.align.no_consistent_offset", result.Error.Code);
     }
 }

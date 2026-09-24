@@ -4,6 +4,8 @@ namespace AstroLab.Api.Features.Images.Astrometry;
 
 public sealed record WorldToPixelBatchRequest
 {
+    private const int MaxPoints = 100_000;
+
     [JsonConstructor]
     private WorldToPixelBatchRequest(IReadOnlyList<WorldPointDto> points)
     {
@@ -28,6 +30,13 @@ public sealed record WorldToPixelBatchRequest
         if (Points.Count == 0)
         {
             throw new ArgumentException("At least one world coordinate must be supplied.", nameof(Points));
+        }
+
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(Points.Count, MaxPoints, nameof(Points));
+
+        if (Points.Any(point => point is null))
+        {
+            throw new ArgumentException("Every world coordinate entry must be non-null.", nameof(Points));
         }
     }
 }

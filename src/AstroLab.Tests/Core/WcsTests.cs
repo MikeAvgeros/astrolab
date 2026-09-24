@@ -446,26 +446,67 @@ public class WcsTests
     }
 
     [Fact]
-    public void ResolveSkyRegionPixelBounds_CentersOnReferencePixel_WithExpectedDiameter()
+    public void ResolveSkyRegionPixelBounds_InteriorPosition_IsCentredWithExpectedDiameter()
     {
         // 0.0001 deg/pixel = 0.36 arcsec/pixel; a 3.6-arcsecond radius spans 10 pixels either side.
         var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
 
+        var target = wcs.PixelToWorld(100.0, 60.0).Value;
+
         var result = wcs.ResolveSkyRegionPixelBounds(
-            wcs.ReferenceRightAscension, wcs.ReferenceDeclination, radiusArcseconds: 3.6, imageWidth: 200, imageHeight: 200);
+            target.RightAscension, target.Declination, radiusArcseconds: 3.6, imageWidth: 200, imageHeight: 200);
 
         Assert.True(result.IsSuccess);
 
-        var (x, y, width, height) = result.Value;
+        Assert.Equal((90, 50, 20, 20), result.Value);
+    }
 
-        Assert.Equal(20, width);
+    [Fact]
+    public void ResolveSkyRegionPixelBounds_PositionNearEdge_TrimsRatherThanShiftingTheRegion()
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
 
-        Assert.Equal(20, height);
+        var target = wcs.PixelToWorld(5.0, 100.0).Value;
 
-        // The reference pixel (0.5, 0.5) should sit at the center of the returned region.
-        Assert.InRange(wcs.ReferencePixelX - x, 0, width);
+        var result = wcs.ResolveSkyRegionPixelBounds(
+            target.RightAscension, target.Declination, radiusArcseconds: 3.6, imageWidth: 200, imageHeight: 200);
 
-        Assert.InRange(wcs.ReferencePixelY - y, 0, height);
+        Assert.True(result.IsSuccess);
+
+        // The 20-pixel box would span x = -5..15; it is cut at the edge, not moved to 0..20.
+        Assert.Equal((0, 90, 15, 20), result.Value);
+    }
+
+    [Fact]
+    public void ResolveSkyRegionPixelBounds_PositionOutsideImage_ReturnsValidationError()
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
+
+        var target = wcs.PixelToWorld(-1000.0, 50.0).Value;
+
+        var result = wcs.ResolveSkyRegionPixelBounds(
+            target.RightAscension, target.Declination, radiusArcseconds: 3.6, imageWidth: 200, imageHeight: 200);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.position_outside_image", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(0.0)]
+    public void ResolveSkyRegionPixelBounds_InvalidRadius_ReturnsValidationError(double radiusArcseconds)
+    {
+        var wcs = Wcs.FromHeader(BuildTanHeader(0.0001)).Value;
+
+        var target = wcs.PixelToWorld(100.0, 100.0).Value;
+
+        var result = wcs.ResolveSkyRegionPixelBounds(target.RightAscension, target.Declination, radiusArcseconds, 200, 200);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("astrometry.invalid_region_radius", result.Error.Code);
     }
 
     [Fact]
@@ -522,5 +563,110 @@ public class WcsTests
         Assert.Equal(0.0004, wcs.PixelScaleYDegrees, precision: 9);
 
         Assert.Equal("ICRS", wcs.RadeSys);
+    }
+
+    private static FitsHeader BuildSipHeader(string projection = "TAN-SIP", params string[] extraCards) => BuildHeader(
+    [
+        $"CTYPE1  = 'RA---{projection}'",
+        $"CTYPE2  = 'DEC--{projection}'",
+        "CRPIX1  =                512.0",
+        "CRPIX2  =                512.0",
+        "CRVAL1  =                150.0",
+        "CRVAL2  =                  2.0",
+        "CD1_1   =           -0.0001",
+        "CD1_2   =                  0.0",
+        "CD2_1   =                  0.0",
+        "CD2_2   =            0.0001",
+        "A_ORDER =                    2",
+        "A_2_0   =               1.0E-5",
+        "A_1_1   =              -4.0E-6",
+        "B_ORDER =                    2",
+        "B_0_2   =               2.0E-6",
+        "B_1_1   =               3.0E-6",
+        .. extraCards,
+    ]);
+
+    [Fact]
+    public void PixelToWorld_TanSip_AppliesForwardDistortionBeforeTheCdMatrix()
+    {
+        var sipWcs = Wcs.FromHeader(BuildSipHeader()).Value;
+
+        var linearWcs = Wcs.FromHeader(BuildSipHeader("TAN")).Value;
+
+        Assert.NotNull(sipWcs.Sip);
+
+        // Pixel (1011.5, 711.5) is u = 500, v = 200 from CRPIX (FITS pixel = x + 0.5).
+        const double u = 500.0;
+
+        const double v = 200.0;
+
+        var f = 1.0e-5 * u * u - 4.0e-6 * u * v;
+
+        var g = 2.0e-6 * v * v + 3.0e-6 * u * v;
+
+        var distorted = sipWcs.PixelToWorld(1011.5, 711.5).Value;
+
+        var expected = linearWcs.PixelToWorld(1011.5 + f, 711.5 + g).Value;
+
+        Assert.Equal(expected.RightAscension, distorted.RightAscension, precision: 10);
+
+        Assert.Equal(expected.Declination, distorted.Declination, precision: 10);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WorldToPixel_TanSip_RoundTripsWithOrWithoutInversePolynomials(bool includeApproximateInverse)
+    {
+        string[] inverseCards = includeApproximateInverse
+            ? ["AP_ORDER=                    2", "AP_2_0  =              -1.0E-5", "BP_ORDER=                    2", "BP_0_2  =              -2.0E-6"]
+            : [];
+
+        var wcs = Wcs.FromHeader(BuildSipHeader("TAN-SIP", inverseCards)).Value;
+
+        foreach (var (x, y) in new[] { (0.0, 0.0), (1023.0, 1023.0), (100.0, 900.0), (511.5, 511.5) })
+        {
+            var world = wcs.PixelToWorld(x, y).Value;
+
+            var pixel = wcs.WorldToPixel(world.RightAscension, world.Declination);
+
+            Assert.True(pixel.IsSuccess);
+
+            Assert.Equal(x, pixel.Value.PixelX, precision: 6);
+
+            Assert.Equal(y, pixel.Value.PixelY, precision: 6);
+        }
+    }
+
+    [Fact]
+    public void FromHeader_UnsupportedDistortionSuffix_ReturnsNotImplemented()
+    {
+        var result = Wcs.FromHeader(BuildSipHeader("TAN-XYZ"));
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal(AstroLab.Core.Result.ErrorCategory.NotImplemented, result.Error.Category);
+    }
+
+    [Fact]
+    public void FromHeader_SlantSinProjection_ReturnsNotImplemented()
+    {
+        var header = BuildHeader(
+            "CTYPE1  = 'RA---SIN'",
+            "CTYPE2  = 'DEC--SIN'",
+            "CRPIX1  =                 50.0",
+            "CRPIX2  =                 50.0",
+            "CRVAL1  =                 10.0",
+            "CRVAL2  =                 30.0",
+            "CDELT1  =              -0.0002",
+            "CDELT2  =               0.0002",
+            "PV2_1   =                  0.1",
+            "PV2_2   =                  0.0");
+
+        var result = Wcs.FromHeader(header);
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal(AstroLab.Core.Result.ErrorCategory.NotImplemented, result.Error.Category);
     }
 }

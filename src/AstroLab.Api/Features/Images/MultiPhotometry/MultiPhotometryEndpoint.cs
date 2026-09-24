@@ -61,6 +61,8 @@ public static class MultiPhotometryEndpoint
 
         var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
 
+        var gain = PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header);
+
         var sourceDtos = ImmutableList.CreateBuilder<SourcePhotometryDto>();
 
         foreach (var source in detectionResult.Value)
@@ -76,7 +78,14 @@ public static class MultiPhotometryEndpoint
 
             var measurement = measurementResult.Value;
 
-            var fluxUncertainty = InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, measurement.ApertureArea);
+            var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(measurement, skySigma, gain);
+
+            if (uncertaintyResult.IsFailure)
+            {
+                continue;
+            }
+
+            var fluxUncertainty = uncertaintyResult.Value;
 
             var magnitudeResult = InstrumentalPhotometry.ComputeMagnitude(measurement.NetFlux, fluxUncertainty, request.MagnitudeZeroPoint);
 

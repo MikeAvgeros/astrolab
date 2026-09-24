@@ -101,6 +101,46 @@ public sealed class ExceptionHandlingTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task RequestValidationExceptionHandler_ArgumentExceptionFromCore_IsLeftForTheGlobalHandler()
+    {
+        var handler = new RequestValidationExceptionHandler();
+
+        var exception = Assert.ThrowsAny<ArgumentException>(
+            () => AstroLab.Core.Astrometry.AlignmentTransform.Create(0.0, 0.0, 0.0, scale: 0.0));
+
+        var (handled, _) = await InvokeAsync(handler.TryHandleAsync, exception);
+
+        Assert.False(handled);
+    }
+
+    [Fact]
+    public async Task RequestValidationExceptionHandler_JsonSerializationOfNonFiniteNumber_IsLeftForTheGlobalHandler()
+    {
+        var handler = new RequestValidationExceptionHandler();
+
+        var exception = Assert.ThrowsAny<ArgumentException>(() => JsonSerializer.Serialize(new { Value = double.NaN }));
+
+        var (handled, _) = await InvokeAsync(handler.TryHandleAsync, exception);
+
+        Assert.False(handled);
+    }
+
+    [Fact]
+    public async Task RequestValidationExceptionHandler_ArgumentExceptionFromRequestDto_ReturnsBadRequest()
+    {
+        var handler = new RequestValidationExceptionHandler();
+
+        var exception = Assert.ThrowsAny<ArgumentException>(
+            () => AstroLab.Api.Features.Measurements.StellarColour.StellarColourRequest.Create("", 1.0, 1.0, 2.0, 3.0, 5.0));
+
+        var (handled, context) = await InvokeAsync(handler.TryHandleAsync, exception);
+
+        Assert.True(handled);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task RequestValidationExceptionHandler_NonArgumentException_DoesNotHandleIt()
     {
         var handler = new RequestValidationExceptionHandler();

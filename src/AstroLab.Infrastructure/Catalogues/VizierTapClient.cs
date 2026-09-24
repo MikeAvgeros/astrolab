@@ -214,7 +214,7 @@ public sealed class VizierTapClient : ICatalogueClient
     private static string? GetCell(IReadOnlyList<string?> row, int index) => index < row.Count ? row[index] : null;
 
     private static bool TryParseDouble(string? value, out double result) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result);
 
     private static string EscapeAdqlStringLiteral(string value) => value.Replace("'", "''");
 
@@ -275,6 +275,12 @@ public sealed class VizierTapClient : ICatalogueClient
         {
             _logger.LogWarning("VizieR TAP query was canceled.");
             throw;
+        }
+        catch (Exception ex) when (UpstreamFailure.IsUnavailable(ex, cancellationToken))
+        {
+            _logger.LogWarning(ex, "VizieR TAP query failed because the service was unavailable.");
+
+            return UpstreamFailure.ToError("catalogues.vizier.query", "VizieR");
         }
         catch (Exception ex)
         {

@@ -429,7 +429,7 @@ curl "http://localhost:5279/api/archives/search?archive=Mast&target=M31&instrume
 | `target`              | string | Astronomical target         |
 | `mission`             | string | Optional mission/collection |
 | `instrument`          | string | Optional instrument         |
-| `searchRadiusDegrees` | double | Optional cone-search radius |
+| `searchRadiusDegrees` | double | Optional cone-search radius (MAST only; defaults to 0.1°. ESO searches match target names, so supplying a radius to ESO returns 501 Not Implemented) |
 | `maxResults`          | int    | Maximum number of results   |
 
 MAST resolves target names through its own name-resolution service, so names such as:
@@ -1600,11 +1600,13 @@ GET /api/measurements/{fileId}/galaxy-morphology
 
 Measures properties of a detected extended source, including:
 
-- Effective radius
+- Effective radius (the Petrosian half-light radius R50)
 - Ellipticity
-- Concentration
+- Concentration (Petrosian R90/R50)
 
-A concentration-based classification provides a coarse:
+The requested position must fall on a detected source; otherwise the endpoint returns 404. When the Petrosian aperture cannot be measured (for example, the source is too close to the image edge), the effective radius and concentration are `null`.
+
+A concentration-based classification (threshold 2.6, Strateva et al. 2001) provides a coarse:
 
 - Elliptical
 - Spiral

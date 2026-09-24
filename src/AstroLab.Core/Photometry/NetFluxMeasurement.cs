@@ -2,12 +2,13 @@ namespace AstroLab.Core.Photometry;
 
 public readonly record struct NetFluxMeasurement
 {
-    private NetFluxMeasurement(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
+    private NetFluxMeasurement(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux, int backgroundPixelCount)
     {
         RawFlux = rawFlux;
         ApertureArea = apertureArea;
         BackgroundPerPixel = backgroundPerPixel;
         NetFlux = netFlux;
+        BackgroundPixelCount = backgroundPixelCount;
     }
 
     public double RawFlux { get; }
@@ -18,10 +19,14 @@ public readonly record struct NetFluxMeasurement
 
     public double NetFlux { get; }
 
-    public static NetFluxMeasurement Create(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux)
+    public int BackgroundPixelCount { get; }
+
+    public static NetFluxMeasurement Create(double rawFlux, double apertureArea, double backgroundPerPixel, double netFlux, int backgroundPixelCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(apertureArea);
 
-        return new NetFluxMeasurement(rawFlux, apertureArea, backgroundPerPixel, netFlux);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(backgroundPixelCount);
+
+        return new NetFluxMeasurement(rawFlux, apertureArea, backgroundPerPixel, netFlux, backgroundPixelCount);
     }
 }

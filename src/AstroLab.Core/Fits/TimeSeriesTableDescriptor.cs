@@ -173,7 +173,14 @@ public readonly record struct TimeSeriesTableDescriptor
                 $"TFORM '{tform}' is a variable-length array column, which is not yet supported.");
         }
 
-        if (typeCode == 'A' || digitCount == 0)
+        if (typeCode is not ('B' or 'I' or 'J' or 'K' or 'E' or 'D' or 'F'))
+        {
+            return Error.Validation(
+                "fits.data.unsupported_column_type",
+                $"TFORM '{tform}' is not a real or integer column; time and flux columns must be numeric.");
+        }
+
+        if (digitCount == 0)
         {
             return ScalarRepeatCount;
         }

@@ -69,16 +69,16 @@ public static class FitsImageRenderer
 
         if (options.RequiresAutoScale)
         {
-            var boundsResult = ImageStatistics.ComputePercentileBounds(workingPixels, options.AutoLowerPercentile, options.AutoUpperPercentile);
+            var boundsResult = ImageScaler.ResolveAutoScaleBounds(workingPixels, options.AutoLowerPercentile, options.AutoUpperPercentile);
 
             if (boundsResult.IsFailure)
             {
                 return Result<RenderedImage>.Failure(boundsResult.Error);
             }
 
-            blackPoint = options.BlackPoint ?? boundsResult.Value.Lower;
+            blackPoint = options.BlackPoint ?? boundsResult.Value.BlackPoint;
 
-            whitePoint = options.WhitePoint ?? boundsResult.Value.Upper;
+            whitePoint = options.WhitePoint ?? boundsResult.Value.WhitePoint;
         }
 
         var scaleParameters = ScaleParameters.Create(blackPoint, whitePoint, options.Stretch, options.AsinhSoftening);

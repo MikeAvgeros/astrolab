@@ -1829,6 +1829,45 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Render_ConstantImageWithAutoScale_ReturnsPng()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallImageWithSourceOnFlatSky(skyLevel: 10, sourceExcess: 0));
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/render");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
+    [InlineData("pixel-to-world")]
+    [InlineData("world-to-pixel")]
+    public async Task AstrometryBatch_NullPointEntry_ReturnsBadRequest(string conversion)
+    {
+        var fileId = await UploadGradientImageWithWcsAsync();
+
+        var content = new StringContent("""{"points":[null]}""", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync($"/api/images/{fileId}/astrometry/{conversion}", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("contours?levelCount=2147483647")]
+    [InlineData("render/wcs-grid?linesPerAxis=100000000")]
+    [InlineData("photometry/sources?magnitudeZeroPoint=NaN")]
+    public async Task OversizedOrNonFiniteImageParameters_ReturnBadRequestRatherThanExhaustingResources(string pathAndQuery)
+    {
+        var fileId = await UploadImageWithSourceAndWcsAsync();
+
+        var response = await _client.GetAsync($"/api/images/{fileId}/{pathAndQuery}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task MeasureStellarColour_IdenticalImages_ReturnsZeroColourIndex()
     {
         var fileId = await UploadImageWithSourceAsync();

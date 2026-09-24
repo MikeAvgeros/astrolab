@@ -12,6 +12,8 @@ namespace AstroLab.Api.Features.Images.Stack;
 /// </summary>
 public static class StackEndpoint
 {
+    private const long MaxStackedPixelSamples = 512L * 1024 * 1024;
+
     extension(IEndpointRouteBuilder group)
     {
         public void MapStackEndpoint()
@@ -82,6 +84,13 @@ public static class StackEndpoint
                 height = frameHeight;
 
                 isFirstFrame = false;
+
+                if ((long)width * height * fileIds.Count > MaxStackedPixelSamples)
+                {
+                    return Error.Validation(
+                        "images.stack.too_large",
+                        $"Stacking {fileIds.Count} frames of {width}x{height} exceeds the {MaxStackedPixelSamples:N0}-sample limit for a single stack request.");
+                }
             }
             else if (frameWidth != width || frameHeight != height)
             {

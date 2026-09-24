@@ -61,7 +61,8 @@ public static class PhotometryEndpoint
 
         var skySigma = ImageStatistics.ComputeSkyBackground(dataset.Pixels, statsResult.Value).SkySigma;
 
-        var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(measurement.NetFlux, measurement.ApertureArea, skySigma);
+        var uncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(
+            measurement, skySigma, PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header));
 
         if (uncertaintyResult.IsFailure)
         {
@@ -72,13 +73,13 @@ public static class PhotometryEndpoint
 
         var snrResult = PhotometricUncertainty.ComputeSignalToNoiseRatio(measurement.NetFlux, fluxUncertainty);
 
-        return snrResult.ToApiResult(snr => Results.Ok(AperturePhotometryResponse.Create(
+        return Results.Ok(AperturePhotometryResponse.Create(
             fileId,
             measurement.RawFlux,
             measurement.ApertureArea,
             measurement.BackgroundPerPixel,
             measurement.NetFlux,
             fluxUncertainty,
-            snr)));
+            snrResult.IsSuccess ? snrResult.Value : null));
     }
 }

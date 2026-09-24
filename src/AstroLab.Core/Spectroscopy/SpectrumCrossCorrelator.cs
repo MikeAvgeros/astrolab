@@ -6,7 +6,11 @@ namespace AstroLab.Core.Spectroscopy;
 /// Pure spectral cross-correlation: aligning two flux series either by an integer pixel lag (for two
 /// spectra extracted on the same instrument/dispersion setup) or by a redshift applied to a rest-frame
 /// template's wavelength axis (for comparing an observed spectrum against a reference template). Both
-/// searches maximize the Pearson correlation coefficient over their respective trial grids.
+/// searches maximize the Pearson correlation coefficient over their respective trial grids. For the
+/// template search, a linear continuum trend (in wavelength) is removed from both series over each
+/// trial's overlap before correlating, and at least half of the observed samples must overlap the
+/// shifted template: otherwise any two smooth, monotonic continua correlate almost perfectly and a
+/// small overlap at a wrong redshift can outscore the true, noisier full-overlap peak.
 /// </summary>
 public static class SpectrumCrossCorrelator
 {
@@ -14,6 +18,7 @@ public static class SpectrumCrossCorrelator
 
     private const int MinimumPoints = 5;
     private const int MinimumOverlapPoints = 5;
+    private const double MinimumTemplateOverlapFraction = 0.5;
     private const double MaxLagFraction = 0.25;
     private const double Epsilon = 1e-12;
     private const int MaxStackallocLength = 1024;
@@ -128,6 +133,10 @@ public static class SpectrumCrossCorrelator
 
         var overlapObservedFlux = new double[observedFlux.Length];
 
+        var overlapWavelengths = new double[observedFlux.Length];
+
+        var minimumOverlap = Math.Max(MinimumOverlapPoints, (int)Math.Ceiling(MinimumTemplateOverlapFraction * observedFlux.Length));
+
         for (var k = 0; k < gridSize; k++)
         {
             var redshift = minRedshift + k * step;
@@ -138,14 +147,15 @@ public static class SpectrumCrossCorrelator
             }
 
             var overlapCount = InterpolateOverlap(
-                observedWavelengths, observedFlux, shiftedTemplateWavelengths, templateFlux, overlapObservedFlux, interpolatedTemplateFlux);
+                observedWavelengths, observedFlux, shiftedTemplateWavelengths, templateFlux, overlapWavelengths, overlapObservedFlux, interpolatedTemplateFlux);
 
-            if (overlapCount < MinimumOverlapPoints)
+            if (overlapCount < minimumOverlap)
             {
                 continue;
             }
 
-            var correlation = PearsonCorrelation(overlapObservedFlux.AsSpan(0, overlapCount), interpolatedTemplateFlux.AsSpan(0, overlapCount));
+            var correlation = ContinuumRemovedCorrelation(
+                overlapWavelengths.AsSpan(0, overlapCount), overlapObservedFlux.AsSpan(0, overlapCount), interpolatedTemplateFlux.AsSpan(0, overlapCount));
 
             if (double.IsFinite(correlation) && correlation > bestCorrelation)
             {
@@ -230,6 +240,7 @@ public static class SpectrumCrossCorrelator
         ReadOnlySpan<double> observedFlux,
         ReadOnlySpan<double> shiftedTemplateWavelengths,
         ReadOnlySpan<double> templateFlux,
+        Span<double> overlapWavelengths,
         Span<double> overlapObservedFlux,
         Span<double> interpolatedTemplateFlux)
     {
@@ -267,12 +278,48 @@ public static class SpectrumCrossCorrelator
 
             interpolatedTemplateFlux[count] = y0 + (fraction * (y1 - y0));
 
+            overlapWavelengths[count] = wavelength;
+
             overlapObservedFlux[count] = observedFlux[i];
 
             count++;
         }
 
         return count;
+    }
+
+    private static double ContinuumRemovedCorrelation(ReadOnlySpan<double> wavelengths, Span<double> observed, Span<double> template)
+    {
+        RemoveLinearTrend(wavelengths, observed);
+
+        RemoveLinearTrend(wavelengths, template);
+
+        return PearsonCorrelation(observed, template);
+    }
+
+    private static void RemoveLinearTrend(ReadOnlySpan<double> x, Span<double> y)
+    {
+        var meanX = Mean(x);
+
+        var meanY = Mean(y);
+
+        var sumXx = 0.0;
+
+        var sumXy = 0.0;
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            sumXx += (x[i] - meanX) * (x[i] - meanX);
+
+            sumXy += (x[i] - meanX) * (y[i] - meanY);
+        }
+
+        var slope = sumXx > 0.0 ? sumXy / sumXx : 0.0;
+
+        for (var i = 0; i < x.Length; i++)
+        {
+            y[i] -= meanY + slope * (x[i] - meanX);
+        }
     }
 
     private static bool IsStrictlyIncreasing(ReadOnlySpan<double> values)

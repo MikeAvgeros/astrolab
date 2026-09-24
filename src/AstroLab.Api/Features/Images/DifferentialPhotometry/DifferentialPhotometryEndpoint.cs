@@ -63,8 +63,28 @@ public static class DifferentialPhotometryEndpoint
 
         var comparison = comparisonResult.Value;
 
+        var gain = PhotometricUncertainty.ReadDetectorGain(dataset.Hdu.Header);
+
+        var targetUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(target, skySigma, gain);
+
+        if (targetUncertaintyResult.IsFailure)
+        {
+            return targetUncertaintyResult.Error.ToProblem();
+        }
+
+        var comparisonUncertaintyResult = PhotometricUncertainty.EstimateFluxUncertainty(comparison, skySigma, gain);
+
+        if (comparisonUncertaintyResult.IsFailure)
+        {
+            return comparisonUncertaintyResult.Error.ToProblem();
+        }
+
+        var targetUncertainty = targetUncertaintyResult.Value;
+
+        var comparisonUncertainty = comparisonUncertaintyResult.Value;
+
         var targetMagnitudeResult = InstrumentalPhotometry.ComputeMagnitude(
-            target.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, target.ApertureArea), InstrumentalPhotometry.DefaultZeroPoint);
+            target.NetFlux, targetUncertainty, InstrumentalPhotometry.DefaultZeroPoint);
 
         if (targetMagnitudeResult.IsFailure)
         {
@@ -72,7 +92,7 @@ public static class DifferentialPhotometryEndpoint
         }
 
         var comparisonMagnitudeResult = InstrumentalPhotometry.ComputeMagnitude(
-            comparison.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, comparison.ApertureArea), InstrumentalPhotometry.DefaultZeroPoint);
+            comparison.NetFlux, comparisonUncertainty, InstrumentalPhotometry.DefaultZeroPoint);
 
         if (comparisonMagnitudeResult.IsFailure)
         {
@@ -87,10 +107,10 @@ public static class DifferentialPhotometryEndpoint
             targetMagnitude.Magnitude, targetMagnitude.MagnitudeUncertainty, comparisonMagnitude.Magnitude, comparisonMagnitude.MagnitudeUncertainty);
 
         var targetSnr = PhotometricUncertainty.ComputeSignalToNoiseRatio(
-            target.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, target.ApertureArea));
+            target.NetFlux, targetUncertainty);
 
         var comparisonSnr = PhotometricUncertainty.ComputeSignalToNoiseRatio(
-            comparison.NetFlux, InstrumentalPhotometry.EstimateFluxUncertainty(skySigma, comparison.ApertureArea));
+            comparison.NetFlux, comparisonUncertainty);
 
         return Results.Ok(DifferentialPhotometryResponse.Create(
             fileId, targetMagnitude.Magnitude, comparisonMagnitude.Magnitude, differentialMagnitude, uncertainty,

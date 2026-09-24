@@ -14,6 +14,7 @@ namespace AstroLab.Core.Astrometry;
 public static class WcsGridGenerator
 {
     public const int DefaultLinesPerAxis = 6;
+    public const int MaxLinesPerAxis = 100;
 
     private const int SamplesPerLine = 50;
     private const double MinDeclinationDegrees = -90.0;
@@ -29,9 +30,10 @@ public static class WcsGridGenerator
             return Error.Validation("astrometry.wcsgrid.invalid_image_bounds", "width and height must both be positive.");
         }
 
-        if (linesPerAxis <= 0)
+        if (linesPerAxis is <= 0 or > MaxLinesPerAxis)
         {
-            return Error.Validation("astrometry.wcsgrid.invalid_line_count", "linesPerAxis must be positive.");
+            return Error.Validation(
+                "astrometry.wcsgrid.invalid_line_count", $"linesPerAxis must be between 1 and {MaxLinesPerAxis}.");
         }
 
         var footprintResult = SampleFootprint(wcs, width, height);

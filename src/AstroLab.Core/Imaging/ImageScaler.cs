@@ -9,6 +9,8 @@ namespace AstroLab.Core.Imaging;
 /// </summary>
 public static class ImageScaler
 {
+    private const double ConstantImageDisplayRange = 1.0;
+
     public static Result<Unit> Stretch(ReadOnlySpan<float> source, Span<byte> destination, ScaleParameters parameters)
     {
         if (source.Length != destination.Length)
@@ -30,6 +32,28 @@ public static class ImageScaler
         }
 
         return Result<Unit>.Success(Unit.Value);
+    }
+    
+    public static Result<(double BlackPoint, double WhitePoint)> ResolveAutoScaleBounds(
+        ReadOnlySpan<float> pixels, double lowerPercentile, double upperPercentile)
+    {
+        var boundsResult = ImageStatistics.ComputePercentileBounds(pixels, lowerPercentile, upperPercentile);
+
+        if (boundsResult.IsFailure)
+        {
+            return Result<(double, double)>.Failure(boundsResult.Error);
+        }
+
+        var (lower, upper) = boundsResult.Value;
+
+        if (upper > lower)
+        {
+            return (lower, upper);
+        }
+
+        var stats = ImageStatistics.Compute(pixels).Value;
+
+        return stats.Max > stats.Min ? (stats.Min, stats.Max) : (stats.Min, stats.Min + ConstantImageDisplayRange);
     }
 
     public static double NormalizeAndStretch(float value, ScaleParameters parameters)

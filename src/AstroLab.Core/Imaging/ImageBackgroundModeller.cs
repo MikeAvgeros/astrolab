@@ -34,9 +34,13 @@ public static class ImageBackgroundModeller
 
         var meshCountY = (height + meshSizePixels - 1) / meshSizePixels;
 
-        var meshBackgrounds = new List<double>(meshCountX * meshCountY);
+        var meshBackgrounds = new double[meshCountX * meshCountY];
 
-        var meshRmsValues = new List<double>(meshCountX * meshCountY);
+        var meshRmsValues = new double[meshCountX * meshCountY];
+
+        var validBackgrounds = new List<double>(meshBackgrounds.Length);
+
+        var validRmsValues = new List<double>(meshBackgrounds.Length);
 
         var maxBoxWidth = Math.Min(meshSizePixels, width);
 
@@ -60,7 +64,20 @@ public static class ImageBackgroundModeller
 
                     var meshPixelCount = CopyMeshRows(pixels, width, xStart, xEnd, yStart, yEnd, buffer);
 
-                    TryAddMeshStatistics(buffer.AsSpan(0, meshPixelCount), meshBackgrounds, meshRmsValues);
+                    var meshIndex = meshY * meshCountX + meshX;
+
+                    var (background, rms) = ComputeMeshStatistics(buffer.AsSpan(0, meshPixelCount));
+
+                    meshBackgrounds[meshIndex] = background;
+
+                    meshRmsValues[meshIndex] = rms;
+
+                    if (double.IsFinite(background))
+                    {
+                        validBackgrounds.Add(background);
+
+                        validRmsValues.Add(rms);
+                    }
                 }
             }
         }
@@ -69,12 +86,27 @@ public static class ImageBackgroundModeller
             ArrayPool<float>.Shared.Return(buffer);
         }
 
-        if (meshBackgrounds.Count == 0)
+        if (validBackgrounds.Count == 0)
         {
             return Error.Validation("imaging.background.no_valid_meshes", "No mesh box contained valid pixel data.");
         }
 
-        return ImageBackgroundModel.Create(meshSizePixels, meshCountX, meshCountY, Median(meshBackgrounds), Median(meshRmsValues));
+        var medianBackground = Median(validBackgrounds);
+
+        var medianRms = Median(validRmsValues);
+
+        for (var i = 0; i < meshBackgrounds.Length; i++)
+        {
+            if (!double.IsFinite(meshBackgrounds[i]))
+            {
+                meshBackgrounds[i] = medianBackground;
+
+                meshRmsValues[i] = medianRms;
+            }
+        }
+
+        return ImageBackgroundModel.Create(
+            meshSizePixels, meshCountX, meshCountY, medianBackground, medianRms, [.. meshBackgrounds], [.. meshRmsValues]);
     }
 
     private static int CopyMeshRows(ReadOnlySpan<float> pixels, int width, int xStart, int xEnd, int yStart, int yEnd, float[] buffer)
@@ -95,13 +127,13 @@ public static class ImageBackgroundModeller
         return count;
     }
 
-    private static void TryAddMeshStatistics(ReadOnlySpan<float> meshPixels, List<double> meshBackgrounds, List<double> meshRmsValues)
+    private static (double Background, double Rms) ComputeMeshStatistics(ReadOnlySpan<float> meshPixels)
     {
         var statsResult = ImageStatistics.Compute(meshPixels);
 
         if (statsResult.IsFailure)
         {
-            return;
+            return (double.NaN, double.NaN);
         }
 
         var stats = statsResult.Value;
@@ -113,18 +145,10 @@ public static class ImageBackgroundModeller
 
         if (percentilesResult.IsFailure)
         {
-            return;
+            return (double.NaN, double.NaN);
         }
 
-        var q1 = percentileValues[0];
-
-        var median = percentileValues[1];
-
-        var q3 = percentileValues[2];
-
-        meshBackgrounds.Add(median);
-
-        meshRmsValues.Add((q3 - q1) / ImageStatistics.IqrToSigmaFactor);
+        return (percentileValues[1], (percentileValues[2] - percentileValues[0]) / ImageStatistics.IqrToSigmaFactor);
     }
 
     private static double Median(List<double> values)

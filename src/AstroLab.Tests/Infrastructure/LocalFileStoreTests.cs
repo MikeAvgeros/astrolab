@@ -82,6 +82,32 @@ public class LocalFileStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteAsync_SourceReadFails_PropagatesTheSourceExceptionAndRemovesPartialFile()
+    {
+        // Kestrel reports an over-limit request body as an IOException-derived BadHttpRequestException;
+        // that must reach the API layer (413) rather than be reported as a storage failure (502).
+        var pipe = new Pipe();
+
+        await pipe.Writer.WriteAsync(new byte[] { 1, 2, 3 }, TestContext.Current.CancellationToken);
+
+        await pipe.Writer.CompleteAsync(new IOException("Request body too large."));
+
+        await Assert.ThrowsAsync<IOException>(() => _store.WriteAsync("partial.fits", pipe.Reader, TestContext.Current.CancellationToken));
+
+        Assert.False(_store.Exists("partial.fits"));
+    }
+
+    [Fact]
+    public void ResolvePath_KeyContainingNulCharacter_ReturnsValidationErrorRatherThanThrowing()
+    {
+        var result = _store.ResolvePath("abc\0def.fits");
+
+        Assert.True(result.IsFailure);
+
+        Assert.Equal("storage.invalid_key", result.Error.Code);
+    }
+
+    [Fact]
     public async Task Exists_ReflectsWriteAndDelete()
     {
         Assert.False(_store.Exists("temp.fits"));

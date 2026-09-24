@@ -13,15 +13,16 @@ namespace AstroLab.Core.Imaging;
 /// </summary>
 public static class ImageContourGenerator
 {
+    public const int MaxLevelCount = 256;
     private const double DefaultLowerPercentile = 1.0;
     private const double DefaultUpperPercentile = 99.0;
-    private const double Epsilon = 1e-12;
 
     public static Result<double[]> SuggestLevels(ReadOnlySpan<float> pixels, int levelCount)
     {
-        if (levelCount <= 0)
+        if (levelCount is <= 0 or > MaxLevelCount)
         {
-            return Error.Validation("imaging.contours.invalid_level_count", "levelCount must be positive.");
+            return Error.Validation(
+                "imaging.contours.invalid_level_count", $"levelCount must be between 1 and {MaxLevelCount}.");
         }
 
         var boundsResult = ImageStatistics.ComputePercentileBounds(pixels, DefaultLowerPercentile, DefaultUpperPercentile);
@@ -175,7 +176,7 @@ public static class ImageContourGenerator
 
     private static (double X, double Y) Interpolate(double x1, double y1, double x2, double y2, double v1, double v2, double level)
     {
-        if (Math.Abs(v1 - v2) < Epsilon)
+        if (v1 == v2)
         {
             return ((x1 + x2) / 2.0, (y1 + y2) / 2.0);
         }

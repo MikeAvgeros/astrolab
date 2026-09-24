@@ -1,0 +1,35 @@
+# Serves the built SPA and forwards API traffic to the AstroLab API, so the browser talks to a
+# single origin and the API needs no CORS configuration (the same role the Vite proxy plays in dev).
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Vite emits content-hashed file names under /assets, so they can be cached indefinitely.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location ~ ^/(api|openapi)/ {
+        proxy_pass ${ASTROLAB_API_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # FITS uploads can be very large: the API enforces Storage:MaxUploadSizeBytes itself, and the
+        # body is streamed straight through rather than spooled to nginx's temp files first.
+        client_max_body_size 0;
+        proxy_request_buffering off;
+
+        # Archive downloads can take minutes before the API responds.
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+    }
+}

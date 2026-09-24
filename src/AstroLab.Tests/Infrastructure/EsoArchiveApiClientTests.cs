@@ -13,25 +13,25 @@ public class EsoArchiveApiClientTests
             {"name":"dp_id"},{"name":"target_name"},{"name":"obs_collection"},{"name":"instrument_name"},
             {"name":"dataproduct_type"},{"name":"calib_level"},{"name":"t_min"},{"name":"t_max"},
             {"name":"t_exptime"},{"name":"s_ra"},{"name":"s_dec"},{"name":"em_min"},{"name":"em_max"},
-            {"name":"proposal_id"},{"name":"obs_creator_name"},{"name":"data_rights"}
+            {"name":"proposal_id"},{"name":"obs_creator_name"}
           ],
           "data": [
-            ["ADP.123", "M31", "FORS", "FORS2", "image", 2, 58000.5, 58000.6, 300.0, 10.68, 41.27, 4e-7, 7e-7, "60.A-9203", "Someone", "public"]
+            ["ADP.123", "M31", "FORS", "FORS2", "image", 2, 58000.5, 58000.6, 300.0, 10.68, 41.27, 4e-7, 7e-7, "60.A-9203", "Someone"]
           ]
         }
         """;
 
     private const string DataLinkResponseJson = """
-        {
-          "metadata": [
-            {"name":"id"},{"name":"access_url"},{"name":"semantics"},{"name":"content_type"},
-            {"name":"content_length"},{"name":"error_message"}
-          ],
-          "data": [
-            ["ADP.123-preview", "https://dataportal.eso.org/dataPortal/preview/ADP.123", "#preview", "image/jpeg", 5000, null],
-            ["ADP.123-this", "https://dataportal.eso.org/dataPortal/file/ADP.123", "#this", "application/x-fits", 200000, null]
-          ]
-        }
+        [
+          {"id":"ivo://eso.org/ID?ADP.123","access_url":"https://dataportal.eso.org/dataPortal/preview/ADP.123",
+           "service_def":null,"error_message":null,"semantics":"#preview","content_type":"image/jpeg",
+           "content_length":5000,"eso_origfile":null,"science":false},
+          {"id":"ivo://eso.org/ID?ADP.123","access_url":"https://dataportal.eso.org/dataPortal/file/ADP.123",
+           "service_def":null,"error_message":null,"semantics":"#this","content_type":"application/x-fits",
+           "content_length":200000,"eso_origfile":"FORS2.2017-09-01T01:02:03.000.fits","science":true},
+          {"id":"ivo://eso.org/ID?ADP.123","access_url":null,"service_def":"ADP.123_soda","error_message":null,
+           "semantics":"#cutout","content_type":"application/x-fits","content_length":null,"eso_origfile":null,"science":false}
+        ]
         """;
 
     private static (EsoArchiveApiClient Client, StubHttpMessageHandler Handler) CreateClient(
@@ -75,19 +75,42 @@ public class EsoArchiveApiClientTests
     }
 
     [Fact]
-    public async Task SearchAsync_TargetContainingLikeWildcards_EscapesThemInTheAdqlQuery()
+    public async Task SearchAsync_TargetFilter_UsesLikeWithoutUnsupportedEscapeClause()
     {
         var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
 
-        var query = ArchiveSearchQuery.Create(target: "NGC_1234%");
-
-        var result = await client.SearchAsync(query);
+        var result = await client.SearchAsync(ArchiveSearchQuery.Create(target: "NGC_1234"));
 
         Assert.True(result.IsSuccess);
 
         var decodedBody = Uri.UnescapeDataString(handler.LastRequestBody!.Replace('+', ' '));
 
-        Assert.Contains(@"target_name LIKE '%NGC\_1234\%%' ESCAPE '\'", decodedBody);
+        Assert.Contains("target_name LIKE '%NGC_1234%'", decodedBody);
+        Assert.DoesNotContain("ESCAPE", decodedBody);
+    }
+
+    [Fact]
+    public async Task SearchAsync_TargetContainingQuote_EscapesTheAdqlStringLiteral()
+    {
+        var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
+
+        await client.SearchAsync(ArchiveSearchQuery.Create(target: "Barnard's Star"));
+
+        var decodedBody = Uri.UnescapeDataString(handler.LastRequestBody!.Replace('+', ' '));
+
+        Assert.Contains("target_name LIKE '%Barnard''s Star%'", decodedBody);
+    }
+
+    [Fact]
+    public async Task SearchAsync_RequestsOnlyColumnsPresentInEsoObsCore()
+    {
+        var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(TapResponseJson)));
+
+        await client.SearchAsync(ArchiveSearchQuery.Create(target: "M31"));
+
+        var decodedBody = Uri.UnescapeDataString(handler.LastRequestBody!.Replace('+', ' '));
+
+        Assert.DoesNotContain("data_rights", decodedBody);
     }
 
     [Fact]
@@ -150,7 +173,7 @@ public class EsoArchiveApiClientTests
         Assert.Equal(0.7, observation.WavelengthMaxMicrometres!.Value, precision: 9);
         Assert.Equal("60.A-9203", observation.ProposalId);
         Assert.Equal("Someone", observation.ProposalPi);
-        Assert.Equal("public", observation.DataRights);
+        Assert.Null(observation.DataRights);
 
         var expectedDate = new DateTimeOffset(1858, 11, 17, 0, 0, 0, TimeSpan.Zero).AddDays(58000.5);
         Assert.Equal(expectedDate, observation.ObservationDate);
@@ -239,7 +262,7 @@ public class EsoArchiveApiClientTests
     }
 
     [Fact]
-    public async Task GetProductsAsync_MapsProducts_SkippingErrorRows()
+    public async Task GetProductsAsync_MapsProducts_SkippingRowsWithoutAccessUrl()
     {
         var (client, handler) = CreateClient(_ => Task.FromResult(JsonResponse(DataLinkResponseJson)));
 
@@ -251,6 +274,8 @@ public class EsoArchiveApiClientTests
         Assert.Equal("#this", result.Value[1].ProductType);
         Assert.Equal("application/x-fits", result.Value[1].Format);
         Assert.Equal(200000, result.Value[1].Size);
+        Assert.Equal("FORS2.2017-09-01T01:02:03.000.fits", result.Value[1].FileName);
+        Assert.Null(result.Value[0].FileName);
         
         var decodedRequestUri = Uri.UnescapeDataString(handler.LastRequest!.RequestUri!.PathAndQuery);
         Assert.Contains("ID=ivo://eso.org/ID?ADP.123", decodedRequestUri);
@@ -261,10 +286,7 @@ public class EsoArchiveApiClientTests
     public async Task GetProductsAsync_RowWithErrorMessage_IsSkipped()
     {
         const string json = """
-            {
-              "metadata": [{"name":"id"},{"name":"access_url"},{"name":"error_message"}],
-              "data": [["broken", "https://dataportal.eso.org/x", "not available"]]
-            }
+            [{"id":"broken","access_url":"https://dataportal.eso.org/x","error_message":"not available"}]
             """;
 
         var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse(json)));
@@ -278,7 +300,7 @@ public class EsoArchiveApiClientTests
     [Fact]
     public async Task GetProductsAsync_EmptyResultSet_ReturnsSuccessWithEmptyList()
     {
-        var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse("""{"metadata":[],"data":[]}""")));
+        var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse("[]")));
 
         var result = await client.GetProductsAsync("ADP.123");
 

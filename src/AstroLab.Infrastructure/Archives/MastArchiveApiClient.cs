@@ -19,6 +19,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
     private const string InvokeEndpoint = "api/v0/invoke";
     private const string NameLookupService = "Mast.Name.Lookup";
     private const string CaomFilteredService = "Mast.Caom.Filtered";
+    private const string CaomFilteredPositionService = "Mast.Caom.Filtered.Position";
     private const string ProductsService = "Mast.Caom.Products";
     private const string CompleteStatus = "COMPLETE";
     private const string CollectionParam = "obs_collection";
@@ -32,7 +33,7 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
 
     private const string RequestedColumns =
         "obsid,obs_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
-        "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,proposal_pi,data_rights";
+        "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,proposal_pi,dataRights";
 
     private const string CaomObsIdLookupColumns = "obsid,obs_id";
 
@@ -121,13 +122,12 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
         var target = targetResult.Value;
 
         var requestPayload = MastMashupRequest.Create(
-            CaomFilteredService,
+            CaomFilteredPositionService,
             MastMashupParams.Create(
                 RequestedColumns,
                 BuildFilters(query),
-                FormattableString.Invariant($"{target.RightAscension}, {target.Declination}"),
-                query.SearchRadiusDegrees,
-                query.MaxResults));
+                FormattableString.Invariant($"{target.RightAscension}, {target.Declination}, {query.SearchRadiusDegrees}")),
+            query.MaxResults);
 
         try
         {
@@ -262,10 +262,8 @@ public sealed class MastArchiveApiClient : IMastArchiveApiClient
             CaomFilteredService,
             MastMashupParams.Create(
                 CaomObsIdLookupColumns,
-                [MastMashupFilter.Create(ObsIdParam, [MastFilterValue.FromText(observationId)])],
-                position: null,
-                radius: null,
-                pageSize: 1));
+                [MastMashupFilter.Create(ObsIdParam, [MastFilterValue.FromText(observationId)])]),
+            pageSize: 1);
 
         try
         {

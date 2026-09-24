@@ -31,7 +31,7 @@ public class MastArchiveApiClientTests
               "obs_id":"obs1","target_name":"M31","obs_collection":"HST","instrument_name":"ACS/WFC",
               "dataproduct_type":"image","calib_level":3,"t_min":58000.5,"t_max":58000.6,
               "t_exptime":900.0,"s_ra":10.68,"s_dec":41.27,"em_min":4e-7,"em_max":7e-7,
-              "proposal_id":"12345","proposal_pi":"Someone","data_rights":"PUBLIC"
+              "proposal_id":"12345","proposal_pi":"Someone","dataRights":"PUBLIC"
             }
           ]
         }
@@ -94,6 +94,23 @@ public class MastArchiveApiClientTests
     }
 
     [Fact]
+    public async Task ResolveTargetAsync_RequestsJsonFormatInsideParams()
+    {
+        string? requestJson = null;
+
+        var (client, _) = CreateClient(async request =>
+        {
+            requestJson = await ReadRequestJsonAsync(request);
+            return JsonResponse(NameLookupResponseJson);
+        });
+
+        await client.ResolveTargetAsync("M31");
+
+        Assert.NotNull(requestJson);
+        Assert.Contains("\"params\":{\"input\":\"M31\",\"format\":\"json\"}", requestJson);
+    }
+
+    [Fact]
     public async Task ResolveTargetAsync_UnknownTarget_ReturnsNotFoundFailure()
     {
         var (client, _) = CreateClient(_ => Task.FromResult(JsonResponse(NameLookupNotFoundResponseJson)));
@@ -148,9 +165,10 @@ public class MastArchiveApiClientTests
         Assert.Contains("\"paramName\":\"t_min\"", searchJson);
         Assert.Contains("\"min\":", searchJson);
         Assert.Contains("\"max\":", searchJson);
-        Assert.Contains("\"pagesize\":25", searchJson);
-        Assert.Contains("\"position\":\"10.68471, 41.26875\"", searchJson);
-        Assert.Contains("\"radius\":0.2", searchJson);
+        Assert.Contains("\"service\":\"Mast.Caom.Filtered.Position\"", searchJson);
+        Assert.Contains("\"position\":\"10.68471, 41.26875, 0.2\"", searchJson);
+        Assert.DoesNotContain("\"radius\"", searchJson);
+        Assert.Contains("},\"pagesize\":25,\"page\":1}", searchJson);
         Assert.DoesNotContain("\"columns\":\"*\"", searchJson);
         Assert.Contains("\"columns\":\"obsid,obs_id,target_name", searchJson);
     }

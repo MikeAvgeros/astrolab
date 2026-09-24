@@ -8,3 +8,14 @@ services:
       - "8080:8080"
     volumes:
       - ./storage:/app/storage
+
+  web:
+    build:
+      context: ./web
+    image: astrolab-web
+    ports:
+      - "3000:80"
+    environment:
+      ASTROLAB_API_URL: http://astrolab:8080
+    depends_on:
+      - astrolab

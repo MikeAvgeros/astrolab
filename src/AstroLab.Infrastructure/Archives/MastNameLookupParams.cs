@@ -4,13 +4,19 @@ namespace AstroLab.Infrastructure.Archives;
 
 internal sealed record MastNameLookupParams
 {
-    private MastNameLookupParams(string input)
+    private const string JsonFormat = "json";
+
+    private MastNameLookupParams(string input, string format)
     {
         Input = input;
+        Format = format;
     }
 
     [JsonPropertyName("input")]
     public string Input { get; }
 
-    public static MastNameLookupParams Create(string input) => new(input);
+    [JsonPropertyName("format")]
+    public string Format { get; }
+
+    public static MastNameLookupParams Create(string input) => new(input, JsonFormat);
 }

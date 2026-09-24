@@ -19,6 +19,18 @@ internal static class SyntheticFits
         "END",
     ]);
     
+    public static byte[] SmallGradientImageWithBlankKeywordCards() => BuildSingleHdu(
+    [
+        "SIMPLE  =                    T",
+        "BITPIX  =                    8",
+        "NAXIS   =                    2",
+        "NAXIS1  =                    4",
+        "NAXIS2  =                    2",
+        "        / DATA DESCRIPTION KEYWORDS",
+        "",
+        "END",
+    ]);
+
     public static byte[] SmallGradientImageTransposed() => BuildSingleHdu(
     [
         "SIMPLE  =                    T",

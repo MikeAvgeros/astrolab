@@ -198,6 +198,8 @@ Run the API locally with:
 dotnet run --project src/AstroLab.Api
 ```
 
+The React SPA in `web/` consumes the API through its OpenAPI document, via a Vite dev proxy locally or nginx in Docker (`web/Dockerfile`, `web/nginx.conf.template`). When changing it, run `npm run build` in `web/` (type-check and bundle). When changing API contracts, remember that its generated endpoint forms depend on accurate OpenAPI metadata. `docker compose up -d --build` builds and starts both the API (`:8080`) and the web UI (`:3000`).
+
 When deployment or native dependencies are affected, also validate the container:
 
 ```bash

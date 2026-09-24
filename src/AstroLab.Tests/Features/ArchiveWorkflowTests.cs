@@ -119,25 +119,28 @@ public sealed class ArchiveWorkflowTests : IClassFixture<ApiFactory>
         Assert.Equal("eso.invalid_target", body.GetProperty("title").GetString());
     }
 
+    private static StubMastArchiveClient MastClientDownloading(byte[] content) => new(
+        search: (_, _) => throw new InvalidOperationException("Download should not search."),
+        download: (datasetId, _) =>
+        {
+            Assert.Equal("obs1", datasetId);
+
+            var pipeReader = PipeReader.Create(new MemoryStream(content));
+
+            var download = new ArchiveDownload("obs1.fits", content.Length, pipeReader, new HttpResponseMessage());
+
+            return Task.FromResult(Result<ArchiveDownload>.Success(download));
+        });
+
+    private string[] StagedFiles() =>
+        Directory.Exists(_factory.StorageRoot) ? Directory.GetFiles(_factory.StorageRoot, "*", SearchOption.AllDirectories) : [];
+
     [Fact]
     public async Task DownloadDataset_KnownArchive_StagesFileAndReturnsCreated()
     {
-        const string fitsContent = "not a real FITS file, just bytes to stage";
+        var fitsContent = SyntheticFits.SmallGradientImage();
 
-        var mast = new StubMastArchiveClient(
-            search: (_, _) => throw new InvalidOperationException("Download should not search."),
-            download: (datasetId, _) =>
-            {
-                Assert.Equal("obs1", datasetId);
-
-                var pipeReader = PipeReader.Create(new MemoryStream(Encoding.UTF8.GetBytes(fitsContent)));
-
-                var download = new ArchiveDownload("obs1.fits", fitsContent.Length, pipeReader, new HttpResponseMessage());
-
-                return Task.FromResult(Result<ArchiveDownload>.Success(download));
-            });
-
-        var client = CreateClientWithStubArchives(NotCalledEsoClient(), mast);
+        var client = CreateClientWithStubArchives(NotCalledEsoClient(), MastClientDownloading(fitsContent));
 
         var response = await client.PostAsJsonAsync("/api/archives/download", new { Archive = "Mast", DatasetId = "obs1" });
 
@@ -147,7 +150,32 @@ public sealed class ArchiveWorkflowTests : IClassFixture<ApiFactory>
 
         Assert.Equal("Mast", body.GetProperty("archive").GetString());
         Assert.Equal(fitsContent.Length, body.GetProperty("sizeBytes").GetInt64());
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("fileId").GetString()));
+
+        var fileId = body.GetProperty("fileId").GetString()!;
+
+        Assert.Equal(fitsContent, await File.ReadAllBytesAsync(Path.Combine(_factory.StorageRoot, fileId)));
+    }
+
+    [Fact]
+    public async Task DownloadDataset_ArchiveReturnsNonFitsContent_ReturnsBadGatewayAndDiscardsStagedFile()
+    {
+        // e.g. an archive answering 200 OK with an HTML error or login page instead of the dataset.
+        var htmlErrorPage = Encoding.UTF8.GetBytes("<!DOCTYPE html><html><body>Service temporarily unavailable</body></html>");
+
+        var client = CreateClientWithStubArchives(NotCalledEsoClient(), MastClientDownloading(htmlErrorPage));
+
+        var stagedBefore = StagedFiles().Length;
+
+        var response = await client.PostAsJsonAsync("/api/archives/download", new { Archive = "Mast", DatasetId = "obs1" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("archive.download_invalid_fits", body.GetProperty("title").GetString());
+        Assert.Contains("fits.header.truncated_file", body.GetProperty("detail").GetString());
+
+        Assert.Equal(stagedBefore, StagedFiles().Length);
     }
 
     [Fact]

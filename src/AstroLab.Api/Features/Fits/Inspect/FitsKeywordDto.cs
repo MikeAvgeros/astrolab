@@ -17,7 +17,7 @@ public sealed record FitsKeywordDto
 
     public static FitsKeywordDto Create(string name, string value, string? comment)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(name);
 
         ArgumentNullException.ThrowIfNull(value);
 

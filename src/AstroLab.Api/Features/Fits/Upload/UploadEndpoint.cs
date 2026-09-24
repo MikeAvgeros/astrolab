@@ -4,7 +4,10 @@ using Microsoft.Extensions.Options;
 
 namespace AstroLab.Api.Features.Fits.Upload;
 
-/// <summary>Streams a raw FITS file upload directly to local staging storage.</summary>
+/// <summary>
+/// Streams a raw FITS file upload directly to local staging storage, then validates the staged
+/// file's header structure and discards it if it is not a conforming FITS file.
+/// </summary>
 public static class UploadEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -12,13 +15,17 @@ public static class UploadEndpoint
         public void MapUploadEndpoint()
         {
             group.MapPost("/upload", UploadAsync)
-                .WithSummary("Streams a raw FITS file body directly to local staging storage.")
+                .WithSummary("Streams a raw FITS file body to local staging storage, rejecting files that are not valid FITS.")
                 .DisableAntiforgery();
         }
     }
 
     private static async Task<IResult> UploadAsync(
-        HttpRequest request, ILocalFileStore fileStore, IOptions<LocalFileStoreOptions> storageOptions, CancellationToken cancellationToken)
+        HttpRequest request,
+        ILocalFileStore fileStore,
+        StagedFitsValidator stagedFitsValidator,
+        IOptions<LocalFileStoreOptions> storageOptions,
+        CancellationToken cancellationToken)
     {
         var maxRequestBodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
         
@@ -31,7 +38,19 @@ public static class UploadEndpoint
 
         var writeResult = await fileStore.WriteAsync(fileId, request.BodyReader, cancellationToken);
 
-        return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", FitsUploadResponse.Create(fileId, stored.SizeBytes)));
+        if (writeResult.IsFailure)
+        {
+            return writeResult.Error.ToProblem();
+        }
+        
+        var validationResult = await stagedFitsValidator.ValidateOrDiscardAsync(fileId, cancellationToken);
+
+        if (validationResult.IsFailure)
+        {
+            return validationResult.Error.ToProblem();
+        }
+
+        return Results.Created(
+            $"/api/fits/{fileId}/header", FitsUploadResponse.Create(fileId, writeResult.Value.SizeBytes));
     }
 }

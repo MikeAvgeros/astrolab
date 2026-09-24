@@ -55,8 +55,11 @@ AstroLab.slnx
 │   └── AstroLab.Api/
 ├── tests/
 │   └── AstroLab.Tests/
+├── web/
 └── storage/
 ```
+
+`web/` is an optional React single-page client of the HTTP API. It is not part of the .NET solution, MUST NOT contain scientific logic, and MUST consume the API only through its public HTTP contract. It builds its endpoint forms from the OpenAPI document, so the API MUST serve `/openapi/v1.json` in every environment. The interactive Swagger UI remains development-only.
 
 The exact folder layout MAY evolve. A new project or major structural boundary SHOULD only be introduced when it represents a genuine separation of responsibility, deployment, dependency, or ownership.
 

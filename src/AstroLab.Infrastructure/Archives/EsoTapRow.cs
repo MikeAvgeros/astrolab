@@ -43,8 +43,6 @@ internal sealed class EsoTapRow
 
     public int? GetInt(string columnName) => (int?)GetDouble(columnName);
 
-    public long? GetLong(string columnName) => (long?)GetDouble(columnName);
-
     private object? GetRaw(string columnName)
     {
         if (!_columnIndex.TryGetValue(columnName, out var index) || index >= _values.Count)

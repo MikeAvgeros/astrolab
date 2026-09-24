@@ -32,9 +32,10 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
+app.MapOpenApi();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "AstroLab API v1"));
 }
 

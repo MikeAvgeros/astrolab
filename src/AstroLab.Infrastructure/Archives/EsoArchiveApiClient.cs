@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Web;
 using AstroLab.Core.Result;
 using Microsoft.Extensions.Logging;
@@ -20,10 +21,9 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     private const string DatasetIdIvoPrefix = "ivo://eso.org/ID?";
     private const string UnknownInstrument = "UNKNOWN";
     private const double MetresToMicrometres = 1e6;
-    private const string LikeEscapeChar = "\\";
     private const string RequestedColumns =
         "dp_id,target_name,obs_collection,instrument_name,dataproduct_type,calib_level," +
-        "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,obs_creator_name,data_rights";
+        "t_min,t_max,t_exptime,s_ra,s_dec,em_min,em_max,proposal_id,obs_creator_name";
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<EsoArchiveApiClient> _logger;
@@ -107,16 +107,16 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
                     await MapHttpErrorAsync(response, "eso.products", cancellationToken));
             }
 
-            var dataLinkResponse = await response.Content.ReadFromJsonAsync<EsoTapResponse>(cancellationToken: cancellationToken);
+            var dataLinkRows = await response.Content.ReadFromJsonAsync<List<EsoDataLinkRow>>(cancellationToken: cancellationToken);
 
-            if (dataLinkResponse?.Metadata is not { } metadata)
+            if (dataLinkRows is null)
             {
                 return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected(
                     "eso.products_malformed_response",
-                    "ESO DataLink returned a response that did not match the expected TAP result contract."));
+                    "ESO DataLink returned a response that did not match the expected DataLink contract."));
             }
 
-            var products = MapDataLinkResponseToProducts(metadata, dataLinkResponse.Data, datasetId);
+            var products = MapDataLinkRowsToProducts(dataLinkRows, datasetId);
 
             return Result<IReadOnlyList<EsoProduct>>.Success(products);
         }
@@ -124,6 +124,13 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
         {
             _logger.LogWarning("ESO product discovery was canceled for dataset {DatasetId}", datasetId);
             throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "ESO DataLink returned an unexpected payload for dataset {DatasetId}", datasetId);
+            return Result<IReadOnlyList<EsoProduct>>.Failure(Error.Unexpected(
+                "eso.products_malformed_response",
+                "ESO DataLink returned a response that did not match the expected DataLink contract."));
         }
         catch (Exception ex)
         {
@@ -139,7 +146,7 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
 
         if (!string.IsNullOrWhiteSpace(query.Target))
         {
-            conditions.Add($"target_name LIKE '%{EscapeAdqlLikePattern(query.Target)}%' ESCAPE '{LikeEscapeChar}'");
+            conditions.Add($"target_name LIKE '%{EscapeAdqlLiteral(query.Target)}%'");
         }
 
         if (!string.IsNullOrWhiteSpace(query.Mission))
@@ -170,11 +177,6 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
     }
 
     private static string EscapeAdqlLiteral(string value) => value.Replace("'", "''");
-    
-    private static string EscapeAdqlLikePattern(string value) => EscapeAdqlLiteral(
-        value.Replace(LikeEscapeChar, LikeEscapeChar + LikeEscapeChar)
-            .Replace("%", LikeEscapeChar + "%")
-            .Replace("_", LikeEscapeChar + "_"));
 
     private static Dictionary<string, int> BuildColumnIndex(List<EsoColumnMetadata> metadata) =>
         metadata
@@ -223,54 +225,38 @@ public sealed class EsoArchiveApiClient : IEsoArchiveApiClient
                 wavelengthMinMicrometres: row.GetDouble("em_min") * MetresToMicrometres,
                 wavelengthMaxMicrometres: row.GetDouble("em_max") * MetresToMicrometres,
                 proposalId: row.GetString("proposal_id"),
-                proposalPi: row.GetString("obs_creator_name"),
-                dataRights: row.GetString("data_rights")));
+                proposalPi: row.GetString("obs_creator_name")));
         }
 
         return observations;
     }
 
-    private static List<EsoProduct> MapDataLinkResponseToProducts(List<EsoColumnMetadata> metadata, List<List<object>>? data, string datasetId)
+    private static List<EsoProduct> MapDataLinkRowsToProducts(List<EsoDataLinkRow> rows, string datasetId)
     {
         var products = new List<EsoProduct>();
 
-        if (data is null)
+        foreach (var row in rows)
         {
-            return products;
-        }
-
-        var columnIndex = BuildColumnIndex(metadata);
-
-        foreach (var rowValues in data)
-        {
-            var row = new EsoTapRow(columnIndex, rowValues);
-
-            var errorMessage = row.GetString("error_message");
-            
-            if (!string.IsNullOrWhiteSpace(errorMessage))
+            if (!string.IsNullOrWhiteSpace(row.ErrorMessage))
             {
                 continue;
             }
 
-            var dataUri = row.GetString("access_url");
-            
-            if (string.IsNullOrWhiteSpace(dataUri))
+            if (string.IsNullOrWhiteSpace(row.AccessUrl))
             {
                 continue;
             }
-
-            var id = row.GetString("id") ?? datasetId;
 
             products.Add(EsoProduct.Create(
-                id: id,
+                id: row.Id ?? datasetId,
                 observationId: datasetId,
-                fileName: null,
-                dataUri: dataUri,
-                productType: row.GetString("semantics"),
+                fileName: row.EsoOrigFile,
+                dataUri: row.AccessUrl,
+                productType: row.Semantics,
                 dataProductType: null,
                 calibrationLevel: null,
-                format: row.GetString("content_type"),
-                size: row.GetLong("content_length"),
+                format: row.ContentType,
+                size: row.ContentLength,
                 dataRights: null));
         }
 

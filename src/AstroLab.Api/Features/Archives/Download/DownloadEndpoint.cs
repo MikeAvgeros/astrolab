@@ -1,9 +1,13 @@
+using AstroLab.Core.Result;
 using AstroLab.Infrastructure.Archives;
 using AstroLab.Infrastructure.Storage;
 
 namespace AstroLab.Api.Features.Archives.Download;
 
-/// <summary>Downloads a dataset from an upstream archive (ESO or MAST) and stages it to local storage.</summary>
+/// <summary>
+/// Downloads a dataset from an upstream archive (ESO or MAST), stages it to local storage, and
+/// discards it if the archive returned something that is not a conforming FITS file.
+/// </summary>
 public static class DownloadEndpoint
 {
     extension(IEndpointRouteBuilder group)
@@ -11,7 +15,7 @@ public static class DownloadEndpoint
         public void MapDownloadEndpoint()
         {
             group.MapPost("/download", DownloadAsync)
-                .WithSummary("Downloads a dataset from an upstream archive and stages it to local storage.");
+                .WithSummary("Downloads a dataset from an upstream archive and stages it to local storage, rejecting non-FITS content.");
         }
     }
 
@@ -20,11 +24,12 @@ public static class DownloadEndpoint
         IEsoArchiveClient esoClient,
         IMastArchiveClient mastClient,
         ILocalFileStore fileStore,
+        StagedFitsValidator stagedFitsValidator,
         CancellationToken cancellationToken)
     {
         request.Validate();
 
-        var client = ArchiveClientResolver.Resolve(request.Archive.Value, esoClient, mastClient);
+        var client = ArchiveClientResolver.Resolve(request.Archive!.Value, esoClient, mastClient);
 
         var downloadResult = await client.DownloadAsync(request.DatasetId, cancellationToken);
 
@@ -39,7 +44,24 @@ public static class DownloadEndpoint
 
         var writeResult = await fileStore.WriteAsync(fileId, download.Content, cancellationToken);
 
-        return writeResult.ToApiResult(stored =>
-            Results.Created($"/api/fits/{fileId}/header", DownloadResponse.Create(fileId, request.Archive.Value, stored.SizeBytes)));
+        if (writeResult.IsFailure)
+        {
+            return writeResult.Error.ToProblem();
+        }
+
+        var validationResult = await stagedFitsValidator.ValidateOrDiscardAsync(fileId, cancellationToken);
+
+        if (validationResult.IsFailure)
+        {
+            var error = validationResult.Error;
+
+            return Error.Infrastructure(
+                    "archive.download_invalid_fits",
+                    $"The {request.Archive.Value} archive returned content that is not a valid FITS file ({error.Code}: {error.Message})")
+                .ToProblem();
+        }
+
+        return Results.Created(
+            $"/api/fits/{fileId}/header", DownloadResponse.Create(fileId, request.Archive.Value, writeResult.Value.SizeBytes));
     }
 }

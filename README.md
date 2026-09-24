@@ -51,6 +51,7 @@ The architecture is documented in [`spec.md`](spec.md) and [`CLAUDE.md`](CLAUDE.
 - [Features](#features)
 - [How AstroLab Works](#how-astrolab-works)
 - [Running the API](#running-the-api)
+- [Web UI](#web-ui)
 - [CFITSIO](#cfitsio)
 - [Getting FITS Data](#getting-fits-data)
   - [Search an Archive](#1-search-an-archive)
@@ -294,19 +295,20 @@ Swagger is the easiest way to inspect the available request and response models 
 
 ## Docker
 
-The recommended way to run AstroLab in Docker is via Docker Compose, which builds the image and bind mounts the repository's `storage/` directory into the container:
+The recommended way to run AstroLab in Docker is via Docker Compose. It builds and starts both the API and the [web UI](#web-ui), and bind mounts the repository's `storage/` directory into the API container:
 
 ```bash
 docker compose up -d
 ```
 
-The API is then available at:
+| Service | URL | Notes |
+| --- | --- | --- |
+| Web UI (`web`) | `http://localhost:3000` | nginx serves the built SPA and proxies `/api` and `/openapi` to the API |
+| API (`astrolab`) | `http://localhost:8080` | Can also be called directly |
 
-```text
-http://localhost:8080
-```
+Rebuild after code changes with `docker compose up -d --build`, and stop everything with `docker compose down`. Staged files remain in `./storage`.
 
-Equivalently, without Compose:
+Equivalently, for the API alone without Compose:
 
 ```bash
 docker build -t astrolab-api .
@@ -325,6 +327,24 @@ The container runs as the non-root `app` user built into the .NET runtime image.
 mkdir -p storage
 chown 1654:1654 storage
 ```
+
+---
+
+# Web UI
+
+[`web/`](web/README.md) contains a small React single-page application for using the API from a browser. It supports uploading FITS files, rendering images, searching and downloading from archives, and calling any endpoint through forms generated from the API's OpenAPI document (`/openapi/v1.json`, served in every environment).
+
+The easiest way to run both is [`docker compose up -d`](#docker), then open `http://localhost:3000`.
+
+For development, with the API running via `dotnet run --project src/AstroLab.Api`:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Then open `http://localhost:5173`. In both setups the SPA reaches the API through a same-origin proxy (nginx or the Vite dev server), so no CORS configuration is required. See [`web/README.md`](web/README.md) for details.
 
 ---
 
@@ -473,6 +493,8 @@ The result contains a `fileId`:
 
 That `fileId` is used by subsequent analysis requests.
 
+The downloaded file goes through the same FITS validation as an [upload](#3-upload-your-own-fits-file). If the archive returns something that is not a valid FITS file (for example an HTML error page served with `200 OK`), the file is deleted and the response is `502 Bad Gateway` with title `archive.download_invalid_fits`. The `detail` names the specific `fits.header.*` reason.
+
 ---
 
 ## 3. Upload Your Own FITS File
@@ -505,6 +527,19 @@ Response:
 ```
 
 This is particularly useful for FITS files produced by personal telescopes, observatory instruments, or other astronomy software.
+
+After the upload is stored, AstroLab reads the file's headers (without reading the pixel data) and rejects anything that is not a valid FITS file. Archive downloads are checked the same way. The rejected file is deleted and the response is `400 Bad Request` with the reason as the problem `title`, for example:
+
+| `title` | Meaning |
+| --- | --- |
+| `fits.header.empty_file` | The request body was empty. |
+| `fits.header.truncated_file` | The file ended before a complete 2880-byte header block, e.g. it is not a FITS file at all. |
+| `fits.header.too_large` | No `END` card within the first 200 header blocks. |
+| `fits.header.missing_simple` | The primary header does not begin with `SIMPLE`. |
+| `fits.header.nonconforming` | The primary header declares `SIMPLE = F`. |
+| `fits.header.invalid_data_size` | An HDU declares more data than the file contains. |
+
+Other `fits.header.*` codes report specific malformed header cards.
 
 ---
 
@@ -2476,8 +2511,11 @@ dotnet test src/AstroLab.Tests
 # Run the API
 dotnet run --project src/AstroLab.Api
 
-# Build and run in Docker (bind mounts ./storage:/app/storage)
+# Build and run the API (:8080) and web UI (:3000) in Docker (bind mounts ./storage:/app/storage)
 docker compose up -d
+
+# Run the web UI in development (http://localhost:5173, proxies to the API)
+cd web && npm install && npm run dev
 ```
 
 ---

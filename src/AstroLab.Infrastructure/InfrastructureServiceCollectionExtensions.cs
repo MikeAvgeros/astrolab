@@ -47,6 +47,8 @@ public static class InfrastructureServiceCollectionExtensions
 
             services.TryAddSingleton<FitsDatasetReader>();
 
+            services.TryAddSingleton<StagedFitsValidator>();
+
             AddEsoArchiveClients(services, configuration);
 
             AddMastArchiveClients(services, configuration);

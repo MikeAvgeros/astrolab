@@ -16,10 +16,12 @@ namespace AstroLab.Tests.Features;
 public class FitsWorkflowTests : IClassFixture<ApiFactory>
 {
     private readonly HttpClient _client;
+    private readonly string _storageRoot;
 
     public FitsWorkflowTests(ApiFactory factory)
     {
         _client = factory.CreateClient();
+        _storageRoot = factory.StorageRoot;
     }
 
     private async Task<string> UploadGradientImageAsync() => await UploadAsync(SyntheticFits.SmallGradientImage());
@@ -103,7 +105,13 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task GetHeader_EmptyFile_ReturnsBadRequestInsteadOfCrashing()
     {
-        var fileId = await UploadAsync([]);
+        // Upload now rejects empty bodies, so stage the file directly: a file can still reach
+        // storage by other means (e.g. copied in by hand), and the header endpoint must not crash on it.
+        var fileId = $"{Guid.NewGuid():N}.fits";
+
+        Directory.CreateDirectory(_storageRoot);
+
+        await File.WriteAllBytesAsync(Path.Combine(_storageRoot, fileId), []);
 
         var response = await _client.GetAsync($"/api/fits/{fileId}/header");
 
@@ -128,6 +136,26 @@ public class FitsWorkflowTests : IClassFixture<ApiFactory>
         var statisticsResponse = await _client.GetAsync($"/api/images/{fileId}/statistics");
         
         Assert.Equal(HttpStatusCode.OK, statisticsResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetHeader_BlankKeywordCommentaryCards_AreReturnedRatherThanRejected()
+    {
+        var fileId = await UploadAsync(SyntheticFits.SmallGradientImageWithBlankKeywordCards());
+
+        var response = await _client.GetAsync($"/api/fits/{fileId}/header");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var blankKeywords = body.GetProperty("keywords").EnumerateArray()
+            .Where(k => k.GetProperty("name").GetString() == string.Empty)
+            .ToArray();
+
+        Assert.Contains(blankKeywords, k => k.GetProperty("comment").GetString() == "/ DATA DESCRIPTION KEYWORDS");
+
+        Assert.Contains(blankKeywords, k => k.GetProperty("comment").ValueKind == JsonValueKind.Null);
     }
 
     [Fact]

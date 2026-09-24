@@ -91,6 +91,6 @@ internal sealed record MastCaomRecord
     [JsonPropertyName("proposal_pi")]
     public string? ProposalPi { get; }
 
-    [JsonPropertyName("data_rights")]
+    [JsonPropertyName("dataRights")]
     public string? DataRights { get; }
 }
